@@ -1,7 +1,8 @@
 # To build: docker build -t open-mvs .
 # To run: docker run -it open-mvs
+# To clean up docker disk space: docker system prune -a
 
-FROM ubuntu:20.04
+FROM ubuntu:22.04
 
 # Set non-interactive mode
 ENV DEBIAN_FRONTEND=noninteractive
@@ -39,14 +40,5 @@ RUN git clone https://github.com/microsoft/vcpkg.git \
 # Set environment variables
 ENV VCPKG_ROOT=/opt/vcpkg
 ENV PATH="/opt/vcpkg:$PATH"
-
-# RUN echo "find_package(OpenMVS)\n\
-#     if(OpenMVS_FOUND)\n\
-#         include_directories(\${OpenMVS_INCLUDE_DIRS})\n\
-#         add_definitions(\${OpenMVS_DEFINITIONS})\n\
-#     endif()\n\
-#     \n\
-#     add_executable(your_project source_code.cpp)\n\
-#     target_link_libraries(your_project PRIVATE OpenMVS::MVS)" >> $VCPKG_ROOT/scripts/buildsystems/vcpkg.cmake
 
 WORKDIR /workspace
