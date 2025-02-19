@@ -29,6 +29,12 @@ RUN apt-get update && apt-get install -y \
     bison \
     libx11-dev libxft-dev libxext-dev \
     libxi-dev libxtst-dev \
+    libxmu-dev libgl-dev \
+    gfortran \
+    libxinerama-dev libxcursor-dev xorg-dev libglu1-mesa-dev '^libxcb.*-dev' \
+    libgles2-mesa-dev libx11-xcb-dev libgl1-mesa-dev libxrender-dev libxkbcommon-dev libxkbcommon-x11-dev \
+    # libfontconfig-dev libfreetype6-dev libssl-dev libsqlite3-dev libharfbuzz-dev libpng-dev libjpeg-dev \
+    # libpcre2-dev libdouble-conversion-dev libbz2-dev libzstd-dev  libexpat1-dev\
     && rm -rf /var/lib/apt/lists/*
 
 # Get CMake version 3.30.1
