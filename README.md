@@ -5,6 +5,7 @@
 [Project Milestones](https://github.com/cs210/2025-ManageXR-2/milestones)
 
 # Running Open MVG
+For full instructions, see [the OpenMVG github](https://github.com/openMVG/openMVG/wiki/OpenMVG-on-your-image-dataset).
 ## Run the docker container
 ```
 cd open-mvg
@@ -22,3 +23,7 @@ From `open-mvg` on your machine, run
 ```
 cp my-openmvg-container:/opt/openMVG_Build/software/SfM/output .
 ```
+## Open with Meshlab
+Example of colorized.ply for the Sceaux Castle dataset:
+![Point cloud for colorized.ply](sample-mvg-output.png)
+#
