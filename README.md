@@ -25,5 +25,5 @@ cp my-openmvg-container:/opt/openMVG_Build/software/SfM/output .
 ```
 ## Open with Meshlab
 Example of colorized.ply for the Sceaux Castle dataset:
-![Point cloud for colorized.ply](sample-mvg-output.png)
+![Point cloud for colorized.ply](img/sample-mvg-output.png)
 #
