@@ -47,3 +47,14 @@ DensifyPointCloud scene.mvs
 ```
 ReconstructMesh scene.mvs
 ```
+## Full example error
+```
+root@9c8a66a0a3f6:/working# DensifyPointCloud scene.mvs
+00:04:33 [App     ] Build date: Dec 10 2019, 20:59:37
+00:04:33 [App     ] CPU: Intel(R) Xeon(R) CPU E5-2690 v4 @ 2.60GHz (56 cores)
+00:04:33 [App     ] RAM: 125.78GB Physical Memory 119.21GB Virtual Memory
+00:04:33 [App     ] OS: Linux 5.15.0-130-generic (x86_64)
+00:04:33 [App     ] SSE & AVX compatible CPU & OS detected
+00:04:33 [App     ] Command line: scene.mvs
+00:04:33 [App     ] error: invalid project
+```
