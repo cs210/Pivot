@@ -37,12 +37,13 @@ Example of colorized.ply for the Sceaux Castle dataset:
 cd open-mvs-2/docker
 ./QUICK_START.sh /path/to/Phoenix-Recon/open-mvg/output 
 ```
-> **Note:** DensifyPointCloud and ReconstructMesh do not currently work.
 ## Run Densify Point Cloud
+> **Note:** Does not currently work. Getting an "invalid project" error for scene.mvs.
 ```
 DensifyPointCloud scene.mvs
 ```
 ## Run ReconstructMesh
+> **Note:** Does not currently work. Getting an "invalid project" error for scene.mvs.
 ```
 ReconstructMesh scene.mvs
 ```
