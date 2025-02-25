@@ -18,12 +18,22 @@ cd /opt/openMVG_Build/software/SfM/
 mkdir output
 python3 SfM_SequentialPipeline.py images output
 ```
+## Prepare output for OpenMVS
+```
+openMVG_main_openMVG2openMVS -i output/reconstruction_sequential/sfm_data.bin -o output/scene.mvs output/scene_undistorted_images/
+```
 ## Copy output back to your machine
 From `open-mvg` on your machine, run
 ```
-cp my-openmvg-container:/opt/openMVG_Build/software/SfM/output .
+docker cp my-openmvg-container:/opt/openMVG_Build/software/SfM/output .
 ```
-## Open with Meshlab
+## View with Meshlab
 Example of colorized.ply for the Sceaux Castle dataset:
 ![Point cloud for colorized.ply](img/sample-mvg-output.png)
-#
+
+# Running Open MVS
+## Run the docker container
+```
+cd open-mvs-2/docker
+./QUICK_START.sh /path/to/Phoenix-Recon/open-mvg/output 
+```
