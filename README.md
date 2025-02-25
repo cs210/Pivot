@@ -48,6 +48,7 @@ DensifyPointCloud scene.mvs
 ReconstructMesh scene.mvs
 ```
 ## Full example error
+> **Note:** The error for `ReconstructMesh scene.mvs` is the same.
 ```
 root@9c8a66a0a3f6:/working# DensifyPointCloud scene.mvs
 00:04:33 [App     ] Build date: Dec 10 2019, 20:59:37
