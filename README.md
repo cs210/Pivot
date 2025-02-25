@@ -37,3 +37,11 @@ Example of colorized.ply for the Sceaux Castle dataset:
 cd open-mvs-2/docker
 ./QUICK_START.sh /path/to/Phoenix-Recon/open-mvg/output 
 ```
+## Run Densify Point Cloud
+```
+DensifyPointCloud scene.mvs
+```
+## Run ReconstructMesh
+```
+ReconstructMesh scene.mvs
+```
