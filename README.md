@@ -20,7 +20,9 @@ python3 SfM_SequentialPipeline.py images output
 ```
 ## Prepare output for OpenMVS
 ```
-openMVG_main_openMVG2openMVS -i output/reconstruction_sequential/sfm_data.bin -o output/scene.mvs output/scene_undistorted_images/
+mv images output/reconstruction_reconstruction_sequential
+cd output/reconstruction_reconstruction_sequential
+openMVG_main_openMVG2openMVS -i sfm_data.bin -o scene.mvs -d scene_undistorted_images/
 ```
 ## Copy output back to your machine
 From `open-mvg` on your machine, run
