@@ -32,7 +32,9 @@ Example of colorized.ply for the Sceaux Castle dataset:
 ![Point cloud for colorized.ply](img/sample-mvg-output.png)
 
 # Running Open MVS
+For instructions on usage, see the [OpenMVS usage wiki](https://github.com/cdcseacave/openMVS/wiki/Usage).
 ## Run the docker container
+For instructions on running the docker container, see the [README in the docker folder of OpenMVS](https://github.com/cdcseacave/openMVS/tree/develop/docker).
 ```
 cd open-mvs-2/docker
 ./QUICK_START.sh /path/to/Phoenix-Recon/open-mvg/output 
