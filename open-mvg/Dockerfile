@@ -39,4 +39,11 @@ RUN mkdir /opt/openMVG_Build; \
 
 RUN cd /opt/openMVG_Build && make test && make install;
 
-COPY images /opt/openMVG_Build/software/SfM/images
+RUN mkdir /working
+RUN mkdir /working/images
+RUN mkdir /working/output 
+RUN mkdir /working/output/sfm
+RUN mkdir /working/output/sfm/matches
+RUN mkdir /working/output/mvs
+
+COPY images /working/images
