@@ -7,5 +7,5 @@
 ## Features Overview
 ### 3D Reconstruction
 * This is a "Priority 3" feature. 
-* It will add value to users who want to be able to experience what it feels like to walk through the space but don't need the highest-possible level of detail. These users could include recovery/response teams preparing to enter dangerous zones. 
+* It will add value to users who want to experience what it feels like to walk through the space but don't need the highest-possible level of detail. These users could include recovery/response teams preparing to enter dangerous zones. 
 * Creating these reconstructions and viewing them in a VR headset has posed significant technical challenges, including just to run existing models.
