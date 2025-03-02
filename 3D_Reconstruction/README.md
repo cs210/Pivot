@@ -1,8 +1,17 @@
-# Phoenix Recon
-
-[Team Wiki Page](https://github.com/cs210/2025-ManageXR-2/wiki/)
-
-[Project Milestones](https://github.com/cs210/2025-ManageXR-2/milestones)
+# 3D Reconstruction Technologies
+## OpenMVG
+Input(s)
+* A directory of images
+Output(s)
+* A sparse, colorized point cloud (.ply)
+* An mvs file to input to OpenMVS
+## OpenMVS
+Input(s)
+* A directory of undistorted images
+* An MVS file
+Output(s)
+* A dense point cloud (.ply)
+* A mesh (.ply)
 
 # Running Open MVG
 For full instructions, see [the OpenMVG github](https://github.com/openMVG/openMVG/wiki/OpenMVG-on-your-image-dataset).
