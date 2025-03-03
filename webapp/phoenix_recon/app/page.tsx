@@ -1,8 +1,26 @@
+"use client";
+
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { ArrowRight, Compass, CuboidIcon as Cube, Globe } from "lucide-react";
+import { createClient } from "@/utils/supabase/client";
 
 export default function Home() {
+  const [user, setUser] = useState<any>(null);
+  const supabase = createClient();
+
+  useEffect(() => {
+    const checkUser = async () => {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      setUser(user);
+    };
+
+    checkUser();
+  }, [supabase]); // Added supabase to the dependency array
+
   return (
     <div className="flex flex-col min-h-screen">
       <header className="border-b">
@@ -12,12 +30,20 @@ export default function Home() {
             <span className="text-xl">Phoenix Recon</span>
           </Link>
           <nav className="flex gap-4">
-            <Link href="/login">
-              <Button variant="ghost">Login</Button>
-            </Link>
-            <Link href="/register">
-              <Button>Sign Up</Button>
-            </Link>
+            {user ? (
+              <Link href="/dashboard">
+                <Button variant="outline">My Account</Button>
+              </Link>
+            ) : (
+              <>
+                <Link href="/login">
+                  <Button variant="ghost">Login</Button>
+                </Link>
+                <Link href="/register">
+                  <Button>Sign Up</Button>
+                </Link>
+              </>
+            )}
           </nav>
         </div>
       </header>
@@ -37,9 +63,10 @@ export default function Home() {
                   </p>
                 </div>
                 <div className="flex flex-col gap-2 min-[400px]:flex-row">
-                  <Link href="/register">
+                  <Link href={user ? "/dashboard" : "/register"}>
                     <Button size="lg" className="gap-1">
-                      Start Creating <ArrowRight className="h-4 w-4" />
+                      {user ? "Go to Dashboard" : "Start Creating"}{" "}
+                      <ArrowRight className="h-4 w-4" />
                     </Button>
                   </Link>
                   <Link href="/how-it-works">
