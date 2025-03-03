@@ -1,61 +1,66 @@
+"use client"
+
+import { useEffect, useState } from "react"
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
-import { ArrowRight, Compass, CuboidIcon as Cube, Globe } from "lucide-react"
+import { ArrowRight, CuboidIcon as Cube, Globe } from "lucide-react"
+import { createClient } from "@/utils/supabase/client"
+import { Header } from "@/components/header"
 
 export default function Home() {
+  const [user, setUser] = useState<any>(null)
+  const supabase = createClient()
+
+  useEffect(() => {
+    const checkUser = async () => {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser()
+      setUser(user)
+    }
+
+    checkUser()
+  }, [supabase])
+
   return (
-    <div className="flex flex-col min-h-screen">
-      <header className="border-b">
-        <div className="container flex h-16 items-center justify-between px-4 md:px-6">
-          <Link href="/" className="flex items-center gap-2 font-semibold">
-            <Compass className="h-6 w-6 text-primary" />
-            <span className="text-xl">Phoenix Recon</span>
-          </Link>
-          <nav className="flex gap-4">
-            <Link href="/login">
-              <Button variant="ghost">Login</Button>
-            </Link>
-            <Link href="/register">
-              <Button>Sign Up</Button>
-            </Link>
-          </nav>
-        </div>
-      </header>
+    <div className="flex flex-col min-h-screen bg-background text-foreground">
+      <Header />
       <main className="flex-1">
-        <section className="w-full py-12 md:py-24 lg:py-32 bg-gradient-to-b from-primary/5 to-background">
-          <div className="container px-4 md:px-6">
+        <section className="w-full py-12 md:py-24 lg:py-32 relative overflow-hidden">
+          <div className="container px-4 md:px-6 relative z-10">
             <div className="grid gap-6 lg:grid-cols-2 lg:gap-12 xl:grid-cols-2">
               <div className="flex flex-col justify-center space-y-4">
                 <div className="space-y-2">
-                  <h1 className="text-3xl font-bold tracking-tighter sm:text-5xl xl:text-6xl/none">
+                  <h1 className="text-3xl font-bold tracking-tighter sm:text-5xl xl:text-6xl/none geometric-text">
                     Transform 360° Videos Into Interactive VR Experiences
                   </h1>
-                  <p className="max-w-[600px] text-gray-500 md:text-xl dark:text-gray-400">
+                  <p className="max-w-[600px] text-muted-foreground md:text-xl">
                     Upload your 360° videos and we'll convert them into immersive VR environments that users can
                     navigate and explore.
                   </p>
                 </div>
                 <div className="flex flex-col gap-2 min-[400px]:flex-row">
-                  <Link href="/register">
-                    <Button size="lg" className="gap-1">
-                      Start Creating <ArrowRight className="h-4 w-4" />
+                  <Link href={user ? "/dashboard" : "/register"}>
+                    <Button size="lg" className="bg-cyber-gradient hover:opacity-90 geometric-text">
+                      {user ? "Go to Dashboard" : "Start Creating"} <ArrowRight className="h-4 w-4 ml-2" />
                     </Button>
                   </Link>
-                  <Link href="/about">
-                    <Button size="lg" variant="outline">
+                  <Link href="/how-it-works">
+                    <Button size="lg" variant="outline" className="glass-card geometric-text">
                       How It Works
                     </Button>
                   </Link>
                 </div>
               </div>
               <div className="flex items-center justify-center">
-                <div className="relative w-full aspect-video overflow-hidden rounded-xl bg-gray-100 dark:bg-gray-800">
-                  <div className="absolute inset-0 flex items-center justify-center">
+                <div className="relative w-full aspect-video overflow-hidden rounded-xl glass-card p-1">
+                  <div className="absolute inset-0 bg-cyber-gradient opacity-10" />
+                  <div className="relative h-full w-full rounded-lg bg-background/50 flex items-center justify-center">
                     <div className="grid gap-2 place-items-center">
-                      <div className="rounded-full bg-primary p-4">
+                      <div className="rounded-full bg-cyber-gradient p-4">
                         <Globe className="h-6 w-6 text-white" />
                       </div>
-                      <span className="text-sm font-medium">360° VR Experience</span>
+                      <span className="text-sm font-medium geometric-text">360° VR Experience</span>
                     </div>
                   </div>
                 </div>
@@ -63,21 +68,23 @@ export default function Home() {
             </div>
           </div>
         </section>
-        <section className="w-full py-12 md:py-24 lg:py-32 bg-gray-100 dark:bg-gray-800">
+        <section className="w-full py-12 md:py-24 lg:py-32 bg-muted">
           <div className="container px-4 md:px-6">
             <div className="flex flex-col items-center justify-center space-y-4 text-center">
               <div className="space-y-2">
-                <h2 className="text-3xl font-bold tracking-tighter sm:text-4xl md:text-5xl">How Phoenix Recon Works</h2>
-                <p className="max-w-[900px] text-gray-500 md:text-xl/relaxed lg:text-base/relaxed xl:text-xl/relaxed dark:text-gray-400">
+                <h2 className="text-3xl font-bold tracking-tighter sm:text-4xl md:text-5xl cyber-glow">
+                  How Phoenix Recon Works
+                </h2>
+                <p className="max-w-[900px] text-muted-foreground md:text-xl/relaxed lg:text-base/relaxed xl:text-xl/relaxed">
                   From 360° video to interactive VR in three simple steps
                 </p>
               </div>
             </div>
             <div className="mx-auto grid max-w-5xl grid-cols-1 gap-6 py-12 md:grid-cols-3 lg:gap-12">
               <div className="flex flex-col items-center space-y-2 rounded-lg p-4">
-                <div className="rounded-full bg-primary p-2">
+                <div className="rounded-full bg-cyber-gradient p-2">
                   <svg
-                    className="h-6 w-6 text-white"
+                    className="h-6 w-6 text-foreground"
                     fill="none"
                     height="24"
                     stroke="currentColor"
@@ -93,24 +100,24 @@ export default function Home() {
                     <path d="m16 16-4-4-4 4" />
                   </svg>
                 </div>
-                <h3 className="text-xl font-bold">Upload 360° Videos</h3>
-                <p className="text-center text-gray-500 dark:text-gray-400">
+                <h3 className="text-xl font-bold cyber-glow">Upload 360° Videos</h3>
+                <p className="text-center text-muted-foreground">
                   Upload your 360° video footage through our secure platform
                 </p>
               </div>
               <div className="flex flex-col items-center space-y-2 rounded-lg p-4">
-                <div className="rounded-full bg-primary p-2">
-                  <Cube className="h-6 w-6 text-white" />
+                <div className="rounded-full bg-cyber-gradient p-2">
+                  <Cube className="h-6 w-6 text-foreground" />
                 </div>
-                <h3 className="text-xl font-bold">Automatic Processing</h3>
-                <p className="text-center text-gray-500 dark:text-gray-400">
+                <h3 className="text-xl font-bold cyber-glow">Automatic Processing</h3>
+                <p className="text-center text-muted-foreground">
                   Our system converts your videos into navigable 3D environments
                 </p>
               </div>
               <div className="flex flex-col items-center space-y-2 rounded-lg p-4">
-                <div className="rounded-full bg-primary p-2">
+                <div className="rounded-full bg-cyber-gradient p-2">
                   <svg
-                    className="h-6 w-6 text-white"
+                    className="h-6 w-6 text-foreground"
                     fill="none"
                     height="24"
                     stroke="currentColor"
@@ -124,38 +131,39 @@ export default function Home() {
                     <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10" />
                   </svg>
                 </div>
-                <h3 className="text-xl font-bold">Explore in VR</h3>
-                <p className="text-center text-gray-500 dark:text-gray-400">
+                <h3 className="text-xl font-bold cyber-glow">Explore in VR</h3>
+                <p className="text-center text-muted-foreground">
                   Access your interactive VR environments on any compatible device
                 </p>
               </div>
             </div>
           </div>
         </section>
-        <section className="w-full py-12 md:py-24 lg:py-32">
-          <div className="container px-4 md:px-6">
+        <section className="w-full py-12 md:py-24 lg:py-32 bg-background relative">
+          <div className="absolute inset-0 bg-cyber-gradient opacity-5"></div>
+          <div className="container px-4 md:px-6 relative z-10">
             <div className="grid gap-10 px-10 md:gap-16 lg:grid-cols-2">
               <div className="space-y-4">
                 <div className="inline-block rounded-lg bg-primary/10 px-3 py-1 text-sm text-primary">
                   Virtual Reality
                 </div>
-                <h2 className="lg:leading-tighter text-3xl font-bold tracking-tighter sm:text-4xl md:text-5xl">
+                <h2 className="lg:leading-tighter text-3xl font-bold tracking-tighter sm:text-4xl md:text-5xl cyber-glow">
                   Experience Locations Like You're Actually There
                 </h2>
-                <p className="text-gray-500 md:text-xl/relaxed dark:text-gray-400">
+                <p className="text-muted-foreground md:text-xl/relaxed">
                   Our technology transforms ordinary 360° videos into fully navigable virtual environments. Move through
                   spaces, explore details, and experience locations from any angle.
                 </p>
                 <Link
                   href="/register"
-                  className="inline-flex h-9 items-center justify-center rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground shadow transition-colors hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50"
+                  className="inline-flex h-9 items-center justify-center rounded-md px-4 py-2 text-sm font-medium shadow transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50"
                 >
-                  Get Started
+                  <Button className="bg-cyber-gradient hover:opacity-90">Get Started</Button>
                 </Link>
               </div>
               <div className="flex flex-col items-start space-y-4">
                 <div className="inline-block rounded-lg bg-primary/10 px-3 py-1 text-sm text-primary">Applications</div>
-                <h3 className="text-2xl font-bold">Perfect For:</h3>
+                <h3 className="text-2xl font-bold cyber-glow">Perfect For:</h3>
                 <ul className="grid gap-2">
                   <li className="flex items-center gap-2">
                     <svg
@@ -247,32 +255,29 @@ export default function Home() {
                   href="/use-cases"
                   className="inline-flex h-9 items-center justify-center rounded-md border border-input bg-background px-4 py-2 text-sm font-medium shadow-sm transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50"
                 >
-                  View Use Cases
+                  <Button variant="outline" className="cyber-border">
+                    View Use Cases
+                  </Button>
                 </Link>
               </div>
             </div>
           </div>
         </section>
-        <section className="w-full py-12 md:py-24 lg:py-32 bg-primary/5">
+        <section className="w-full py-12 md:py-24 lg:py-32 bg-muted">
           <div className="container grid items-center justify-center gap-4 px-4 text-center md:px-6 lg:gap-10">
             <div className="space-y-3">
-              <h2 className="text-3xl font-bold tracking-tighter md:text-4xl/tight">
+              <h2 className="text-3xl font-bold tracking-tighter md:text-4xl/tight cyber-glow">
                 Ready to Transform Your 360° Videos?
               </h2>
-              <p className="mx-auto max-w-[600px] text-gray-500 md:text-xl/relaxed lg:text-base/relaxed xl:text-xl/relaxed dark:text-gray-400">
+              <p className="mx-auto max-w-[600px] text-muted-foreground md:text-xl/relaxed lg:text-base/relaxed xl:text-xl/relaxed">
                 Create immersive, interactive VR experiences from your 360° footage today.
               </p>
             </div>
             <div className="mx-auto w-full max-w-sm space-y-2">
-              <div className="flex flex-col gap-2 min-[400px]:flex-row justify-center">
+              <div className="flex justify-center">
                 <Link href="/register">
-                  <Button size="lg" className="w-full min-[400px]:w-auto">
+                  <Button size="lg" className="w-full min-[400px]:w-auto bg-cyber-gradient hover:opacity-90">
                     Get Started
-                  </Button>
-                </Link>
-                <Link href="/contact">
-                  <Button size="lg" variant="outline" className="w-full min-[400px]:w-auto">
-                    Contact Sales
                   </Button>
                 </Link>
               </div>
@@ -280,16 +285,16 @@ export default function Home() {
           </div>
         </section>
       </main>
-      <footer className="border-t">
+      <footer className="border-t border-border/40 bg-background">
         <div className="container flex flex-col gap-2 py-4 md:h-16 md:flex-row md:items-center md:justify-between md:py-0">
-          <p className="text-center text-sm text-gray-500 md:text-left dark:text-gray-400">
+          <p className="text-center text-sm text-muted-foreground md:text-left">
             © 2024 Phoenix Recon. All rights reserved.
           </p>
           <nav className="flex items-center justify-center gap-4 md:gap-6">
-            <Link className="text-sm font-medium hover:underline" href="#">
+            <Link className="text-sm font-medium text-muted-foreground hover:text-foreground" href="#">
               Terms of Service
             </Link>
-            <Link className="text-sm font-medium hover:underline" href="#">
+            <Link className="text-sm font-medium text-muted-foreground hover:text-foreground" href="#">
               Privacy
             </Link>
           </nav>

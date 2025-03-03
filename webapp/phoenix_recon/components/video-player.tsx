@@ -115,7 +115,7 @@ export default function VideoPlayer({ url }: VideoPlayerProps) {
   }
 
   return (
-    <div ref={containerRef} className="relative w-full overflow-hidden rounded-lg bg-black">
+    <div ref={containerRef} className="relative w-full overflow-hidden rounded-lg bg-black cyber-border">
       <video ref={videoRef} src={url} className="w-full aspect-video" onClick={togglePlay} />
 
       <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/80 to-transparent p-4">
@@ -125,7 +125,7 @@ export default function VideoPlayer({ url }: VideoPlayerProps) {
           max={duration || 100}
           step={0.1}
           onValueChange={handleSeek}
-          className="mb-4 [&>span:first-child]:h-1 [&>span:first-child]:bg-white/30 [&_[role=slider]]:bg-white [&_[role=slider]]:w-3 [&_[role=slider]]:h-3 [&_[role=slider]]:border-0 [&>span:first-child_span]:bg-primary [&_[role=slider]:focus-visible]:ring-0 [&_[role=slider]:focus-visible]:ring-offset-0"
+          className="mb-4 [&>span:first-child]:h-1 [&>span:first-child]:bg-white/30 [&_[role=slider]]:bg-white [&_[role=slider]]:w-3 [&_[role=slider]]:h-3 [&_[role=slider]]:border-0 [&>span:first-child_span]:bg-cyber-gradient [&_[role=slider]:focus-visible]:ring-0 [&_[role=slider]:focus-visible]:ring-offset-0"
         />
 
         <div className="flex items-center justify-between text-white">
@@ -144,7 +144,7 @@ export default function VideoPlayer({ url }: VideoPlayerProps) {
                 max={1}
                 step={0.1}
                 onValueChange={handleVolumeChange}
-                className="w-24 [&>span:first-child]:h-1 [&>span:first-child]:bg-white/30 [&_[role=slider]]:bg-white [&_[role=slider]]:w-3 [&_[role=slider]]:h-3 [&_[role=slider]]:border-0 [&>span:first-child_span]:bg-primary [&_[role=slider]:focus-visible]:ring-0 [&_[role=slider]:focus-visible]:ring-offset-0"
+                className="w-24 [&>span:first-child]:h-1 [&>span:first-child]:bg-white/30 [&_[role=slider]]:bg-white [&_[role=slider]]:w-3 [&_[role=slider]]:h-3 [&_[role=slider]]:border-0 [&>span:first-child_span]:bg-cyber-gradient [&_[role=slider]:focus-visible]:ring-0 [&_[role=slider]:focus-visible]:ring-offset-0"
               />
             </div>
 

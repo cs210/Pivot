@@ -16,6 +16,19 @@ module.exports = {
       },
     },
     extend: {
+      fontFamily: {
+        sans: [
+          "Chakra Petch",
+          "system-ui",
+          "-apple-system",
+          "BlinkMacSystemFont",
+          "Segoe UI",
+          "Roboto",
+          "Helvetica",
+          "Arial",
+          "sans-serif",
+        ],
+      },
       colors: {
         border: "hsl(var(--border))",
         input: "hsl(var(--input))",
@@ -50,6 +63,11 @@ module.exports = {
           DEFAULT: "hsl(var(--card))",
           foreground: "hsl(var(--card-foreground))",
         },
+      },
+      backgroundImage: {
+        "gradient-radial": "radial-gradient(var(--tw-gradient-stops))",
+        "cyber-gradient": "linear-gradient(135deg, #ff006e 0%, #8a2be2 100%)",
+        "warm-gradient": "linear-gradient(135deg, #ff6600 0%, #ff006e 100%)",
       },
       borderRadius: {
         lg: "var(--radius)",
