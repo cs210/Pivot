@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { createClient } from "@/utils/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -118,9 +119,14 @@ export default function Dashboard() {
     <div className="container mx-auto px-4 py-8">
       <div className="flex justify-between items-center mb-8">
         <h1 className="text-3xl font-bold">Your Video Dashboard</h1>
-        <Button onClick={handleSignOut} variant="outline">
-          Sign Out
-        </Button>
+        <div className="space-x-2">
+          <Link href="/">
+            <Button variant="outline">Go to Home</Button>
+          </Link>
+          <Button onClick={handleSignOut} variant="outline">
+            Sign Out
+          </Button>
+        </div>
       </div>
 
       <Tabs defaultValue="videos" className="w-full">
