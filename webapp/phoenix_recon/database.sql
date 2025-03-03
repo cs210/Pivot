@@ -1,5 +1,5 @@
 -- Create videos table
-CREATE TABLE videos (
+CREATE TABLE IF NOT EXISTS videos (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   name TEXT NOT NULL,
   path TEXT NOT NULL,
@@ -13,7 +13,6 @@ CREATE TABLE videos (
 );
 
 -- Create RLS policies for videos table
--- Only allow users to see their own videos
 ALTER TABLE videos ENABLE ROW LEVEL SECURITY;
 
 CREATE POLICY "Users can view their own videos" 
@@ -33,7 +32,8 @@ CREATE POLICY "Users can delete their own videos"
   USING (auth.uid() = user_id);
 
 -- Create storage bucket for videos
-INSERT INTO storage.buckets (id, name, public) VALUES ('videos', 'videos', false);
+INSERT INTO storage.buckets (id, name, public) VALUES ('videos', 'videos', false)
+ON CONFLICT (id) DO NOTHING;
 
 -- Set up RLS policies for storage
 CREATE POLICY "Users can upload their own videos" 
