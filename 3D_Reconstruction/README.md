@@ -1,5 +1,6 @@
 # 3D Reconstruction Pipelines Attempted
-* OpenMVG -> OpenMVS
+## OpenMVG -> OpenMVS
+Status: Can run each component separately, but the integration does not work. MVS considers the scene outputted by MVG to be an "invalid project". See `open_mvs/README.md` for more details.
 
 # Overview of the 3D Reconstruction Technologies
 ## OpenMVG
