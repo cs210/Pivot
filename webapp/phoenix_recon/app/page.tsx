@@ -1,6 +1,6 @@
-import Link from "next/link"
-import { Button } from "@/components/ui/button"
-import { ArrowRight, Compass, CuboidIcon as Cube, Globe } from "lucide-react"
+import Link from "next/link";
+import { Button } from "@/components/ui/button";
+import { ArrowRight, Compass, CuboidIcon as Cube, Globe } from "lucide-react";
 
 export default function Home() {
   return (
@@ -31,8 +31,9 @@ export default function Home() {
                     Transform 360° Videos Into Interactive VR Experiences
                   </h1>
                   <p className="max-w-[600px] text-gray-500 md:text-xl dark:text-gray-400">
-                    Upload your 360° videos and we'll convert them into immersive VR environments that users can
-                    navigate and explore.
+                    Upload your 360° videos and we'll convert them into
+                    immersive VR environments that users can navigate and
+                    explore.
                   </p>
                 </div>
                 <div className="flex flex-col gap-2 min-[400px]:flex-row">
@@ -41,7 +42,7 @@ export default function Home() {
                       Start Creating <ArrowRight className="h-4 w-4" />
                     </Button>
                   </Link>
-                  <Link href="/about">
+                  <Link href="/how-it-works">
                     <Button size="lg" variant="outline">
                       How It Works
                     </Button>
@@ -55,7 +56,9 @@ export default function Home() {
                       <div className="rounded-full bg-primary p-4">
                         <Globe className="h-6 w-6 text-white" />
                       </div>
-                      <span className="text-sm font-medium">360° VR Experience</span>
+                      <span className="text-sm font-medium">
+                        360° VR Experience
+                      </span>
                     </div>
                   </div>
                 </div>
@@ -67,7 +70,9 @@ export default function Home() {
           <div className="container px-4 md:px-6">
             <div className="flex flex-col items-center justify-center space-y-4 text-center">
               <div className="space-y-2">
-                <h2 className="text-3xl font-bold tracking-tighter sm:text-4xl md:text-5xl">How Phoenix Recon Works</h2>
+                <h2 className="text-3xl font-bold tracking-tighter sm:text-4xl md:text-5xl">
+                  How Phoenix Recon Works
+                </h2>
                 <p className="max-w-[900px] text-gray-500 md:text-xl/relaxed lg:text-base/relaxed xl:text-xl/relaxed dark:text-gray-400">
                   From 360° video to interactive VR in three simple steps
                 </p>
@@ -126,7 +131,8 @@ export default function Home() {
                 </div>
                 <h3 className="text-xl font-bold">Explore in VR</h3>
                 <p className="text-center text-gray-500 dark:text-gray-400">
-                  Access your interactive VR environments on any compatible device
+                  Access your interactive VR environments on any compatible
+                  device
                 </p>
               </div>
             </div>
@@ -143,18 +149,21 @@ export default function Home() {
                   Experience Locations Like You're Actually There
                 </h2>
                 <p className="text-gray-500 md:text-xl/relaxed dark:text-gray-400">
-                  Our technology transforms ordinary 360° videos into fully navigable virtual environments. Move through
-                  spaces, explore details, and experience locations from any angle.
+                  Our technology transforms ordinary 360° videos into fully
+                  navigable virtual environments. Move through spaces, explore
+                  details, and experience locations from any angle.
                 </p>
                 <Link
                   href="/register"
                   className="inline-flex h-9 items-center justify-center rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground shadow transition-colors hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50"
                 >
-                  Get Started
+                  <Button>Get Started</Button>
                 </Link>
               </div>
               <div className="flex flex-col items-start space-y-4">
-                <div className="inline-block rounded-lg bg-primary/10 px-3 py-1 text-sm text-primary">Applications</div>
+                <div className="inline-block rounded-lg bg-primary/10 px-3 py-1 text-sm text-primary">
+                  Applications
+                </div>
                 <h3 className="text-2xl font-bold">Perfect For:</h3>
                 <ul className="grid gap-2">
                   <li className="flex items-center gap-2">
@@ -247,7 +256,7 @@ export default function Home() {
                   href="/use-cases"
                   className="inline-flex h-9 items-center justify-center rounded-md border border-input bg-background px-4 py-2 text-sm font-medium shadow-sm transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50"
                 >
-                  View Use Cases
+                  <Button>View Use Cases</Button>
                 </Link>
               </div>
             </div>
@@ -260,19 +269,15 @@ export default function Home() {
                 Ready to Transform Your 360° Videos?
               </h2>
               <p className="mx-auto max-w-[600px] text-gray-500 md:text-xl/relaxed lg:text-base/relaxed xl:text-xl/relaxed dark:text-gray-400">
-                Create immersive, interactive VR experiences from your 360° footage today.
+                Create immersive, interactive VR experiences from your 360°
+                footage today.
               </p>
             </div>
             <div className="mx-auto w-full max-w-sm space-y-2">
-              <div className="flex flex-col gap-2 min-[400px]:flex-row justify-center">
+              <div className="flex justify-center">
                 <Link href="/register">
                   <Button size="lg" className="w-full min-[400px]:w-auto">
                     Get Started
-                  </Button>
-                </Link>
-                <Link href="/contact">
-                  <Button size="lg" variant="outline" className="w-full min-[400px]:w-auto">
-                    Contact Sales
                   </Button>
                 </Link>
               </div>
@@ -296,6 +301,5 @@ export default function Home() {
         </div>
       </footer>
     </div>
-  )
+  );
 }
-
