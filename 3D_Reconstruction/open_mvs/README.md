@@ -1,5 +1,4 @@
 # Running Open MVS
-For instructions on usage, see the [OpenMVS usage wiki](https://github.com/cdcseacave/openMVS/wiki/Usage).
 ## Run the docker container
 ```
 cd docker
@@ -20,6 +19,8 @@ DensifyPointCloud scene.mvs
 ```
 ReconstructMesh scene.mvs
 ```
+## Run additional refinement steps
+See additional instructions on usage [here](https://github.com/cdcseacave/openMVS/wiki/Usage).
 ## Full example error when run on OpenMVG output
 > **Note:** The error for `ReconstructMesh scene.mvs` is the same.
 ```
