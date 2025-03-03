@@ -47,3 +47,4 @@ RUN mkdir /working/output/sfm/matches
 RUN mkdir /working/output/mvs
 
 COPY images /working/images
+COPY mvg_script.py /working/
