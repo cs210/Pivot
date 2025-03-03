@@ -12,6 +12,7 @@ import { Label } from "@/components/ui/label"
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { AlertCircle } from "lucide-react"
+import { Header } from "@/components/header"
 
 export default function Register() {
   const router = useRouter()
@@ -51,55 +52,82 @@ export default function Register() {
   }
 
   return (
-    <div className="flex min-h-screen items-center justify-center px-4 py-12">
-      <Card className="w-full max-w-md">
-        <CardHeader className="space-y-1">
-          <CardTitle className="text-2xl font-bold">Create an account</CardTitle>
-          <CardDescription>Enter your email and password to sign up</CardDescription>
-        </CardHeader>
-        <CardContent>
-          {error && (
-            <Alert variant="destructive" className="mb-4">
-              <AlertCircle className="h-4 w-4" />
-              <AlertDescription>{error}</AlertDescription>
-            </Alert>
-          )}
-          <form onSubmit={handleSignUp} className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="email">Email</Label>
-              <Input
-                id="email"
-                type="email"
-                placeholder="name@example.com"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                required
-              />
+    <div className="flex flex-col min-h-screen bg-background text-foreground">
+      <Header />
+      <main className="flex-1 flex items-center justify-center px-4 py-12 relative">
+        <div className="absolute inset-0 bg-cyber-gradient opacity-5"></div>
+        <Card className="w-full max-w-md bg-background/80 backdrop-blur-sm border-border/50 cyber-border">
+          <CardHeader className="space-y-1">
+            <CardTitle className="text-2xl font-bold cyber-glow">Create an account</CardTitle>
+            <CardDescription className="text-muted-foreground">
+              Enter your email and password to sign up
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            {error && (
+              <Alert variant="destructive" className="mb-4 bg-destructive/20 border-destructive/30">
+                <AlertCircle className="h-4 w-4" />
+                <AlertDescription>{error}</AlertDescription>
+              </Alert>
+            )}
+            <form onSubmit={handleSignUp} className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="email" className="text-foreground">
+                  Email
+                </Label>
+                <Input
+                  id="email"
+                  type="email"
+                  placeholder="name@example.com"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  required
+                  className="bg-background/50 border-border/50 text-foreground"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="password" className="text-foreground">
+                  Password
+                </Label>
+                <Input
+                  id="password"
+                  type="password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  required
+                  className="bg-background/50 border-border/50 text-foreground"
+                />
+              </div>
+              <Button type="submit" className="w-full bg-cyber-gradient hover:opacity-90" disabled={loading}>
+                {loading ? "Creating account..." : "Sign Up"}
+              </Button>
+            </form>
+          </CardContent>
+          <CardFooter className="flex flex-col">
+            <div className="text-sm text-muted-foreground mt-2">
+              Already have an account?{" "}
+              <Link href="/login" className="text-primary hover:text-primary/80 underline">
+                Sign in
+              </Link>
             </div>
-            <div className="space-y-2">
-              <Label htmlFor="password">Password</Label>
-              <Input
-                id="password"
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                required
-              />
-            </div>
-            <Button type="submit" className="w-full" disabled={loading}>
-              {loading ? "Creating account..." : "Sign Up"}
-            </Button>
-          </form>
-        </CardContent>
-        <CardFooter className="flex flex-col">
-          <div className="text-sm text-gray-500 mt-2">
-            Already have an account?{" "}
-            <Link href="/login" className="text-primary underline">
-              Sign in
+          </CardFooter>
+        </Card>
+      </main>
+      <footer className="border-t border-border/40 bg-background">
+        <div className="container flex flex-col gap-2 py-4 md:h-16 md:flex-row md:items-center md:justify-between md:py-0">
+          <p className="text-center text-sm text-muted-foreground md:text-left">
+            © 2024 Phoenix Recon. All rights reserved.
+          </p>
+          <nav className="flex items-center justify-center gap-4 md:gap-6">
+            <Link className="text-sm font-medium text-muted-foreground hover:text-foreground" href="#">
+              Terms of Service
             </Link>
-          </div>
-        </CardFooter>
-      </Card>
+            <Link className="text-sm font-medium text-muted-foreground hover:text-foreground" href="#">
+              Privacy
+            </Link>
+          </nav>
+        </div>
+      </footer>
     </div>
   )
 }
