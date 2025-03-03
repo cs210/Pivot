@@ -17,4 +17,4 @@ docker cp my-openmvg-container:/working/output .
 ```
 ## View with Meshlab
 Example of colorized.ply for [the Sceaux Castle dataset](https://github.com/openMVG/ImageDataset_SceauxCastle):
-![Point cloud for colorized.ply](../../img/sample-mvg-output.png)
+![Point cloud for colorized.ply](../../img/sample_outputs/mvg_outputs/sample-mvg-output.png)

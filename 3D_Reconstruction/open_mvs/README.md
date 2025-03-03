@@ -4,6 +4,8 @@
 cd docker
 ./QUICK_START.sh /path/to/mvs_input_folder
 ```
+`/path/to/mvs_input_folder` should contain `scene.mvs` and an `undistorted_images` folder.
+
 For more in depth instructions on running the docker container, see the [README in the docker folder of OpenMVS](https://github.com/cdcseacave/openMVS/tree/develop/docker).
 
 ⚠️ **Issue:** 
@@ -12,15 +14,22 @@ For more in depth instructions on running the docker container, see the [README 
 * We need to further explore running it on Colmap outputs. 
 
 ## Run Densify Point Cloud
+> **Note:** The output gets added to `/path/to/mvs_input_folder`.
 ```
 DensifyPointCloud scene.mvs
 ```
 ## Run ReconstructMesh
+> **Note:** The output gets added to `/path/to/mvs_input_folder`.
 ```
 ReconstructMesh scene.mvs
 ```
 ## Run additional refinement steps
 See additional instructions on usage [here](https://github.com/cdcseacave/openMVS/wiki/Usage).
+## View with Meshlab
+Example of scene_dense.ply for [the Sceaux Castle dataset](https://github.com/openMVG/ImageDataset_SceauxCastle):
+![Point cloud for scene_dense.ply](../../img/sample_outputs/mvs_outputs/sample-mvs-dense-output.png)
+Example of scene_mesh.ply for [the Sceaux Castle dataset](https://github.com/openMVG/ImageDataset_SceauxCastle):
+![Mesh for scene_mesh.ply](../../img/sample_outputs/mvs_outputs/sample-mvs-mesh-output.png)
 ## Full example error when run on OpenMVG output
 > **Note:** The error for `ReconstructMesh scene.mvs` is the same.
 ```
