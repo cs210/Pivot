@@ -15,35 +15,6 @@ Output(s)
 * A dense point cloud (.ply)
 * A mesh (.ply)
 
-# Running Open MVG
-For full instructions, see [the OpenMVG github](https://github.com/openMVG/openMVG/wiki/OpenMVG-on-your-image-dataset).
-## Run the docker container
-```
-cd open-mvg
-docker build -t open-mvg-image .
-docker run -it --name my-openmvg-container open-mvg-image /bin/bash
-```
-## Run Open MVG from in the docker container 
-```
-cd /opt/openMVG_Build/software/SfM/
-mkdir output
-python3 SfM_SequentialPipeline.py images output
-```
-## Prepare output for OpenMVS
-```
-mv images output/reconstruction_reconstruction_sequential
-cd output/reconstruction_reconstruction_sequential
-openMVG_main_openMVG2openMVS -i sfm_data.bin -o scene.mvs -d scene_undistorted_images/
-```
-## Copy output back to your machine
-From `open-mvg` on your machine, run
-```
-docker cp my-openmvg-container:/opt/openMVG_Build/software/SfM/output .
-```
-## View with Meshlab
-Example of colorized.ply for the Sceaux Castle dataset:
-![Point cloud for colorized.ply](img/sample-mvg-output.png)
-
 # Running Open MVS
 For instructions on usage, see the [OpenMVS usage wiki](https://github.com/cdcseacave/openMVS/wiki/Usage).
 ## Run the docker container
