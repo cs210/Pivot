@@ -1,0 +1,9 @@
+- C++ tools 
+
+- CUDA version
+
+- Gsplat version
+
+- Pytorch version
+
+- CUDA_HOME env var
