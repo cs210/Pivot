@@ -1,99 +1,113 @@
-"use client"
+"use client";
 
-import type React from "react"
+import type React from "react";
 
-import { useState, useRef } from "react"
-import { createClient } from "@/utils/supabase/client"
-import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
-import { Alert, AlertDescription } from "@/components/ui/alert"
-import { Progress } from "@/components/ui/progress"
-import { Upload, AlertCircle, CheckCircle2 } from "lucide-react"
+import { useState, useRef } from "react";
+import { createClient } from "@/utils/supabase/client";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardFooter,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Progress } from "@/components/ui/progress";
+import { Upload, AlertCircle, CheckCircle2 } from "lucide-react";
 
 interface VideoUploaderProps {
-  onUploadSuccess: () => void
-  userId: string
+  onUploadSuccess: () => void;
+  userId: string;
 }
 
-export default function VideoUploader({ onUploadSuccess, userId }: VideoUploaderProps) {
-  const supabase = createClient()
-  const [file, setFile] = useState<File | null>(null)
-  const [uploading, setUploading] = useState(false)
-  const [progress, setProgress] = useState(0)
-  const [error, setError] = useState<string | null>(null)
-  const [success, setSuccess] = useState(false)
-  const [videoName, setVideoName] = useState("")
-  const fileInputRef = useRef<HTMLInputElement>(null)
+export default function VideoUploader({
+  onUploadSuccess,
+  userId,
+}: VideoUploaderProps) {
+  const supabase = createClient();
+  const [file, setFile] = useState<File | null>(null);
+  const [uploading, setUploading] = useState(false);
+  const [progress, setProgress] = useState(0);
+  const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState(false);
+  const [videoName, setVideoName] = useState("");
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files.length > 0) {
-      const selectedFile = e.target.files[0]
+      const selectedFile = e.target.files[0];
 
       // Check if file is a video
       if (!selectedFile.type.startsWith("video/")) {
-        setError("Please select a valid video file")
-        return
+        setError("Please select a valid video file");
+        return;
       }
 
-      // Check file size (limit to 100MB for example)
-      if (selectedFile.size > 100 * 1024 * 1024) {
-        setError("File size exceeds 100MB limit")
-        return
+      // Check file size (limit to 50MB for supabase free tier)
+      if (selectedFile.size > 50 * 1024 * 1024) {
+        setError("File size exceeds 100MB limit");
+        return;
       }
 
-      setFile(selectedFile)
-      setError(null)
+      setFile(selectedFile);
+      setError(null);
 
       // Set default video name from file name
       if (!videoName) {
-        const fileName = selectedFile.name.split(".").slice(0, -1).join(".")
-        setVideoName(fileName)
+        const fileName = selectedFile.name.split(".").slice(0, -1).join(".");
+        setVideoName(fileName);
       }
     }
-  }
+  };
 
   const handleUpload = async () => {
     if (!file) {
-      setError("Please select a file to upload")
-      return
+      setError("Please select a file to upload");
+      return;
     }
 
     if (!videoName.trim()) {
-      setError("Please enter a name for your video")
-      return
+      setError("Please enter a name for your video");
+      return;
     }
 
     try {
-      setUploading(true)
-      setProgress(0)
-      setError(null)
-      setSuccess(false)
+      setUploading(true);
+      setProgress(0);
+      setError(null);
+      setSuccess(false);
 
       // Create a unique file path
-      const fileExt = file.name.split(".").pop()
-      const filePath = `${userId}/${Date.now()}.${fileExt}`
+      const fileExt = file.name.split(".").pop();
+      const filePath = `${userId}/${Date.now()}.${fileExt}`;
 
       // Upload the file to Supabase Storage
-      const { error: uploadError, data } = await supabase.storage.from("videos").upload(filePath, file, {
-        cacheControl: "3600",
-        upsert: false,
-        onUploadProgress: (progress) => {
-          const percent = Math.round((progress.loaded / progress.total) * 100)
-          setProgress(percent)
-        },
-      })
+      const { error: uploadError, data } = await supabase.storage
+        .from("videos")
+        .upload(filePath, file, {
+          cacheControl: "3600",
+          upsert: false,
+          onUploadProgress: (progress) => {
+            const percent = Math.round(
+              (progress.loaded / progress.total) * 100
+            );
+            setProgress(percent);
+          },
+        });
 
       if (uploadError) {
-        console.error("Upload error:", uploadError)
-        throw uploadError
+        console.error("Upload error:", uploadError);
+        throw uploadError;
       }
 
       // Get the public URL
       const {
         data: { publicUrl },
-      } = supabase.storage.from("videos").getPublicUrl(filePath)
+      } = supabase.storage.from("videos").getPublicUrl(filePath);
 
       // Save video metadata to the database
       const { error: dbError } = await supabase.from("videos").insert({
@@ -103,29 +117,29 @@ export default function VideoUploader({ onUploadSuccess, userId }: VideoUploader
         user_id: userId,
         size: file.size,
         type: file.type,
-      })
+      });
 
       if (dbError) {
-        console.error("Database error:", dbError)
-        throw dbError
+        console.error("Database error:", dbError);
+        throw dbError;
       }
 
-      setSuccess(true)
-      onUploadSuccess()
+      setSuccess(true);
+      onUploadSuccess();
 
       // Reset form
-      setFile(null)
-      setVideoName("")
+      setFile(null);
+      setVideoName("");
       if (fileInputRef.current) {
-        fileInputRef.current.value = ""
+        fileInputRef.current.value = "";
       }
     } catch (err: any) {
-      console.error("Upload error:", err)
-      setError(err.message || "An error occurred during upload")
+      console.error("Upload error:", err);
+      setError(err.message || "An error occurred during upload");
     } finally {
-      setUploading(false)
+      setUploading(false);
     }
-  }
+  };
 
   return (
     <Card className="bg-background/80 backdrop-blur-sm border-border/50 cyber-border">
@@ -137,7 +151,10 @@ export default function VideoUploader({ onUploadSuccess, userId }: VideoUploader
       </CardHeader>
       <CardContent className="space-y-4">
         {error && (
-          <Alert variant="destructive" className="bg-destructive/20 border-destructive/30">
+          <Alert
+            variant="destructive"
+            className="bg-destructive/20 border-destructive/30"
+          >
             <AlertCircle className="h-4 w-4" />
             <AlertDescription>{error}</AlertDescription>
           </Alert>
@@ -181,7 +198,8 @@ export default function VideoUploader({ onUploadSuccess, userId }: VideoUploader
           </div>
           {file && (
             <p className="text-sm text-muted-foreground">
-              Selected: {file.name} ({(file.size / (1024 * 1024)).toFixed(2)} MB)
+              Selected: {file.name} ({(file.size / (1024 * 1024)).toFixed(2)}{" "}
+              MB)
             </p>
           )}
         </div>
@@ -192,7 +210,10 @@ export default function VideoUploader({ onUploadSuccess, userId }: VideoUploader
               <span className="text-muted-foreground">Uploading...</span>
               <span className="text-muted-foreground">{progress}%</span>
             </div>
-            <Progress value={progress} className="h-2 [&>div]:bg-cyber-gradient" />
+            <Progress
+              value={progress}
+              className="h-2 [&>div]:bg-cyber-gradient"
+            />
           </div>
         )}
       </CardContent>
@@ -212,6 +233,5 @@ export default function VideoUploader({ onUploadSuccess, userId }: VideoUploader
         </Button>
       </CardFooter>
     </Card>
-  )
+  );
 }
-
