@@ -284,6 +284,7 @@ export default function Home() {
               </div>
             </div>
           </div>
+        </div>
         </section>
       </main>
       <footer className="border-t border-border/40 bg-background">
