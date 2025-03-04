@@ -142,41 +142,49 @@ export default function VideoUploader({
   };
 
   return (
-    <Card>
+    <Card className="bg-background/80 backdrop-blur-sm border-border/50 cyber-border">
       <CardHeader>
-        <CardTitle>Upload Video</CardTitle>
-        <CardDescription>
+        <CardTitle className="cyber-glow">Upload Video</CardTitle>
+        <CardDescription className="text-muted-foreground">
           Upload your video files to your personal library
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
         {error && (
-          <Alert variant="destructive">
+          <Alert
+            variant="destructive"
+            className="bg-destructive/20 border-destructive/30"
+          >
             <AlertCircle className="h-4 w-4" />
             <AlertDescription>{error}</AlertDescription>
           </Alert>
         )}
 
         {success && (
-          <Alert className="bg-green-50 text-green-700 border-green-200">
+          <Alert className="bg-secondary/20 text-secondary border-secondary/30">
             <CheckCircle2 className="h-4 w-4" />
             <AlertDescription>Video uploaded successfully!</AlertDescription>
           </Alert>
         )}
 
         <div className="space-y-2">
-          <Label htmlFor="video-name">Video Name</Label>
+          <Label htmlFor="video-name" className="text-foreground">
+            Video Name
+          </Label>
           <Input
             id="video-name"
             value={videoName}
             onChange={(e) => setVideoName(e.target.value)}
             placeholder="Enter a name for your video"
             disabled={uploading}
+            className="bg-background/50 border-border/50 text-foreground"
           />
         </div>
 
         <div className="space-y-2">
-          <Label htmlFor="video-file">Video File</Label>
+          <Label htmlFor="video-file" className="text-foreground">
+            Video File
+          </Label>
           <div className="flex items-center gap-4">
             <Input
               ref={fileInputRef}
@@ -185,11 +193,11 @@ export default function VideoUploader({
               accept="video/*"
               onChange={handleFileChange}
               disabled={uploading}
-              className="file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-primary file:text-primary-foreground hover:file:bg-primary/90"
+              className="bg-background/50 border-border/50 text-foreground file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-primary file:text-primary-foreground hover:file:bg-primary/90"
             />
           </div>
           {file && (
-            <p className="text-sm text-gray-500">
+            <p className="text-sm text-muted-foreground">
               Selected: {file.name} ({(file.size / (1024 * 1024)).toFixed(2)}{" "}
               MB)
             </p>
@@ -199,10 +207,13 @@ export default function VideoUploader({
         {uploading && (
           <div className="space-y-2">
             <div className="flex justify-between text-sm">
-              <span>Uploading...</span>
-              <span>{progress}%</span>
+              <span className="text-muted-foreground">Uploading...</span>
+              <span className="text-muted-foreground">{progress}%</span>
             </div>
-            <Progress value={progress} className="h-2" />
+            <Progress
+              value={progress}
+              className="h-2 [&>div]:bg-cyber-gradient"
+            />
           </div>
         )}
       </CardContent>
@@ -210,7 +221,7 @@ export default function VideoUploader({
         <Button
           onClick={handleUpload}
           disabled={uploading || !file}
-          className="w-full"
+          className="w-full bg-cyber-gradient hover:opacity-90"
         >
           {uploading ? (
             "Uploading..."
