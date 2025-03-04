@@ -8,7 +8,7 @@
 
 ## Features Overview
 ### Web Portal
-We created a web portal for users to upload their videos. It includes authentication, AWS S3 storage for the videos, and other features documented in the github issues.
+We created a web portal for users to upload their videos. It includes authentication, supabase storage for the videos, and other features documented in the github issues.
 
 See more in `webapp`.
 
