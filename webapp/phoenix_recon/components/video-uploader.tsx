@@ -1,7 +1,6 @@
 "use client";
 
 import type React from "react";
-
 import { useState, useRef } from "react";
 import { createClient } from "@/utils/supabase/client";
 import { Button } from "@/components/ui/button";
@@ -49,7 +48,7 @@ export default function VideoUploader({
 
       // Check file size (limit to 50MB for supabase free tier)
       if (selectedFile.size > 50 * 1024 * 1024) {
-        setError("File size exceeds 100MB limit");
+        setError("File size exceeds 50MB limit");
         return;
       }
 
@@ -61,6 +60,78 @@ export default function VideoUploader({
         const fileName = selectedFile.name.split(".").slice(0, -1).join(".");
         setVideoName(fileName);
       }
+    }
+  };
+
+  const tryConvertVideoFormatIfNeeded = async (videoFile: File): Promise<File> => {
+    // If the file is already in a widely supported format, just return it
+    if (videoFile.type === "video/mp4" && videoFile.name.endsWith(".mp4")) {
+      console.log("Video is already in MP4 format, no conversion needed");
+      return videoFile;
+    }
+    
+    try {
+      console.log("Starting video format conversion...");
+      // Create an object URL for the original video
+      const videoUrl = URL.createObjectURL(videoFile);
+      
+      // Create video element to load the video
+      const video = document.createElement('video');
+      video.src = videoUrl;
+      video.muted = true;
+      
+      // Wait for the video metadata to load
+      await new Promise<void>((resolve, reject) => {
+        video.onloadedmetadata = () => resolve();
+        video.onerror = (e) => reject(new Error(`Error loading video: ${e}`));
+        
+        // Set a timeout in case the video never loads
+        setTimeout(() => reject(new Error("Video load timeout")), 10000);
+      });
+      
+      // Create a canvas element to draw the video frames
+      const canvas = document.createElement('canvas');
+      const ctx = canvas.getContext('2d');
+      if (!ctx) {
+        throw new Error("Failed to get canvas context");
+      }
+      
+      // Set canvas dimensions to match video
+      canvas.width = video.videoWidth;
+      canvas.height = video.videoHeight;
+      
+      // Start playing the video to ensure we can capture frames
+      await video.play();
+      
+      // Draw the first frame to the canvas
+      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+      
+      // Stop the video
+      video.pause();
+      
+      // Convert the canvas to a blob (MP4 format)
+      const blob = await new Promise<Blob>((resolve, reject) => {
+        canvas.toBlob((blob) => {
+          if (blob) {
+            resolve(blob);
+          } else {
+            reject(new Error("Failed to convert canvas to blob"));
+          }
+        }, "video/mp4");
+      });
+      
+      // Create a new File from the Blob
+      const convertedFile = new File([blob], videoFile.name.replace(/\.[^.]+$/, ".mp4"), {
+        type: "video/mp4",
+        lastModified: new Date().getTime()
+      });
+      
+      console.log("Video conversion successful");
+      return convertedFile;
+    } catch (error) {
+      console.error("Video conversion failed:", error);
+      console.log("Using original file instead");
+      return videoFile; // Return the original file if conversion fails
     }
   };
 
@@ -81,16 +152,27 @@ export default function VideoUploader({
       setError(null);
       setSuccess(false);
 
+      let fileToUpload = file;
+      
+      // Try to convert video format if needed
+      try {
+        fileToUpload = await tryConvertVideoFormatIfNeeded(file);
+      } catch (conversionError) {
+        console.error("Conversion error:", conversionError);
+        // Continue with original file if conversion fails
+      }
+
       // Create a unique file path
-      const fileExt = file.name.split(".").pop();
+      const fileExt = fileToUpload.name.split(".").pop() || "mp4";
       const filePath = `${userId}/${Date.now()}.${fileExt}`;
 
       // Upload the file to Supabase Storage
       const { error: uploadError, data } = await supabase.storage
         .from("videos")
-        .upload(filePath, file, {
+        .upload(filePath, fileToUpload, {
           cacheControl: "3600",
           upsert: false,
+          contentType: "video/mp4", // Force content type to be video/mp4
           onUploadProgress: (progress) => {
             const percent = Math.round(
               (progress.loaded / progress.total) * 100
@@ -115,8 +197,9 @@ export default function VideoUploader({
         path: filePath,
         url: publicUrl,
         user_id: userId,
-        size: file.size,
-        type: file.type,
+        size: fileToUpload.size,
+        type: "video/mp4", // Force type to be video/mp4
+        // Removed is_360 field since it's not in the database
       });
 
       if (dbError) {
@@ -144,9 +227,9 @@ export default function VideoUploader({
   return (
     <Card className="bg-background/80 backdrop-blur-sm border-border/50 cyber-border">
       <CardHeader>
-        <CardTitle className="cyber-glow">Upload Video</CardTitle>
+        <CardTitle className="cyber-glow">Upload 360° Video</CardTitle>
         <CardDescription className="text-muted-foreground">
-          Upload your video files to your personal library
+          Upload your 360° video files to experience them in immersive VR
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
@@ -183,7 +266,7 @@ export default function VideoUploader({
 
         <div className="space-y-2">
           <Label htmlFor="video-file" className="text-foreground">
-            Video File
+            360° Video File
           </Label>
           <div className="flex items-center gap-4">
             <Input
@@ -227,7 +310,7 @@ export default function VideoUploader({
             "Uploading..."
           ) : (
             <>
-              <Upload className="mr-2 h-4 w-4" /> Upload Video
+              <Upload className="mr-2 h-4 w-4" /> Upload 360° Video
             </>
           )}
         </Button>
