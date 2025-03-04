@@ -275,6 +275,7 @@ export default function Home() {
             </div>
             <div className="mx-auto w-full max-w-sm space-y-2">
               <div className="flex justify-center">
+              <div className="flex justify-center">
                 <Link href="/register">
                   <Button size="lg" className="w-full min-[400px]:w-auto bg-cyber-gradient hover:opacity-90">
                     Get Started
@@ -301,6 +302,5 @@ export default function Home() {
         </div>
       </footer>
     </div>
-  )
+  );
 }
-
