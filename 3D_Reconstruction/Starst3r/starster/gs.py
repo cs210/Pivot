@@ -99,8 +99,8 @@ def run_3dgs_optim(
         iters: int,
         enable_pruning: bool = False,
         loss_ssim_fac=0.2,
-        loss_opacity_fac=0.01,
-        loss_scale_fac=0.01,
+        loss_opacity_fac=0.005,  # Reduced opacity penalty for denser points
+        loss_scale_fac=0.005,    # Reduced scale penalty for more detail
         verbose: bool = False,
     ) -> list[float]:
     """Run 3DGS optimization and pruning (optional) for a number of iterations.

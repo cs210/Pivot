@@ -89,15 +89,18 @@ try:
     pcd.colors = o3d.utility.Vector3dVector(colors)
     
     # After creating the point cloud, filter outliers
-    pcd = pcd.voxel_down_sample(voxel_size=0.005)  # Uniform sampling
-    cl, ind = pcd.remove_statistical_outlier(nb_neighbors=20, std_ratio=2.0)
-    pcd = pcd.select_by_index(ind)
+    # For point cloud pre-processing
+    # Use smaller voxel size for more detail
+    voxel_size = 0.002  # Reducing this increases detail
+    pcd = pcd.voxel_down_sample(voxel_size=voxel_size)
+
+    # Don't be too aggressive with outlier removal
+    cl, ind = pcd.remove_statistical_outlier(nb_neighbors=30, std_ratio=2.5)  # Allow more points
 
     # Better normal estimation
     pcd.estimate_normals(
-        search_param=o3d.geometry.KDTreeSearchParamHybrid(radius=0.05, max_nn=50)
+        search_param=o3d.geometry.KDTreeSearchParamHybrid(radius=0.01, max_nn=30)
     )
-    pcd.orient_normals_consistent_tangent_plane(100)
     # Use a standard viewpoint or estimate one from the point cloud
     estimated_camera_pos = np.mean(np.asarray(pcd.points), axis=0) + np.array([0, 0, 1])  # Position above the center
     pcd.orient_normals_towards_camera_location(estimated_camera_pos)
@@ -119,29 +122,41 @@ try:
     # 1. Alpha shapes - fast but may not work well for all point clouds
     print("\nMethod 1: Creating mesh with Alpha Shapes...")
     try:
-        alpha = 0.01  # Try different values: 0.005, 0.01, 0.02, 0.05
-        mesh_alpha = o3d.geometry.TriangleMesh.create_from_point_cloud_alpha_shape(pcd, alpha)
-        mesh_alpha.compute_vertex_normals()
-        
-        # Paint the mesh vertices using the point cloud colors
-        if len(mesh_alpha.vertices) > 0:
-            vertex_colors = np.asarray(pcd.colors)
-            if len(vertex_colors) > 0:
-                mesh_alpha.vertex_colors = o3d.utility.Vector3dVector(
-                    np.tile(np.mean(vertex_colors, axis=0), (len(mesh_alpha.vertices), 1))
-                )
+        # For Alpha Shapes - try much smaller alpha values
+        for alpha_value in [0.005, 0.0075, 0.01]:  # Try smaller alpha values for denser mesh
+            mesh_alpha = o3d.geometry.TriangleMesh.create_from_point_cloud_alpha_shape(pcd, alpha_value)
+            mesh_alpha.compute_vertex_normals()
             
-            # Save the alpha shape mesh
-            alpha_mesh_path = "models/scene_mesh_alpha.ply"
-            o3d.io.write_triangle_mesh(alpha_mesh_path, mesh_alpha)
-            print(f"Alpha Shape mesh saved to {alpha_mesh_path}")
+            # Paint the mesh vertices using the point cloud colors
+            if len(mesh_alpha.vertices) > 0:
+                vertex_colors = np.asarray(pcd.colors)
+                if len(vertex_colors) > 0:
+                    mesh_alpha.vertex_colors = o3d.utility.Vector3dVector(
+                        np.tile(np.mean(vertex_colors, axis=0), (len(mesh_alpha.vertices), 1))
+                    )
+                
+                # Save the alpha shape mesh
+                alpha_mesh_path = "models/scene_mesh_alpha.ply"
+                o3d.io.write_triangle_mesh(alpha_mesh_path, mesh_alpha)
+                print(f"Alpha Shape mesh saved to {alpha_mesh_path}")
     except Exception as e:
         print(f"Alpha Shape reconstruction failed: {e}")
     
     # 2. Ball pivoting - better for uniformly sampled point clouds
     print("\nMethod 2: Creating mesh with Ball Pivoting...")
     try:
-        radii = [0.001, 0.002, 0.004, 0.008]  # Try smaller values
+        # For Ball Pivoting - adjust based on point cloud density
+        # Calculate average point distance for better radius selection
+        avg_dist = 0
+        pcd_tree = o3d.geometry.KDTreeFlann(pcd)
+        for i in range(min(1000, len(pcd.points))):
+            [_, idx, dist] = pcd_tree.search_knn_vector_3d(pcd.points[i], 11)
+            avg_dist += np.mean(dist[1:])
+        avg_dist /= min(1000, len(pcd.points))
+        base_radius = np.sqrt(avg_dist) * 1.5  # Smaller multiplier for denser mesh
+
+        # Ball pivoting radii should be adjusted based on point cloud
+        radii = [base_radius * 0.25, base_radius * 0.5, base_radius, base_radius * 2]
         mesh_bpa = o3d.geometry.TriangleMesh.create_from_point_cloud_ball_pivoting(
             pcd, o3d.utility.DoubleVector(radii)
         )
@@ -174,12 +189,14 @@ try:
     # 3. Poisson reconstruction - usually best quality but can be slower
     print("\nMethod 3: Creating mesh with Poisson reconstruction...")
     try:
+        # For Poisson reconstruction
+        # Higher depth for more detail
         mesh_poisson, densities = o3d.geometry.TriangleMesh.create_from_point_cloud_poisson(
             pcd, depth=10, width=0, scale=1.1, linear_fit=False
         )
         
-        # More aggressive density filtering for Poisson
-        density_threshold = np.quantile(densities, 0.2)  # Higher percentile for cleaner results
+        # Less aggressive density filtering to keep more points
+        density_threshold = np.quantile(densities, 0.05)  # Only remove the bottom 5%
         print(f"  Filtering mesh with density threshold: {density_threshold}")
         vertices_to_remove = densities < density_threshold
         mesh_poisson.remove_vertices_by_mask(vertices_to_remove)
@@ -246,6 +263,64 @@ try:
         
     print("\nMesh creation complete. Check the 'models' directory for output files.")
     print("You can visualize these meshes using tools like MeshLab, Blender, or Open3D's visualization.")
+    
+    # Poisson-specific improvements
+    print("\nFocused Poisson mesh reconstruction...")
+
+    # 1. Ensure high-quality normals (critical for Poisson)
+    pcd.estimate_normals(
+        search_param=o3d.geometry.KDTreeSearchParamHybrid(radius=0.01, max_nn=50)
+    )
+    pcd.orient_normals_consistent_tangent_plane(100)
+
+    # 2. Run Poisson at multiple depths to find best quality
+    best_poisson_mesh = None
+    best_quality_score = -1
+
+    for depth in [9, 10, 11]:
+        print(f"  Testing Poisson reconstruction at depth {depth}...")
+        mesh_poisson, densities = o3d.geometry.TriangleMesh.create_from_point_cloud_poisson(
+            pcd, depth=depth, width=0, scale=1.1, linear_fit=False
+        )
+        
+        if len(mesh_poisson.vertices) == 0:
+            continue
+        
+        # Only filter the very sparse areas (bottom 2%)
+        density_threshold = np.quantile(densities, 0.02)
+        print(f"  Filtering sparse areas (threshold: {density_threshold:.6f})...")
+        vertices_to_remove = densities < density_threshold
+        mesh_poisson.remove_vertices_by_mask(vertices_to_remove)
+        
+        # Calculate a quality score (higher is better)
+        # Based on mesh density vs complexity
+        vertex_count = len(mesh_poisson.vertices)
+        triangle_count = len(mesh_poisson.triangles)
+        if triangle_count == 0:
+            continue
+        
+        # Quality metric: vertex/triangle ratio, normalized by depth
+        # Higher values indicate better mesh quality
+        quality_score = (vertex_count / triangle_count) * (depth / 10)
+        print(f"  Quality score: {quality_score:.4f} (vertices: {vertex_count}, triangles: {triangle_count})")
+        
+        if quality_score > best_quality_score:
+            best_quality_score = quality_score
+            best_poisson_mesh = mesh_poisson
+            print(f"  ✓ New best mesh found at depth {depth}!")
+
+    # Use the best poisson mesh for further processing
+    if best_poisson_mesh is not None:
+        mesh_poisson = best_poisson_mesh
+        
+        # Apply gentle smoothing to remove noise while preserving features
+        mesh_poisson = mesh_poisson.filter_smooth_taubin(number_of_iterations=5)
+        mesh_poisson.compute_vertex_normals()
+        
+        # Save the optimized Poisson mesh
+        optimized_poisson_path = "models/scene_mesh_poisson_optimized.ply"
+        o3d.io.write_triangle_mesh(optimized_poisson_path, mesh_poisson)
+        print(f"Optimized Poisson mesh saved to {optimized_poisson_path}")
     
 except ImportError:
     print("Please install Open3D: pip install open3d")
