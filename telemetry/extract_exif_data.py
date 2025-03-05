@@ -19,7 +19,7 @@ def extract_features(image_path):
 
 def main():
     if len(sys.argv) != 2:
-        print("Usage: python extract_data2.py <path_to_image>")
+        print("Usage: python extract_exif_data.py <path_to_image>")
         sys.exit(1)
     
     # Get the image file path from command line argument
