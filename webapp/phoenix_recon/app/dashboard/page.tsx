@@ -10,7 +10,7 @@ import { Card, CardContent } from "@/components/ui/card"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Video, Trash2 } from "lucide-react"
 import VideoUploader from "@/components/video-uploader"
-import VideoPlayer from "@/components/video-player"
+import VideoFrameViewer from "@/components/video-frame-viewer"
 import { Header } from "@/components/header"
 
 interface Video {
@@ -180,16 +180,16 @@ export default function Dashboard() {
                     ))}
                   </div>
                   <div className="md:col-span-8">
-                  {selectedVideo ? (
-                    <div className="space-y-4">
-                      <h2 className="text-xl font-semibold cyber-glow">{selectedVideo.name}</h2>
-                      <VideoPlayer url={selectedVideo.url} name={selectedVideo.name} />
-                    </div>
-                  ) : (
-                    <div className="flex items-center justify-center h-64 border-2 border-dashed rounded-lg border-border/50 bg-background/30">
-                      <p className="text-muted-foreground">Select a video to play</p>
-                    </div>
-                  )}
+                    {selectedVideo ? (
+                      <div className="space-y-4">
+                        <h2 className="text-xl font-semibold cyber-glow">{selectedVideo.name}</h2>
+                        <VideoFrameViewer videoUrl={selectedVideo.url} videoName={selectedVideo.name} />
+                      </div>
+                    ) : (
+                      <div className="flex items-center justify-center h-64 border-2 border-dashed rounded-lg border-border/50 bg-background/30">
+                        <p className="text-muted-foreground">Select a video to play</p>
+                      </div>
+                    )}
                   </div>
                 </div>
               )}
