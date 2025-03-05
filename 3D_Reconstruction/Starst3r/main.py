@@ -1,83 +1,204 @@
 """
-Testing script
+3D Reconstruction Script with Configurable Parameters
 """
 
 import os
+import sys
+from pathlib import Path
+import torch
+import argparse
+import numpy as np
+import cv2
+
+# Add Open3D import at the top level
+try:
+    import open3d as o3d
+    OPEN3D_AVAILABLE = True
+except ImportError:
+    OPEN3D_AVAILABLE = False
+    print("Open3D not available. Install with: pip install open3d")
+
+# =============================================================================
+# HYPERPARAMETERS - Tweak these values to adjust reconstruction quality
+# =============================================================================
+
+# General Settings
+RES = 312                    # Image resolution for processing
+USE_CUDA = True              # Whether to use GPU acceleration
+
+# Input/Output Paths
+IMAGE_DIR = "D:/CS210/Phoenix-Recon/3D_Reconstruction/open_mvg/images"
+MODEL_CHECKPOINT = "D:/CS210/Phoenix-Recon/3D_Reconstruction/mast3r/docker/files/checkpoints/MASt3R_ViTLarge_BaseDecoder_512_catmlpdpt_metric.pth"
+OUTPUT_DIR = "models"        # Directory to save 3D models
+RENDER_DIR = "imgs"          # Directory to save rendered images
+
+# 3DGS Parameters
+INIT_SCALE = 1e-4            # Initial scale for Gaussian points (smaller = more detail)
+ENABLE_PRUNING = True        # Enable pruning during optimization
+NUM_COARSE_ITERS = 2        # Number of coarse optimization batches
+COARSE_ITERS = 200           # Iterations per coarse optimization batch
+NUM_FINE_ITERS = 1           # Number of fine optimization batches
+FINE_ITERS = 200             # Iterations per fine optimization batch (no pruning)
+
+# Loss Weights for 3DGS Optimization
+LOSS_OPACITY_FAC = 0.005     # Opacity loss factor (higher = sparser points)
+LOSS_SCALE_FAC = 0.005       # Scale loss factor (higher = larger gaussians)
+LOSS_SSIM_FAC = 0.2          # SSIM loss factor
+
+# Point Cloud Processing
+VOXEL_SIZE = 0.002           # Larger voxels = smoother but less detailed
+OUTLIER_NEIGHBORS = 40       # More neighbors for better outlier detection
+OUTLIER_STD = 1.8            # Lower threshold = more aggressive filtering
+
+# Normal Estimation
+NORMAL_RADIUS = 0.02         # Larger radius for smoother normals
+NORMAL_MAX_NN = 100          # Many neighbors for stable normals
+
+# Alpha Shape Parameters
+ALPHA_VALUES = [0.005, 0.0075, 0.01]  # Alpha values to try
+
+# Ball Pivoting Parameters
+BP_RADIUS_MULT = [0.25, 0.5, 1.0, 2.0]  # Multipliers for ball pivot radius
+
+# Poisson Reconstruction Parameters
+POISSON_DEPTHS = [8, 9]      # Lower depths = smoother surfaces
+POISSON_SCALE = 1.2          # Slightly larger to fill holes
+POISSON_LINEAR_FIT = True    # Better for noisy data
+POISSON_DENSITY_QUANTILE = 0.03  # Higher threshold = cleaner results
+
+# Mesh Postprocessing
+SMOOTHING_ITERATIONS = 15    # More iterations = smoother result
+TARGET_TRIANGLES = 80000     # Fewer triangles = smoother simplified mesh
+
+# MASt3R Parameters
+MAST3R_CONF_THRESHOLD = 0.8  # Confidence threshold for MASt3R feature matching (0.5-1.5)
+                             # Lower values retain more points (possibly noisier)
+                             # Higher values keep only high-confidence points
+IMAGE_BATCH_SIZE = 2         # Number of images to process in each batch
+
+# =============================================================================
+# SETUP
+# =============================================================================
+
 # Set PyTorch memory allocation for better GPU memory handling
 os.environ['PYTORCH_CUDA_ALLOC_CONF'] = 'expandable_segments:True'
 
-import sys
+# Add required paths
 sys.path.append("mast3r")
 sys.path.append("mast3r/dust3r")
 sys.path.append("mast3r/dust3r/croco")
 
-from pathlib import Path
+# Set device
+DEVICE = torch.device("cuda" if USE_CUDA and torch.cuda.is_available() else "cpu")
+print(f"Using device: {DEVICE}")
 
-import starster
-import torch
-import argparse  # Import argparse
-import numpy as np
-import cv2
+# Add required workaround for argparse
+torch.serialization.add_safe_globals([argparse.Namespace])
 
-DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-RES = 256
+# Create output directories
+os.makedirs(OUTPUT_DIR, exist_ok=True)
+os.makedirs(RENDER_DIR, exist_ok=True)
 
-torch.serialization.add_safe_globals([argparse.Namespace]) # Add this line
+# =============================================================================
+# MAIN FUNCTION
+# =============================================================================
 
-# Load image files
-files = []
-dir = Path("D:/CS210/Phoenix-Recon/3D_Reconstruction/open_mvg/images").absolute()
-for file in dir.iterdir():
-    if file.suffix.lower() == ".jpg":
-        files.append(str(file))
-
-# Load images and resize to target resolution
-imgs = []
-for file in files:
-    imgs.append(starster.load_image(file, RES))
-
-# Load Mast3r model
-model = starster.Mast3rModel.from_pretrained(
-    "D:/CS210/Phoenix-Recon/3D_Reconstruction/mast3r/docker/files/checkpoints/MASt3R_ViTLarge_BaseDecoder_512_catmlpdpt_metric.pth"
-).to(DEVICE)
-
-# Initialize scene and add images
-scene = starster.Scene(device=DEVICE)
-scene.add_images(model, imgs[:2])
-scene.add_images(model, imgs[2:])
-
-print(scene.imgs[0].shape)
-
-# Initialize 3D Gaussian Splatting with smaller initial scale
-scene.init_3dgs(init_scale=1e-3)
-
-# Run optimization with increased iterations
-print("Running initial optimization (1200 iterations with pruning)...")
-for _ in range(6):
-    scene.run_3dgs_optim(200, enable_pruning=True, verbose=True)  # More iterations
-print("Running final optimization (200 iterations without pruning)...")
-scene.run_3dgs_optim(200, enable_pruning=False, verbose=True)
-
-# Render views and save images
-imgs, alpha, info = scene.render_3dgs_original(RES, RES)
-print(f"Rendered {imgs.shape[0]} views")
-imgs = torch.clip(imgs.detach().cpu(), 0, 1)
-imgs = (imgs.numpy()[..., ::-1] * 255).astype(np.uint8)
-
-# Create imgs directory if it doesn't exist
-os.makedirs("imgs", exist_ok=True)
-
-for i, img in enumerate(imgs):
-    cv2.imwrite(f"imgs/{i}.png", img)
-
-# Export 3D model using Open3D
-print("\n--------- Exporting 3D Model ---------")
-try:
-    import open3d as o3d
+def main():
+    # Import starster here to avoid import errors if CUDA isn't available
+    import starster
     
-    # Create output directory
-    os.makedirs("models", exist_ok=True)
+    # Load image files
+    print("Loading images...")
+    files = []
+    dir_path = Path(IMAGE_DIR).absolute()
+    for file in dir_path.iterdir():
+        if file.suffix.lower() == ".jpg":
+            files.append(str(file))
     
+    if not files:
+        print(f"No images found in {IMAGE_DIR}")
+        return
+    
+    print(f"Found {len(files)} images")
+    
+    # Load images and resize to target resolution
+    imgs = []
+    for file in files:
+        imgs.append(starster.load_image(file, RES))
+    
+    # Load Mast3r model
+    print("Loading Mast3r model...")
+    model = starster.Mast3rModel.from_pretrained(MODEL_CHECKPOINT).to(DEVICE)
+    
+    # Initialize scene and add images
+    print("Creating scene and adding images...")
+    scene = starster.Scene(device=DEVICE)
+
+    # Process images in batches with confidence threshold
+    print(f"Using MASt3R confidence threshold: {MAST3R_CONF_THRESHOLD}")
+    for i in range(0, len(imgs), IMAGE_BATCH_SIZE):
+        batch = imgs[i:i+IMAGE_BATCH_SIZE]
+        print(f"Adding batch of {len(batch)} images ({i+1}-{min(i+IMAGE_BATCH_SIZE, len(imgs))}/{len(imgs)})...")
+        scene.add_images(model, batch, conf_thres=MAST3R_CONF_THRESHOLD)
+
+    print(f"Scene created with image shape: {scene.imgs[0].shape}")
+    
+    # Initialize 3D Gaussian Splatting with configured initial scale
+    print("Initializing 3D Gaussian Splatting...")
+    scene.init_3dgs(init_scale=INIT_SCALE)
+    
+    # Run optimization with configured iterations
+    print(f"Running coarse optimization ({NUM_COARSE_ITERS} batches of {COARSE_ITERS} iterations with pruning)...")
+    for i in range(NUM_COARSE_ITERS):
+        print(f"Batch {i+1}/{NUM_COARSE_ITERS}")
+        scene.run_3dgs_optim(
+            COARSE_ITERS, 
+            enable_pruning=ENABLE_PRUNING, 
+            loss_opacity_fac=LOSS_OPACITY_FAC,
+            loss_scale_fac=LOSS_SCALE_FAC,
+            loss_ssim_fac=LOSS_SSIM_FAC,
+            verbose=True
+        )
+    
+    print(f"Running fine optimization ({NUM_FINE_ITERS} batches of {FINE_ITERS} iterations without pruning)...")
+    for i in range(NUM_FINE_ITERS):
+        print(f"Batch {i+1}/{NUM_FINE_ITERS}")
+        scene.run_3dgs_optim(
+            FINE_ITERS, 
+            enable_pruning=False,
+            loss_opacity_fac=LOSS_OPACITY_FAC/2,  # Reduce penalties for final refinement
+            loss_scale_fac=LOSS_SCALE_FAC/2,
+            loss_ssim_fac=LOSS_SSIM_FAC,
+            verbose=True
+        )
+    
+    # Render views and save images
+    print("Rendering views...")
+    imgs, alpha, info = scene.render_3dgs_original(RES, RES)
+    print(f"Rendered {imgs.shape[0]} views")
+    imgs = torch.clip(imgs.detach().cpu(), 0, 1)
+    imgs = (imgs.numpy()[..., ::-1] * 255).astype(np.uint8)
+    
+    # Save rendered images
+    for i, img in enumerate(imgs):
+        cv2.imwrite(f"{RENDER_DIR}/{i}.png", img)
+    
+    # Export 3D model using Open3D if available
+    export_mesh(scene)
+
+# =============================================================================
+# MESH EXPORT FUNCTION
+# =============================================================================
+
+# Update export_mesh function to use global o3d
+
+def export_mesh(scene):
+    print("\n--------- Exporting 3D Model ---------")
+    if not OPEN3D_AVAILABLE:
+        print("Open3D not found. Falling back to basic point cloud export.")
+        export_basic_point_cloud(scene)
+        return
+        
     # Export Gaussian centers as point cloud
     print("Converting Gaussians to point cloud...")
     means = scene.gaussians["means"].detach().cpu().numpy()
@@ -88,64 +209,116 @@ try:
     pcd.points = o3d.utility.Vector3dVector(means)
     pcd.colors = o3d.utility.Vector3dVector(colors)
     
-    # After creating the point cloud, filter outliers
-    # For point cloud pre-processing
-    # Use smaller voxel size for more detail
-    voxel_size = 0.002  # Reducing this increases detail
-    pcd = pcd.voxel_down_sample(voxel_size=voxel_size)
-
-    # Don't be too aggressive with outlier removal
-    cl, ind = pcd.remove_statistical_outlier(nb_neighbors=30, std_ratio=2.5)  # Allow more points
-
-    # Better normal estimation
-    pcd.estimate_normals(
-        search_param=o3d.geometry.KDTreeSearchParamHybrid(radius=0.01, max_nn=30)
-    )
-    # Use a standard viewpoint or estimate one from the point cloud
-    estimated_camera_pos = np.mean(np.asarray(pcd.points), axis=0) + np.array([0, 0, 1])  # Position above the center
-    pcd.orient_normals_towards_camera_location(estimated_camera_pos)
-
-    # Save raw point cloud
-    point_cloud_path = "models/scene_point_cloud.ply"
+    # Pre-process point cloud
+    print("Pre-processing point cloud...")
+    pcd = pre_process_point_cloud(pcd)
+    
+    # Save processed point cloud
+    point_cloud_path = f"{OUTPUT_DIR}/scene_point_cloud.ply"
     o3d.io.write_point_cloud(point_cloud_path, pcd)
-    print(f"Exported point cloud with {len(means)} points to {point_cloud_path}")
+    print(f"Exported processed point cloud with {len(pcd.points)} points to {point_cloud_path}")
     
-    # Estimate normals for better mesh reconstruction
-    print("Estimating point normals...")
+    # Generate meshes using different methods
+    generate_alpha_shape_meshes(pcd)
+    generate_ball_pivoting_mesh(pcd)
+    generate_poisson_meshes(pcd)
+    
+    print("\nMesh creation complete. Check the output directory for mesh files.")
+    print("You can visualize these meshes using tools like MeshLab, Blender, or Open3D's visualization.")
+
+# =============================================================================
+# POINT CLOUD PROCESSING FUNCTIONS
+# =============================================================================
+
+def pre_process_point_cloud(pcd):
+    """Apply pre-processing steps to point cloud for better mesh reconstruction."""
+    # First voxel pass to unify density
+    print(f"  Initial downsampling with voxel size {VOXEL_SIZE*2}...")
+    pcd = pcd.voxel_down_sample(voxel_size=VOXEL_SIZE*2)
+    
+    # Statistical outlier removal (first pass - aggressive)
+    print(f"  Removing gross outliers...")
+    cl, ind = pcd.remove_statistical_outlier(nb_neighbors=OUTLIER_NEIGHBORS, std_ratio=OUTLIER_STD*0.8)
+    pcd = cl
+    
+    # Second voxel pass for final density
+    print(f"  Final downsampling with voxel size {VOXEL_SIZE}...")
+    pcd = pcd.voxel_down_sample(voxel_size=VOXEL_SIZE)
+    
+    # Second outlier pass (finer)
+    print(f"  Removing fine outliers...")
+    cl, ind = pcd.remove_statistical_outlier(nb_neighbors=OUTLIER_NEIGHBORS, std_ratio=OUTLIER_STD)
+    pcd = cl
+    
+    # Normal estimation with careful parameters
+    print(f"  Estimating smooth normals...")
     pcd.estimate_normals(
-        search_param=o3d.geometry.KDTreeSearchParamHybrid(radius=0.1, max_nn=30)
+        search_param=o3d.geometry.KDTreeSearchParamHybrid(radius=NORMAL_RADIUS, max_nn=NORMAL_MAX_NN)
     )
-    pcd.orient_normals_consistent_tangent_plane(100)
     
-    # Try different mesh reconstruction methods
+    # Apply normal filtering to smooth normals (this helps create smoother meshes)
+    normal_arr = np.asarray(pcd.normals)
+    for _ in range(2):  # 2 iterations of normal smoothing
+        smooth_normals = np.zeros_like(normal_arr)
+        tree = o3d.geometry.KDTreeFlann(pcd)
+        for i in range(len(pcd.points)):
+            [k, idx, _] = tree.search_knn_vector_3d(pcd.points[i], 10)
+            smooth_normals[i] = np.mean(normal_arr[idx], axis=0)
+        smooth_normals = smooth_normals / np.linalg.norm(smooth_normals, axis=1, keepdims=True)
+        normal_arr = smooth_normals
     
-    # 1. Alpha shapes - fast but may not work well for all point clouds
+    pcd.normals = o3d.utility.Vector3dVector(normal_arr)
+    
+    # Orient normals consistently
+    print("  Orienting normals...")
+    estimated_camera_pos = np.mean(np.asarray(pcd.points), axis=0) + np.array([0, 0, 1])
+    pcd.orient_normals_towards_camera_location(estimated_camera_pos)
+    
+    return pcd
+
+# =============================================================================
+# MESH GENERATION FUNCTIONS
+# =============================================================================
+
+def generate_alpha_shape_meshes(pcd):
+    """Generate meshes using Alpha Shape algorithm with different alpha values."""
     print("\nMethod 1: Creating mesh with Alpha Shapes...")
     try:
-        # For Alpha Shapes - try much smaller alpha values
-        for alpha_value in [0.005, 0.0075, 0.01]:  # Try smaller alpha values for denser mesh
+        best_alpha_mesh = None
+        best_alpha_triangle_count = 0
+        
+        for alpha_value in ALPHA_VALUES:
+            print(f"  Creating alpha shape with alpha={alpha_value}...")
             mesh_alpha = o3d.geometry.TriangleMesh.create_from_point_cloud_alpha_shape(pcd, alpha_value)
             mesh_alpha.compute_vertex_normals()
             
-            # Paint the mesh vertices using the point cloud colors
             if len(mesh_alpha.vertices) > 0:
-                vertex_colors = np.asarray(pcd.colors)
-                if len(vertex_colors) > 0:
-                    mesh_alpha.vertex_colors = o3d.utility.Vector3dVector(
-                        np.tile(np.mean(vertex_colors, axis=0), (len(mesh_alpha.vertices), 1))
-                    )
+                # Color the mesh
+                color_mesh_from_point_cloud(mesh_alpha, pcd)
                 
                 # Save the alpha shape mesh
-                alpha_mesh_path = "models/scene_mesh_alpha.ply"
+                alpha_mesh_path = f"{OUTPUT_DIR}/scene_mesh_alpha_{alpha_value:.4f}.ply"
                 o3d.io.write_triangle_mesh(alpha_mesh_path, mesh_alpha)
-                print(f"Alpha Shape mesh saved to {alpha_mesh_path}")
+                print(f"  Alpha Shape mesh with alpha={alpha_value} saved with {len(mesh_alpha.triangles)} triangles")
+                
+                # Track the best alpha mesh (most triangles, up to a reasonable limit)
+                if len(mesh_alpha.triangles) > best_alpha_triangle_count and len(mesh_alpha.triangles) < 1000000:
+                    best_alpha_triangle_count = len(mesh_alpha.triangles)
+                    best_alpha_mesh = mesh_alpha
+        
+        # Save the best alpha mesh
+        if best_alpha_mesh is not None:
+            best_alpha_path = f"{OUTPUT_DIR}/scene_mesh_alpha_best.ply"
+            o3d.io.write_triangle_mesh(best_alpha_path, best_alpha_mesh)
+            print(f"Best alpha shape mesh (with {best_alpha_triangle_count} triangles) saved")
+            
     except Exception as e:
         print(f"Alpha Shape reconstruction failed: {e}")
-    
-    # 2. Ball pivoting - better for uniformly sampled point clouds
+
+def generate_ball_pivoting_mesh(pcd):
+    """Generate mesh using Ball Pivoting algorithm."""
     print("\nMethod 2: Creating mesh with Ball Pivoting...")
     try:
-        # For Ball Pivoting - adjust based on point cloud density
         # Calculate average point distance for better radius selection
         avg_dist = 0
         pcd_tree = o3d.geometry.KDTreeFlann(pcd)
@@ -153,188 +326,192 @@ try:
             [_, idx, dist] = pcd_tree.search_knn_vector_3d(pcd.points[i], 11)
             avg_dist += np.mean(dist[1:])
         avg_dist /= min(1000, len(pcd.points))
-        base_radius = np.sqrt(avg_dist) * 1.5  # Smaller multiplier for denser mesh
-
-        # Ball pivoting radii should be adjusted based on point cloud
-        radii = [base_radius * 0.25, base_radius * 0.5, base_radius, base_radius * 2]
+        base_radius = np.sqrt(avg_dist) * 1.5
+        
+        # Create radius array
+        radii = [base_radius * mult for mult in BP_RADIUS_MULT]
+        print(f"  Using ball radii: {[f'{r:.6f}' for r in radii]}")
+        
         mesh_bpa = o3d.geometry.TriangleMesh.create_from_point_cloud_ball_pivoting(
             pcd, o3d.utility.DoubleVector(radii)
         )
         mesh_bpa.compute_vertex_normals()
         
-        # Paint the mesh
         if len(mesh_bpa.vertices) > 0:
-            # Transfer colors from point cloud to mesh
-            mesh_colors = np.zeros((len(mesh_bpa.vertices), 3))
-            vertices = np.asarray(mesh_bpa.vertices)
-            points = np.asarray(pcd.points)
-            point_colors = np.asarray(pcd.colors)
-            
-            # Find nearest points for each vertex
-            from scipy.spatial import KDTree
-            tree = KDTree(points)
-            distances, indices = tree.query(vertices, k=1)
-            
-            # Assign colors
-            mesh_colors = point_colors[indices]
-            mesh_bpa.vertex_colors = o3d.utility.Vector3dVector(mesh_colors)
+            # Color the mesh
+            color_mesh_from_point_cloud(mesh_bpa, pcd)
             
             # Save Ball Pivoting mesh
-            bpa_mesh_path = "models/scene_mesh_ball_pivot.ply"
+            bpa_mesh_path = f"{OUTPUT_DIR}/scene_mesh_ball_pivot_r{base_radius:.4f}.ply"
             o3d.io.write_triangle_mesh(bpa_mesh_path, mesh_bpa)
-            print(f"Ball Pivoting mesh saved to {bpa_mesh_path}")
+            print(f"Ball Pivoting mesh saved with {len(mesh_bpa.triangles)} triangles")
+            
+            # Also save with standard name
+            std_bpa_path = f"{OUTPUT_DIR}/scene_mesh_ball_pivot.ply"
+            o3d.io.write_triangle_mesh(std_bpa_path, mesh_bpa)
     except Exception as e:
         print(f"Ball Pivoting reconstruction failed: {e}")
-    
-    # 3. Poisson reconstruction - usually best quality but can be slower
+
+def generate_poisson_meshes(pcd):
+    """Generate meshes using Poisson Surface Reconstruction at different depths."""
     print("\nMethod 3: Creating mesh with Poisson reconstruction...")
     try:
-        # For Poisson reconstruction
-        # Higher depth for more detail
-        mesh_poisson, densities = o3d.geometry.TriangleMesh.create_from_point_cloud_poisson(
-            pcd, depth=10, width=0, scale=1.1, linear_fit=False
-        )
+        best_poisson_mesh = None
+        best_quality_score = -1
+        best_depth = 0
         
-        # Less aggressive density filtering to keep more points
-        density_threshold = np.quantile(densities, 0.05)  # Only remove the bottom 5%
-        print(f"  Filtering mesh with density threshold: {density_threshold}")
-        vertices_to_remove = densities < density_threshold
-        mesh_poisson.remove_vertices_by_mask(vertices_to_remove)
-        
-        mesh_poisson.compute_vertex_normals()
-        
-        # Color the mesh
-        if len(mesh_poisson.vertices) > 0:
-            # Transfer colors from point cloud to mesh using KDTree
-            vertices = np.asarray(mesh_poisson.vertices)
-            points = np.asarray(pcd.points)
-            point_colors = np.asarray(pcd.colors)
+        for depth in POISSON_DEPTHS:
+            print(f"  Testing Poisson reconstruction at depth {depth}...")
+            try:
+                # Set parameters for Poisson reconstruction
+                mesh_poisson, densities = o3d.geometry.TriangleMesh.create_from_point_cloud_poisson(
+                    pcd, depth=depth, width=0, scale=POISSON_SCALE, linear_fit=POISSON_LINEAR_FIT
+                )
+                
+                if len(mesh_poisson.vertices) == 0:
+                    print("  No vertices generated at this depth.")
+                    continue
+                    
+                # Save raw mesh before filtering
+                raw_mesh_path = f"{OUTPUT_DIR}/scene_mesh_poisson_raw_d{depth}.ply"
+                o3d.io.write_triangle_mesh(raw_mesh_path, mesh_poisson)
+                
+                # Filter by density (keeping more points)
+                density_threshold = np.quantile(densities, POISSON_DENSITY_QUANTILE)
+                print(f"  Filtering mesh with density threshold: {density_threshold:.6f}")
+                vertices_to_remove = densities < density_threshold
+                mesh_poisson.remove_vertices_by_mask(vertices_to_remove)
+                
+                # Clean mesh
+                mesh_poisson = clean_mesh(mesh_poisson)
+                
+                # Compute normals
+                mesh_poisson.compute_vertex_normals()
+                
+                # Calculate metrics
+                vertex_count = len(mesh_poisson.vertices)
+                triangle_count = len(mesh_poisson.triangles)
+                
+                if triangle_count < 100 or vertex_count < 100:
+                    print(f"  Too few vertices ({vertex_count}) or triangles ({triangle_count}) after filtering.")
+                    continue
+                
+                # Calculate quality score
+                quality_score = triangle_count * (1 - abs(2.0 - triangle_count/max(1, vertex_count)))
+                print(f"  Quality score: {quality_score:.1f} (vertices: {vertex_count}, triangles: {triangle_count})")
+                
+                # Color the mesh from point cloud
+                color_mesh_from_point_cloud(mesh_poisson, pcd)
+                
+                # Save the filtered mesh for this depth
+                filtered_mesh_path = f"{OUTPUT_DIR}/scene_mesh_poisson_d{depth}.ply"
+                o3d.io.write_triangle_mesh(filtered_mesh_path, mesh_poisson)
+                print(f"  Poisson mesh (depth={depth}) saved to {filtered_mesh_path}")
+                
+                # Track best mesh quality
+                if quality_score > best_quality_score:
+                    best_quality_score = quality_score
+                    best_depth = depth
+                    # Save this mesh's data for later use
+                    print(f"  ✓ New best mesh found at depth {depth}!")
             
-            # Find nearest points for each vertex
-            from scipy.spatial import KDTree
-            tree = KDTree(points)
-            distances, indices = tree.query(vertices, k=3)  # Get 3 nearest points
+            except Exception as e:
+                print(f"  Error at depth {depth}: {e}")
+                
+        # Process the best mesh separately (after the loop)
+        if best_depth > 0:
+            print(f"\nPost-processing best Poisson mesh (depth={best_depth})...")
+            # Reload the best mesh from file instead of using clone()
+            best_mesh_path = f"{OUTPUT_DIR}/scene_mesh_poisson_d{best_depth}.ply"
+            best_poisson_mesh = o3d.io.read_triangle_mesh(best_mesh_path)
             
-            # Weight colors by distance
-            weights = 1.0 / (distances + 1e-10)
-            weights_sum = np.sum(weights, axis=1, keepdims=True)
-            weights = weights / weights_sum
+            if len(best_poisson_mesh.vertices) > 0:
+                # Apply smoothing using Taubin method (preserves volume better)
+                print("  Applying Taubin smoothing...")
+
+                # OLD SMOOTHING METHOD
+                # best_poisson_mesh = best_poisson_mesh.filter_smooth_taubin(
+                #     number_of_iterations=SMOOTHING_ITERATIONS,
+                #     lambda_filter=0.5,
+                #     mu=-0.53  # Standard value to prevent shrinking
+                # )
+                
+                # NEW SMOOTHING METHOD
+                best_poisson_mesh = apply_advanced_smoothing(best_poisson_mesh, SMOOTHING_ITERATIONS)
+
+                best_poisson_mesh.compute_vertex_normals()
+                
+                # Save the optimized mesh
+                optimized_poisson_path = f"{OUTPUT_DIR}/scene_mesh_poisson_optimized_d{best_depth}.ply"
+                o3d.io.write_triangle_mesh(optimized_poisson_path, best_poisson_mesh)
+                print(f"  Optimized Poisson mesh saved to {optimized_poisson_path}")
+                
+                # Create simplified version if needed
+                if len(best_poisson_mesh.triangles) > TARGET_TRIANGLES:
+                    print(f"  Creating simplified version ({len(best_poisson_mesh.triangles)} → {TARGET_TRIANGLES} triangles)...")
+                    mesh_simplified = best_poisson_mesh.simplify_quadric_decimation(TARGET_TRIANGLES)
+                    mesh_simplified.compute_vertex_normals()
+                    simple_mesh_path = f"{OUTPUT_DIR}/scene_mesh_poisson_simplified_d{best_depth}.ply"
+                    o3d.io.write_triangle_mesh(simple_mesh_path, mesh_simplified)
+                    print(f"  Simplified mesh saved to {simple_mesh_path}")
+                
+                # Save standard name version too
+                std_poisson_path = f"{OUTPUT_DIR}/scene_mesh_poisson_optimized.ply"
+                o3d.io.write_triangle_mesh(std_poisson_path, best_poisson_mesh)
+            else:
+                print("  Error: Best mesh has no vertices after reloading.")
+        else:
+            print("No suitable Poisson mesh found.")
             
-            # Calculate weighted average colors
-            vertex_colors = np.zeros((len(vertices), 3))
-            for i in range(3):  # For each of the 3 nearest neighbors
-                vertex_colors += weights[:, i:i+1] * point_colors[indices[:, i]]
-            
-            # Explicitly clamp colors to [0,1] range to avoid the warning
-            vertex_colors = np.clip(vertex_colors, 0.0, 1.0)
-            
-            mesh_poisson.vertex_colors = o3d.utility.Vector3dVector(vertex_colors)
-            
-            # Save Poisson mesh
-            poisson_mesh_path = "models/scene_mesh_poisson.ply"
-            o3d.io.write_triangle_mesh(poisson_mesh_path, mesh_poisson)
-            print(f"Poisson mesh saved to {poisson_mesh_path}")
     except Exception as e:
-        print(f"Poisson reconstruction failed: {e}")
+        print(f"Poisson reconstruction process failed: {e}")
+        import traceback
+        traceback.print_exc()
 
-    # First create a coarse reconstruction
-    mesh_poisson_coarse, _ = o3d.geometry.TriangleMesh.create_from_point_cloud_poisson(
-        pcd, depth=8, scale=1.1
-    )
+# =============================================================================
+# UTILITY FUNCTIONS
+# =============================================================================
 
-    # Then refine it with a second pass
-    mesh_poisson_coarse.compute_vertex_normals()
-    points_refined = mesh_poisson_coarse.sample_points_uniformly(100000)  # Sample points from mesh
-    points_refined.estimate_normals()
-
-    # Create a refined mesh
-    mesh_poisson_refined, _ = o3d.geometry.TriangleMesh.create_from_point_cloud_poisson(
-        points_refined, depth=10, scale=1.0
-    )
+def color_mesh_from_point_cloud(mesh, pcd):
+    """Transfer colors from point cloud to mesh vertices using nearest neighbors."""
+    if len(mesh.vertices) == 0:
+        return
+        
+    # Get data as numpy arrays
+    vertices = np.asarray(mesh.vertices)
+    points = np.asarray(pcd.points)
+    point_colors = np.asarray(pcd.colors)
     
-    # After creating any mesh, apply post-processing
-    mesh_poisson = mesh_poisson.filter_smooth_simple(number_of_iterations=5)
-    mesh_poisson.compute_vertex_normals()
-
-    # Optional: Simplify the mesh to remove small artifacts
-    mesh_poisson = mesh_poisson.simplify_quadric_decimation(
-        target_number_of_triangles=100000
-    )
-        
-    print("\nMesh creation complete. Check the 'models' directory for output files.")
-    print("You can visualize these meshes using tools like MeshLab, Blender, or Open3D's visualization.")
+    # Find nearest points for each vertex
+    from scipy.spatial import KDTree
+    tree = KDTree(points)
+    distances, indices = tree.query(vertices, k=min(3, len(points)))
     
-    # Poisson-specific improvements
-    print("\nFocused Poisson mesh reconstruction...")
-
-    # 1. Ensure high-quality normals (critical for Poisson)
-    pcd.estimate_normals(
-        search_param=o3d.geometry.KDTreeSearchParamHybrid(radius=0.01, max_nn=50)
-    )
-    pcd.orient_normals_consistent_tangent_plane(100)
-
-    # 2. Run Poisson at multiple depths to find best quality
-    best_poisson_mesh = None
-    best_quality_score = -1
-
-    for depth in [9, 10, 11]:
-        print(f"  Testing Poisson reconstruction at depth {depth}...")
-        mesh_poisson, densities = o3d.geometry.TriangleMesh.create_from_point_cloud_poisson(
-            pcd, depth=depth, width=0, scale=1.1, linear_fit=False
-        )
-        
-        if len(mesh_poisson.vertices) == 0:
-            continue
-        
-        # Only filter the very sparse areas (bottom 2%)
-        density_threshold = np.quantile(densities, 0.02)
-        print(f"  Filtering sparse areas (threshold: {density_threshold:.6f})...")
-        vertices_to_remove = densities < density_threshold
-        mesh_poisson.remove_vertices_by_mask(vertices_to_remove)
-        
-        # Calculate a quality score (higher is better)
-        # Based on mesh density vs complexity
-        vertex_count = len(mesh_poisson.vertices)
-        triangle_count = len(mesh_poisson.triangles)
-        if triangle_count == 0:
-            continue
-        
-        # Quality metric: vertex/triangle ratio, normalized by depth
-        # Higher values indicate better mesh quality
-        quality_score = (vertex_count / triangle_count) * (depth / 10)
-        print(f"  Quality score: {quality_score:.4f} (vertices: {vertex_count}, triangles: {triangle_count})")
-        
-        if quality_score > best_quality_score:
-            best_quality_score = quality_score
-            best_poisson_mesh = mesh_poisson
-            print(f"  ✓ New best mesh found at depth {depth}!")
-
-    # Use the best poisson mesh for further processing
-    if best_poisson_mesh is not None:
-        mesh_poisson = best_poisson_mesh
-        
-        # Apply gentle smoothing to remove noise while preserving features
-        mesh_poisson = mesh_poisson.filter_smooth_taubin(number_of_iterations=5)
-        mesh_poisson.compute_vertex_normals()
-        
-        # Save the optimized Poisson mesh
-        optimized_poisson_path = "models/scene_mesh_poisson_optimized.ply"
-        o3d.io.write_triangle_mesh(optimized_poisson_path, mesh_poisson)
-        print(f"Optimized Poisson mesh saved to {optimized_poisson_path}")
+    # Weight colors by distance
+    weights = 1.0 / (distances + 1e-10)
+    weights_sum = np.sum(weights, axis=1, keepdims=True)
+    weights = weights / weights_sum
     
-except ImportError:
-    print("Please install Open3D: pip install open3d")
+    # Calculate weighted average colors
+    vertex_colors = np.zeros((len(vertices), 3))
+    for i in range(min(3, distances.shape[1])):
+        vertex_colors += weights[:, i:i+1] * point_colors[indices[:, i]]
     
-    # Fallback: Export just the point cloud using NumPy/plyfile
+    # Explicitly clamp colors to [0,1] range
+    vertex_colors = np.clip(vertex_colors, 0.0, 1.0)
+    
+    # Assign colors to mesh
+    mesh.vertex_colors = o3d.utility.Vector3dVector(vertex_colors)
+
+def export_basic_point_cloud(scene):
+    """Export point cloud as PLY file without Open3D dependency."""
     try:
         print("Falling back to basic point cloud export...")
         from plyfile import PlyData, PlyElement
         
-        os.makedirs("models", exist_ok=True)
-        
         # Export Gaussian centers as point cloud
         means = scene.gaussians["means"].detach().cpu().numpy()
-        colors = 1 - scene.gaussians["sh0"][:, 0].detach().cpu().numpy()  # Recover colors
+        colors = 1 - scene.gaussians["sh0"][:, 0].detach().cpu().numpy()
         
         # Create PLY structure
         vertices = np.zeros(means.shape[0], dtype=[
@@ -352,9 +529,47 @@ except ImportError:
         
         # Create and write PLY
         el = PlyElement.describe(vertices, 'vertex')
-        point_cloud_path = "models/scene_point_cloud.ply"
+        point_cloud_path = f"{OUTPUT_DIR}/scene_point_cloud.ply"
         PlyData([el]).write(point_cloud_path)
         print(f"Exported basic point cloud to {point_cloud_path}")
-        print("Install Open3D or use tools like MeshLab to convert this to a mesh.")
     except Exception as e:
         print(f"Basic point cloud export failed: {e}")
+
+def clean_mesh(mesh):
+    """Apply cleaning operations to make mesh smoother and more manifold."""
+    # Remove degenerate triangles
+    mesh.remove_degenerate_triangles()
+    
+    # Remove duplicated vertices
+    mesh.remove_duplicated_vertices()
+    
+    # Remove duplicated triangles
+    mesh.remove_duplicated_triangles()
+    
+    # Remove non-manifold edges (critical for smooth meshes)
+    mesh.remove_non_manifold_edges()
+    
+    return mesh
+
+def apply_advanced_smoothing(mesh, iterations=5, lambda_value=0.5):
+    """Apply advanced smoothing to mesh."""
+    # Apply Taubin smoothing
+    mesh = mesh.filter_smooth_taubin(
+        number_of_iterations=iterations,
+        lambda_filter=lambda_value,
+        mu=-0.53  # Standard value to prevent shrinking
+    )
+    
+    # Apply simple Laplacian smoothing after to further smooth surface
+    mesh = mesh.filter_smooth_simple(iterations // 2)
+    
+    # Recompute normals
+    mesh.compute_vertex_normals()
+    return mesh
+
+# =============================================================================
+# ENTRY POINT
+# =============================================================================
+
+if __name__ == "__main__":
+    main()
