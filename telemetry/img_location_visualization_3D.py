@@ -1,5 +1,6 @@
 # Use this program to visualize the positions of images with GPS data in 3D space.
-# Usage: python img_location_visualization_3D.py <image1> [<image2> ...]
+# Usage: python3 img_location_visualization_3D.py --folder <folder_path>
+# Or for individual images: python3 img_location_visualization_3D.py <image1> [<image2> ...]
 
 import exifread
 import math
@@ -8,14 +9,8 @@ import sys
 import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D
 import os
-
-# Try to import plotly for HTML export
-try:
-    import plotly.graph_objects as go
-    import plotly.io as pio
-    PLOTLY_AVAILABLE = True
-except ImportError:
-    PLOTLY_AVAILABLE = False
+import glob
+import argparse
 
 def extract_gps_info(image_path):
     with open(image_path, 'rb') as f:
@@ -69,46 +64,28 @@ def convert_to_decimal(dms_values):
     
     return degrees + (minutes / 60.0) + (seconds / 3600.0)
 
-def convert_to_cartesian(lat, lon, alt=0):
-    # WGS84 ellipsoid parameters
-    a = 6378137.0  # semi-major axis (equatorial radius) in meters
-    e2 = 0.00669438  # eccentricity squared
+def calculate_directional_distances(lat1, lon1, alt1, lat2, lon2, alt2):
+    # Radius of the Earth in meters + average altitude
+    R = 6371000 + (alt1 + alt2) / 2
     
-    # Convert to radians
-    lat_rad = math.radians(lat)
-    lon_rad = math.radians(lon)
-    
-    # Calculate N (radius of curvature in the prime vertical)
-    N = a / math.sqrt(1 - e2 * math.sin(lat_rad) * math.sin(lat_rad))
-    
-    # Calculate ECEF (Earth-Centered, Earth-Fixed) coordinates
-    x = (N + alt) * math.cos(lat_rad) * math.cos(lon_rad)
-    y = (N + alt) * math.cos(lat_rad) * math.sin(lon_rad)
-    z = (N * (1 - e2) + alt) * math.sin(lat_rad)
-    
-    return (x, y, z)
-
-def calculate_distance_meters(lat1, lon1, lat2, lon2):
-    """Calculate distance between two points in meters"""
-    # Earth radius in meters
-    R = 6371000
-    
-    # Convert to radians
+    # Convert latitude and longitude from degrees to radians
     lat1_rad = math.radians(lat1)
     lon1_rad = math.radians(lon1)
     lat2_rad = math.radians(lat2)
     lon2_rad = math.radians(lon2)
     
-    # Haversine formula
+    # North-South distance (change in latitude)
     dlat = lat2_rad - lat1_rad
+    north_south_distance = R * dlat  # In meters
+    
+    # East-West distance (change in longitude), adjusted for the latitude
     dlon = lon2_rad - lon1_rad
+    east_west_distance = R * dlon * math.cos((lat1_rad + lat2_rad) / 2)  # In meters
     
-    a = math.sin(dlat/2)**2 + math.cos(lat1_rad) * math.cos(lat2_rad) * math.sin(dlon/2)**2
-    c = 2 * math.atan2(math.sqrt(a), math.sqrt(1-a))
-    
-    return R * c
+    # Positive is when p2 is north and east, negative is south and west
+    return north_south_distance, east_west_distance
 
-def visualize_positions(panorama_data, export_html=True):
+def visualize_positions(panorama_data):
     # Create a 3D plot
     fig = plt.figure(figsize=(12, 10))
     ax = fig.add_subplot(111, projection='3d')
@@ -117,35 +94,30 @@ def visualize_positions(panorama_data, export_html=True):
     x_coords = []
     y_coords = []
     z_coords = []
+    labels = []
     
     # Use the first point as reference
     if panorama_data:
         lat0 = panorama_data[0]['gps']['latitude']
         lon0 = panorama_data[0]['gps']['longitude']
         alt0 = panorama_data[0]['gps'].get('altitude', 0)
+        print(f"Using reference point from file {os.path.basename(panorama_data[0]['path'])}: {lat0}, {lon0}, {alt0}")
         
         for data in panorama_data:
             # Calculate distance in meters
-            dx, dy = calculate_distance_meters(
-                lat0, lon0, 
-                data['gps']['latitude'], lon0
-            ), calculate_distance_meters(
-                lat0, lon0, 
-                lat0, data['gps']['longitude']
-            )
-            
-            # Apply sign based on direction
-            if data['gps']['latitude'] < lat0:
-                dx = -dx
-            if data['gps']['longitude'] < lon0:
-                dy = -dy
-                
-            # Use actual altitude difference for z
+            dy, dx = calculate_directional_distances(lat0, lon0, alt0, data['gps']['latitude'], data['gps']['longitude'], data['gps'].get('altitude', 0))
             dz = data['gps'].get('altitude', 0) - alt0
-            
+
+            print(f"Filename: {os.path.basename(data['path'])}")
+            print(f"dx: {dx}, dy: {dy}, dz: {dz}")
+
             x_coords.append(dx)
             y_coords.append(dy)
             z_coords.append(dz)
+
+            filename = os.path.basename(data['path'])
+            filename = os.path.splitext(filename)[0]  # Remove extension
+            labels.append(filename)
     
     # Calculate bounds for the floor plane
     x_min, x_max = min(x_coords) - 2, max(x_coords) + 2
@@ -163,14 +135,9 @@ def visualize_positions(panorama_data, export_html=True):
     # Plot points
     scatter = ax.scatter(x_coords, y_coords, z_coords, c='red', s=100, marker='o')
     
-    # Add labels with filenames instead of "Pan X"
-    filenames = []
-    for i, data in enumerate(panorama_data):
-        # Extract filename without extension
-        filename = os.path.basename(data['path'])
-        filename = os.path.splitext(filename)[0]  # Remove extension
-        filenames.append(filename)
-        ax.text(x_coords[i], y_coords[i], z_coords[i] + 0.2, filename, fontsize=12)
+    # Add labels with filenames
+    for i in range(len(labels)):
+        ax.text(x_coords[i], y_coords[i], z_coords[i] + 0.2, labels[i], fontsize=12)
     
     # Add direction arrows if available
     for i, data in enumerate(panorama_data):
@@ -189,8 +156,8 @@ def visualize_positions(panorama_data, export_html=True):
     # Add annotation for altitude differences using filenames
     if len(panorama_data) > 1:
         alt_text = "Altitude differences (m):\n"
-        for i, filename in enumerate(filenames):
-            alt_text += f"{filename}: {z_coords[i]:.2f}\n"
+        for i, label in enumerate(labels):
+            alt_text += f"{label}: {z_coords[i]:.2f}\n"
         
         plt.figtext(0.02, 0.02, alt_text, fontsize=10, 
                    bbox=dict(facecolor='white', alpha=0.8))
@@ -199,7 +166,7 @@ def visualize_positions(panorama_data, export_html=True):
     ax.set_xlabel('X (meters east)')
     ax.set_ylabel('Y (meters north)')
     ax.set_zlabel('Z (meters altitude difference)')
-    ax.set_title('3D Positions of Panoramas with Floor Reference')
+    ax.set_title('3D Positions of Images with Floor Reference')
     
     # Set equal aspect ratio for X and Y
     max_range_xy = max(max(x_coords)-min(x_coords), max(y_coords)-min(y_coords))
@@ -219,132 +186,60 @@ def visualize_positions(panorama_data, export_html=True):
     ax.set_zlim(z_min, mid_z + z_range)
     
     # Save static PNG image
-    plt.savefig('panorama_positions_with_floor.png', dpi=300, bbox_inches='tight')
-    print("Static visualization saved as 'panorama_positions_with_floor.png'")
-    
-    # Export to HTML if requested and plotly is available
-    if export_html and PLOTLY_AVAILABLE:
-        export_to_html(panorama_data, filenames, x_coords, y_coords, z_coords)
+    plt.savefig('image_positions_with_floor.png', dpi=300, bbox_inches='tight')
+    print("Static visualization saved as 'image_positions_with_floor.png'")
     
     # Show the plot
     plt.show()
     
     return fig, ax
 
-def export_to_html(panorama_data, filenames, x_coords, y_coords, z_coords):
-    """Export the visualization to an interactive HTML file using Plotly"""
-    # Calculate floor parameters
-    x_min, x_max = min(x_coords) - 2, max(x_coords) + 2
-    y_min, y_max = min(y_coords) - 2, max(y_coords) + 2
-    z_min = min(z_coords) - 0.5  # Place floor slightly below lowest point
+def get_image_files_from_folder(folder_path):
+    """Get all image files from a folder"""
+    # Common image file extensions
+    image_extensions = ['*.jpg', '*.jpeg', '*.png', '*.tif', '*.tiff', '*.gif', '*.bmp']
     
-    # Create a new figure
-    fig = go.Figure()
+    # Get all image files
+    image_files = set()  # Use a set to avoid duplicates
     
-    # Add a semi-transparent floor
-    x_floor = np.linspace(x_min, x_max, 10)
-    y_floor = np.linspace(y_min, y_max, 10)
-    x_floor_grid, y_floor_grid = np.meshgrid(x_floor, y_floor)
-    z_floor_grid = np.ones((10, 10)) * z_min
-    
-    fig.add_trace(go.Surface(
-        x=x_floor_grid, y=y_floor_grid, z=z_floor_grid,
-        colorscale=[[0, 'gray'], [1, 'gray']],
-        opacity=0.3,
-        showscale=False
-    ))
-    
-    # Add the panorama points
-    fig.add_trace(go.Scatter3d(
-        x=x_coords, y=y_coords, z=z_coords,
-        mode='markers+text',
-        marker=dict(size=10, color='red'),
-        text=filenames,
-        textposition='top center',
-        name='Panoramas',
-        hovertemplate='<b>%{text}</b><br>X: %{x:.2f}m<br>Y: %{y:.2f}m<br>Z: %{z:.2f}m'
-    ))
-    
-    # Add vertical lines from points to floor
-    for i in range(len(x_coords)):
-        fig.add_trace(go.Scatter3d(
-            x=[x_coords[i], x_coords[i]],
-            y=[y_coords[i], y_coords[i]],
-            z=[z_min, z_coords[i]],
-            mode='lines',
-            line=dict(color='black', width=2, dash='dash'),
-            showlegend=False,
-            hoverinfo='none'
-        ))
-    
-    # Add direction arrows if available
-    for i, data in enumerate(panorama_data):
-        if 'direction' in data['gps']:
-            direction_rad = math.radians(data['gps']['direction'])
-            dx = math.sin(direction_rad)
-            dy = math.cos(direction_rad)
+    # Only search the specified folder (not recursive)
+    for extension in image_extensions:
+        for file in glob.glob(os.path.join(folder_path, extension)):
+            image_files.add(file)
             
-            # Add arrow
-            arrow_length = 1.5
-            fig.add_trace(go.Scatter3d(
-                x=[x_coords[i], x_coords[i] + dx * arrow_length],
-                y=[y_coords[i], y_coords[i] + dy * arrow_length],
-                z=[z_coords[i], z_coords[i]],
-                mode='lines',
-                line=dict(color='blue', width=4),
-                showlegend=False,
-                hoverinfo='none'
-            ))
-    
-    # Setup layout
-    fig.update_layout(
-        title='3D Positions of Panoramas with Floor Reference',
-        scene=dict(
-            xaxis_title='X (meters east)',
-            yaxis_title='Y (meters north)',
-            zaxis_title='Z (meters altitude difference)',
-            aspectmode='manual',
-            aspectratio=dict(x=1, y=1, z=0.5)
-        ),
-        margin=dict(r=20, l=10, b=10, t=40),
-        showlegend=False,
-        scene_camera=dict(
-            eye=dict(x=1.5, y=1.5, z=1.2)
-        )
-    )
-    
-    # Add text annotation for altitude differences
-    annotation_text = "Altitude differences (m):<br>"
-    for i, filename in enumerate(filenames):
-        annotation_text += f"{filename}: {z_coords[i]:.2f}<br>"
-    
-    fig.add_annotation(
-        x=0.01, y=0.01,
-        xref="paper", yref="paper",
-        text=annotation_text,
-        showarrow=False,
-        bgcolor="white",
-        opacity=0.8,
-        bordercolor="black",
-        borderwidth=1
-    )
-    
-    # Save as HTML file
-    pio.write_html(fig, file='panorama_positions_interactive.html', auto_open=False)
-    print("Interactive visualization saved as 'panorama_positions_interactive.html'")
+    return list(image_files)
 
 def main():
-    if len(sys.argv) < 2:
-        print("Usage: python img_location_visualization_3D.py <image1> [<image2> ...]")
+    # Set up argument parser
+    parser = argparse.ArgumentParser(description='Visualize GPS locations of images in 3D space.')
+    parser.add_argument('--folder', type=str, help='Folder containing images to process')
+    parser.add_argument('images', nargs='*', help='Individual image files to process')
+    
+    args = parser.parse_args()
+    
+    image_paths = []
+    
+    # If a folder is specified, get all images from it
+    if args.folder:
+        folder_path = args.folder
+        print(f"Processing images from folder: {folder_path}")
+        image_paths = get_image_files_from_folder(folder_path)
+        print(f"Found {len(image_paths)} image files")
+    
+    # Add individual images if specified
+    if args.images:
+        image_paths.extend(args.images)
+    
+    # If no images were found or specified, show usage
+    if not image_paths:
+        print("No images found or specified.")
+        print("Usage: python img_location_visualization_3D.py --folder <folder_path>")
+        print("   or: python img_location_visualization_3D.py <image1> [<image2> ...]")
         sys.exit(1)
     
     panorama_data = []
     
-    for i, image_path in enumerate(sys.argv[1:]):
-        # Skip if it looks like a flag option
-        if image_path.startswith('--'):
-            continue
-            
+    for i, image_path in enumerate(image_paths):
         print(f"Processing {image_path}...")
         
         # Extract GPS data
@@ -357,37 +252,23 @@ def main():
             if 'direction' in gps_info:
                 print(f"Direction: {gps_info['direction']} degrees")
             
-            # Convert to cartesian coordinates
-            cartesian = convert_to_cartesian(
-                gps_info['latitude'], 
-                gps_info['longitude'], 
-                gps_info.get('altitude', 0)
-            )
-            
+
             panorama_data.append({
                 'id': i,
                 'path': image_path,
                 'gps': gps_info,
-                'cartesian': cartesian
             })
             
-            print(f"Cartesian coordinates: {cartesian}")
             print("-" * 40)
         else:
             print(f"No GPS data found in {image_path}")
     
-    # Visualize the panorama positions
+    # Visualize the image positions
     if len(panorama_data) > 0:
-        # Determine if we can export to HTML
-        export_html = PLOTLY_AVAILABLE
-        if export_html:
-            print("Plotly is available - will save interactive HTML file in addition to displaying visualization")
-        else:
-            print("Plotly is not installed. To save interactive HTML visualizations, install with:")
-            print("pip install plotly")
-        
         # Visualize with the original matplotlib visualization
-        visualize_positions(panorama_data, export_html=export_html)
+        visualize_positions(panorama_data)
+    else:
+        print("No images with GPS data found. Visualization cannot be created.")
 
 if __name__ == "__main__":
     main()
