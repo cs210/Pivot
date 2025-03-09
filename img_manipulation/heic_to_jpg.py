@@ -7,7 +7,6 @@
 # Set custom JPEG quality
 # python3 heic_to_jpeg_converter.py /path/to/photos -q 95
 
-
 #!/usr/bin/env python3
 import os
 import subprocess
