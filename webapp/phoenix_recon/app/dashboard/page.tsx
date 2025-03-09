@@ -13,9 +13,8 @@ import VideoUploader from "@/components/video-uploader";
 import VideoFrameViewer from "@/components/video-frame-viewer";
 import { Header } from "@/components/header";
 import ImageUploader from "@/components/image-uploader";
-import { DndProvider } from "react-dnd";
-import { HTML5Backend } from "react-dnd-html5-backend";
 import { StorageCheck } from "@/components/storage-check";
+import { EnhancedImageGrid } from "@/components/enhanced-image-grid";
 
 interface Video {
   id: string;
@@ -273,48 +272,6 @@ export default function Dashboard() {
     );
   };
 
-  const DropTarget = ({
-    position,
-    item,
-  }: {
-    position: number;
-    item: GridItem;
-  }) => {
-    const imageInSlot = images.find((img) => img.id === item.imageId);
-
-    return (
-      <div
-        onDragOver={(e) => e.preventDefault()}
-        onDrop={(e) => {
-          e.preventDefault();
-          const imageId = e.dataTransfer.getData("imageId");
-          handleDrop(imageId, position);
-        }}
-        className={`w-20 h-20 rounded-full flex items-center justify-center border-2 ${
-          imageInSlot
-            ? "border-primary"
-            : "border-dashed border-muted-foreground/50"
-        }`}
-        style={{
-          background: imageInSlot
-            ? `url(${imageInSlot.url}) center/cover no-repeat`
-            : "transparent",
-        }}
-      >
-        {imageInSlot ? (
-          <button
-            onClick={() => handleRemoveFromGrid(position)}
-            className="w-6 h-6 bg-background/80 rounded-full flex items-center justify-center opacity-0 hover:opacity-100 transition-opacity"
-          >
-            <Trash2 className="w-4 h-4 text-destructive" />
-          </button>
-        ) : (
-          <div className="text-muted-foreground text-xs">Drop</div>
-        )}
-      </div>
-    );
-  };
-
   return (
     <div className="flex flex-col min-h-screen bg-background text-foreground">
       <Header />
@@ -529,42 +486,28 @@ export default function Dashboard() {
                     </div>
                   </div>
                   <div className="md:col-span-8">
-                    <div className="space-y-4">
-                      <div className="flex items-center justify-between">
-                        <h2 className="text-xl font-semibold cyber-glow">
-                          Image Grid
-                        </h2>
-                        <div className="flex items-center space-x-2">
-                          <Grid className="h-5 w-5 text-primary" />
-                          <span>Drag & Drop Images to Circles</span>
+                    <EnhancedImageGrid
+                      images={images}
+                      initialGridItems={gridItems}
+                      onGridChange={(newGridItems) =>
+                        setGridItems(newGridItems)
+                      }
+                    />
+
+                    {selectedImage && (
+                      <div className="mt-6">
+                        <h3 className="text-lg font-medium mb-3">
+                          Selected Image: {selectedImage.name}
+                        </h3>
+                        <div className="border border-border rounded-lg overflow-hidden">
+                          <img
+                            src={selectedImage.url}
+                            alt={selectedImage.name}
+                            className="w-full object-contain max-h-[300px]"
+                          />
                         </div>
                       </div>
-                      <div className="bg-background/30 border border-border/50 rounded-lg p-6">
-                        <div className="grid grid-cols-3 gap-6 place-items-center">
-                          {gridItems.map((item) => (
-                            <DropTarget
-                              key={item.id}
-                              position={item.position}
-                              item={item}
-                            />
-                          ))}
-                        </div>
-                      </div>
-                      {selectedImage && (
-                        <div className="mt-6">
-                          <h3 className="text-lg font-medium mb-3">
-                            Selected Image: {selectedImage.name}
-                          </h3>
-                          <div className="border border-border rounded-lg overflow-hidden">
-                            <img
-                              src={selectedImage.url}
-                              alt={selectedImage.name}
-                              className="w-full object-contain max-h-[300px]"
-                            />
-                          </div>
-                        </div>
-                      )}
-                    </div>
+                    )}
                   </div>
                 </div>
               )}
