@@ -1,105 +1,319 @@
-"use client"
+"use client";
 
-import Link from "next/link"
+import Link from "next/link";
 
-import { useEffect, useState } from "react"
-import { useRouter } from "next/navigation"
-import { createClient } from "@/utils/supabase/client"
-import { Button } from "@/components/ui/button"
-import { Card, CardContent } from "@/components/ui/card"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { Video, Trash2 } from "lucide-react"
-import VideoUploader from "@/components/video-uploader"
-import VideoFrameViewer from "@/components/video-frame-viewer"
-import { Header } from "@/components/header"
+import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
+import { createClient } from "@/utils/supabase/client";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Video, Trash2, Image as ImageIcon, Grid } from "lucide-react";
+import VideoUploader from "@/components/video-uploader";
+import VideoFrameViewer from "@/components/video-frame-viewer";
+import { Header } from "@/components/header";
+import ImageUploader from "@/components/image-uploader";
+import { DndProvider } from "react-dnd";
+import { HTML5Backend } from "react-dnd-html5-backend";
+import { StorageCheck } from "@/components/storage-check";
 
 interface Video {
-  id: string
-  name: string
-  created_at: string
-  url: string
-  thumbnail?: string
+  id: string;
+  name: string;
+  created_at: string;
+  url: string;
+  thumbnail?: string;
+}
+
+interface Image {
+  id: string;
+  name: string;
+  created_at: string;
+  url: string;
+  path: string;
+}
+
+interface GridItem {
+  id: string;
+  imageId: string | null;
+  position: number;
 }
 
 export default function Dashboard() {
-  const router = useRouter()
-  const supabase = createClient()
-  const [videos, setVideos] = useState<Video[]>([])
-  const [loading, setLoading] = useState(true)
-  const [user, setUser] = useState<any>(null)
-  const [selectedVideo, setSelectedVideo] = useState<Video | null>(null)
-  const [activeTab, setActiveTab] = useState("videos")
+  const router = useRouter();
+  const supabase = createClient();
+  const [videos, setVideos] = useState<Video[]>([]);
+  const [images, setImages] = useState<Image[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [imageLoading, setImageLoading] = useState(true);
+  const [user, setUser] = useState<any>(null);
+  const [selectedVideo, setSelectedVideo] = useState<Video | null>(null);
+  const [selectedImage, setSelectedImage] = useState<Image | null>(null);
+  const [activeTab, setActiveTab] = useState("videos");
+  const [gridItems, setGridItems] = useState<GridItem[]>(
+    Array(9)
+      .fill(null)
+      .map((_, i) => ({
+        id: `grid-${i}`,
+        imageId: null,
+        position: i,
+      }))
+  );
 
   useEffect(() => {
     const checkUser = async () => {
       const {
         data: { user },
-      } = await supabase.auth.getUser()
+      } = await supabase.auth.getUser();
       if (!user) {
-        router.push("/login")
-        return
+        router.push("/login");
+        return;
       }
-      setUser(user)
-      fetchVideos()
-    }
+      setUser(user);
+      fetchVideos();
+      fetchImages();
+    };
 
-    checkUser()
-  }, [router, supabase])
+    checkUser();
+  }, [router, supabase]);
 
   const fetchVideos = async () => {
     try {
-      setLoading(true)
-      const { data, error } = await supabase.from("videos").select("*").order("created_at", { ascending: false })
+      setLoading(true);
+      const { data, error } = await supabase
+        .from("videos")
+        .select("*")
+        .order("created_at", { ascending: false });
 
-      if (error) throw error
-      setVideos(data || [])
+      if (error) throw error;
+      setVideos(data || []);
     } catch (error) {
-      console.error("Error fetching videos:", error)
+      console.error("Error fetching videos:", error);
     } finally {
-      setLoading(false)
+      setLoading(false);
     }
-  }
+  };
+
+  const fetchImages = async () => {
+    try {
+      setImageLoading(true);
+
+      // First check if the images table exists
+      const { error: tableCheckError } = await supabase
+        .from("images")
+        .select("count")
+        .limit(1)
+        .single();
+
+      if (tableCheckError && tableCheckError.code === "PGRST116") {
+        console.warn(
+          "Images table doesn't exist yet. Creating empty images array."
+        );
+        setImages([]);
+        return;
+      }
+
+      // If table exists, proceed with fetching images
+      const { data, error } = await supabase
+        .from("images")
+        .select("*")
+        .order("created_at", { ascending: false });
+
+      if (error) throw error;
+      setImages(data || []);
+    } catch (error) {
+      console.error("Error fetching images:", error);
+      // Set images to empty array to prevent further errors
+      setImages([]);
+    } finally {
+      setImageLoading(false);
+    }
+  };
 
   const handleVideoUploadSuccess = () => {
-    fetchVideos()
-  }
+    fetchVideos();
+  };
+
+  const handleImageUploadSuccess = () => {
+    fetchImages();
+  };
 
   const handleDeleteVideo = async (id: string) => {
     try {
       // First get the video to get the file path
-      const { data: video } = await supabase.from("videos").select("*").eq("id", id).single()
+      const { data: video } = await supabase
+        .from("videos")
+        .select("*")
+        .eq("id", id)
+        .single();
 
-      if (!video) return
+      if (!video) return;
 
       // Delete from storage
-      const { error: storageError } = await supabase.storage.from("videos").remove([video.path])
+      const { error: storageError } = await supabase.storage
+        .from("videos")
+        .remove([video.path]);
 
-      if (storageError) throw storageError
+      if (storageError) throw storageError;
 
       // Delete from database
-      const { error: dbError } = await supabase.from("videos").delete().eq("id", id)
+      const { error: dbError } = await supabase
+        .from("videos")
+        .delete()
+        .eq("id", id);
 
-      if (dbError) throw dbError
+      if (dbError) throw dbError;
 
       // Update the videos list
-      setVideos(videos.filter((v) => v.id !== id))
+      setVideos(videos.filter((v) => v.id !== id));
       if (selectedVideo?.id === id) {
-        setSelectedVideo(null)
+        setSelectedVideo(null);
       }
     } catch (error) {
-      console.error("Error deleting video:", error)
+      console.error("Error deleting video:", error);
     }
-  }
+  };
+
+  const handleDeleteImage = async (id: string) => {
+    try {
+      // First get the image to get the file path
+      const { data: image } = await supabase
+        .from("images")
+        .select("*")
+        .eq("id", id)
+        .single();
+
+      if (!image) return;
+
+      // Delete from storage
+      const { error: storageError } = await supabase.storage
+        .from("images")
+        .remove([image.path]);
+
+      if (storageError) throw storageError;
+
+      // Delete from database
+      const { error: dbError } = await supabase
+        .from("images")
+        .delete()
+        .eq("id", id);
+
+      if (dbError) throw dbError;
+
+      // Update the images list
+      setImages(images.filter((img) => img.id !== id));
+      if (selectedImage?.id === id) {
+        setSelectedImage(null);
+      }
+
+      // Remove image from any grid items
+      setGridItems(
+        gridItems.map((item) =>
+          item.imageId === id ? { ...item, imageId: null } : item
+        )
+      );
+    } catch (error) {
+      console.error("Error deleting image:", error);
+    }
+  };
 
   const handleSignOut = async () => {
-    await supabase.auth.signOut()
-    router.push("/")
-    router.refresh()
-  }
+    await supabase.auth.signOut();
+    router.push("/");
+    router.refresh();
+  };
 
   const handleUploadFirstVideo = () => {
-    setActiveTab("upload")
-  }
+    setActiveTab("upload");
+  };
+
+  const handleUploadFirstImage = () => {
+    setActiveTab("upload-image");
+  };
+
+  const handleDrop = (imageId: string, gridPosition: number) => {
+    // Update the grid item at the specified position with the image ID
+    setGridItems(
+      gridItems.map((item) =>
+        item.position === gridPosition ? { ...item, imageId } : item
+      )
+    );
+  };
+
+  const handleRemoveFromGrid = (position: number) => {
+    setGridItems(
+      gridItems.map((item) =>
+        item.position === position ? { ...item, imageId: null } : item
+      )
+    );
+  };
+
+  const DraggableImage = ({
+    image,
+    onDragStart,
+  }: {
+    image: Image;
+    onDragStart: () => void;
+  }) => {
+    return (
+      <div
+        draggable
+        onDragStart={(e) => {
+          e.dataTransfer.setData("imageId", image.id);
+          onDragStart();
+        }}
+        className="cursor-grab"
+      >
+        <img
+          src={image.url}
+          alt={image.name}
+          className="h-16 w-16 object-cover rounded-md"
+        />
+      </div>
+    );
+  };
+
+  const DropTarget = ({
+    position,
+    item,
+  }: {
+    position: number;
+    item: GridItem;
+  }) => {
+    const imageInSlot = images.find((img) => img.id === item.imageId);
+
+    return (
+      <div
+        onDragOver={(e) => e.preventDefault()}
+        onDrop={(e) => {
+          e.preventDefault();
+          const imageId = e.dataTransfer.getData("imageId");
+          handleDrop(imageId, position);
+        }}
+        className={`w-20 h-20 rounded-full flex items-center justify-center border-2 ${
+          imageInSlot
+            ? "border-primary"
+            : "border-dashed border-muted-foreground/50"
+        }`}
+        style={{
+          background: imageInSlot
+            ? `url(${imageInSlot.url}) center/cover no-repeat`
+            : "transparent",
+        }}
+      >
+        {imageInSlot ? (
+          <button
+            onClick={() => handleRemoveFromGrid(position)}
+            className="w-6 h-6 bg-background/80 rounded-full flex items-center justify-center opacity-0 hover:opacity-100 transition-opacity"
+          >
+            <Trash2 className="w-4 h-4 text-destructive" />
+          </button>
+        ) : (
+          <div className="text-muted-foreground text-xs">Drop</div>
+        )}
+      </div>
+    );
+  };
 
   return (
     <div className="flex flex-col min-h-screen bg-background text-foreground">
@@ -107,30 +321,63 @@ export default function Dashboard() {
       <main className="flex-1 relative">
         <div className="absolute inset-0 bg-cyber-gradient opacity-5"></div>
         <div className="container mx-auto px-4 py-8 relative z-10">
+          <StorageCheck />
           <div className="flex justify-between items-center mb-8">
-            <h1 className="text-3xl font-bold cyber-glow">Your Video Dashboard</h1>
-            <Button onClick={handleSignOut} variant="outline" className="cyber-border">
+            <h1 className="text-3xl font-bold cyber-glow">Your Dashboard</h1>
+            <Button
+              onClick={handleSignOut}
+              variant="outline"
+              className="cyber-border"
+            >
               Sign Out
             </Button>
           </div>
 
-          <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+          <Tabs
+            value={activeTab}
+            onValueChange={setActiveTab}
+            className="w-full"
+          >
             <TabsList className="mb-6 bg-muted/50 border border-border/50">
               <TabsTrigger
                 value="videos"
                 className={`data-[state=active]:bg-cyber-gradient data-[state=active]:text-foreground ${
-                  activeTab === "videos" ? "bg-cyber-gradient text-foreground" : ""
+                  activeTab === "videos"
+                    ? "bg-cyber-gradient text-foreground"
+                    : ""
                 }`}
               >
                 My Videos
               </TabsTrigger>
               <TabsTrigger
+                value="images"
+                className={`data-[state=active]:bg-cyber-gradient data-[state=active]:text-foreground ${
+                  activeTab === "images"
+                    ? "bg-cyber-gradient text-foreground"
+                    : ""
+                }`}
+              >
+                My Images
+              </TabsTrigger>
+              <TabsTrigger
                 value="upload"
                 className={`data-[state=active]:bg-cyber-gradient data-[state=active]:text-foreground ${
-                  activeTab === "upload" ? "bg-cyber-gradient text-foreground" : ""
+                  activeTab === "upload"
+                    ? "bg-cyber-gradient text-foreground"
+                    : ""
                 }`}
               >
                 Upload Video
+              </TabsTrigger>
+              <TabsTrigger
+                value="upload-image"
+                className={`data-[state=active]:bg-cyber-gradient data-[state=active]:text-foreground ${
+                  activeTab === "upload-image"
+                    ? "bg-cyber-gradient text-foreground"
+                    : ""
+                }`}
+              >
+                Upload Image
               </TabsTrigger>
             </TabsList>
 
@@ -139,28 +386,41 @@ export default function Dashboard() {
                 <div className="text-center py-12">Loading your videos...</div>
               ) : videos.length === 0 ? (
                 <div className="text-center py-12">
-                  <p className="text-muted-foreground mb-4">You haven't uploaded any videos yet.</p>
-                  <Button onClick={handleUploadFirstVideo} className="bg-cyber-gradient hover:opacity-90">
+                  <p className="text-muted-foreground mb-4">
+                    You haven't uploaded any videos yet.
+                  </p>
+                  <Button
+                    onClick={handleUploadFirstVideo}
+                    className="bg-cyber-gradient hover:opacity-90"
+                  >
                     Upload Your First Video
                   </Button>
                 </div>
               ) : (
                 <div className="grid grid-cols-1 gap-8 md:grid-cols-12">
                   <div className="md:col-span-4 space-y-4">
-                    <h2 className="text-xl font-semibold mb-4 cyber-glow">Your Videos</h2>
+                    <h2 className="text-xl font-semibold mb-4 cyber-glow">
+                      Your Videos
+                    </h2>
                     {videos.map((video) => (
                       <Card
                         key={video.id}
-                        className={`cursor-pointer hover:border-primary transition-colors bg-background/80 backdrop-blur-sm border-border/50 ${selectedVideo?.id === video.id ? "cyber-border" : ""}`}
+                        className={`cursor-pointer hover:border-primary transition-colors bg-background/80 backdrop-blur-sm border-border/50 ${
+                          selectedVideo?.id === video.id ? "cyber-border" : ""
+                        }`}
                         onClick={() => setSelectedVideo(video)}
                       >
                         <CardContent className="p-4 flex justify-between items-center">
                           <div className="flex items-center space-x-3">
                             <Video className="h-5 w-5 text-primary" />
                             <div>
-                              <p className="font-medium text-foreground">{video.name}</p>
+                              <p className="font-medium text-foreground">
+                                {video.name}
+                              </p>
                               <p className="text-sm text-muted-foreground">
-                                {new Date(video.created_at).toLocaleDateString()}
+                                {new Date(
+                                  video.created_at
+                                ).toLocaleDateString()}
                               </p>
                             </div>
                           </div>
@@ -168,8 +428,8 @@ export default function Dashboard() {
                             variant="ghost"
                             size="icon"
                             onClick={(e) => {
-                              e.stopPropagation()
-                              handleDeleteVideo(video.id)
+                              e.stopPropagation();
+                              handleDeleteVideo(video.id);
                             }}
                             className="hover:bg-destructive/20 hover:text-destructive"
                           >
@@ -182,12 +442,19 @@ export default function Dashboard() {
                   <div className="md:col-span-8">
                     {selectedVideo ? (
                       <div className="space-y-4">
-                        <h2 className="text-xl font-semibold cyber-glow">{selectedVideo.name}</h2>
-                        <VideoFrameViewer videoUrl={selectedVideo.url} videoName={selectedVideo.name} />
+                        <h2 className="text-xl font-semibold cyber-glow">
+                          {selectedVideo.name}
+                        </h2>
+                        <VideoFrameViewer
+                          videoUrl={selectedVideo.url}
+                          videoName={selectedVideo.name}
+                        />
                       </div>
                     ) : (
                       <div className="flex items-center justify-center h-64 border-2 border-dashed rounded-lg border-border/50 bg-background/30">
-                        <p className="text-muted-foreground">Select a video to play</p>
+                        <p className="text-muted-foreground">
+                          Select a video to play
+                        </p>
                       </div>
                     )}
                   </div>
@@ -195,8 +462,126 @@ export default function Dashboard() {
               )}
             </TabsContent>
 
+            <TabsContent value="images">
+              {imageLoading ? (
+                <div className="text-center py-12">Loading your images...</div>
+              ) : images.length === 0 ? (
+                <div className="text-center py-12">
+                  <p className="text-muted-foreground mb-4">
+                    You haven't uploaded any images yet.
+                  </p>
+                  <Button
+                    onClick={handleUploadFirstImage}
+                    className="bg-cyber-gradient hover:opacity-90"
+                  >
+                    Upload Your First Image
+                  </Button>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 gap-8 md:grid-cols-12">
+                  <div className="md:col-span-4 space-y-4">
+                    <h2 className="text-xl font-semibold mb-4 cyber-glow">
+                      Your Images
+                    </h2>
+                    <p className="text-sm text-muted-foreground mb-4">
+                      Drag images to the grid on the right
+                    </p>
+                    <div className="space-y-4 max-h-[60vh] overflow-y-auto pr-2">
+                      {images.map((image) => (
+                        <Card
+                          key={image.id}
+                          className={`cursor-pointer hover:border-primary transition-colors bg-background/80 backdrop-blur-sm border-border/50 ${
+                            selectedImage?.id === image.id ? "cyber-border" : ""
+                          }`}
+                          onClick={() => setSelectedImage(image)}
+                        >
+                          <CardContent className="p-4 flex justify-between items-center">
+                            <div className="flex items-center space-x-3">
+                              <DraggableImage
+                                image={image}
+                                onDragStart={() => setSelectedImage(image)}
+                              />
+                              <div>
+                                <p className="font-medium text-foreground">
+                                  {image.name}
+                                </p>
+                                <p className="text-sm text-muted-foreground">
+                                  {new Date(
+                                    image.created_at
+                                  ).toLocaleDateString()}
+                                </p>
+                              </div>
+                            </div>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleDeleteImage(image.id);
+                              }}
+                              className="hover:bg-destructive/20 hover:text-destructive"
+                            >
+                              <Trash2 className="h-4 w-4 text-destructive" />
+                            </Button>
+                          </CardContent>
+                        </Card>
+                      ))}
+                    </div>
+                  </div>
+                  <div className="md:col-span-8">
+                    <div className="space-y-4">
+                      <div className="flex items-center justify-between">
+                        <h2 className="text-xl font-semibold cyber-glow">
+                          Image Grid
+                        </h2>
+                        <div className="flex items-center space-x-2">
+                          <Grid className="h-5 w-5 text-primary" />
+                          <span>Drag & Drop Images to Circles</span>
+                        </div>
+                      </div>
+                      <div className="bg-background/30 border border-border/50 rounded-lg p-6">
+                        <div className="grid grid-cols-3 gap-6 place-items-center">
+                          {gridItems.map((item) => (
+                            <DropTarget
+                              key={item.id}
+                              position={item.position}
+                              item={item}
+                            />
+                          ))}
+                        </div>
+                      </div>
+                      {selectedImage && (
+                        <div className="mt-6">
+                          <h3 className="text-lg font-medium mb-3">
+                            Selected Image: {selectedImage.name}
+                          </h3>
+                          <div className="border border-border rounded-lg overflow-hidden">
+                            <img
+                              src={selectedImage.url}
+                              alt={selectedImage.name}
+                              className="w-full object-contain max-h-[300px]"
+                            />
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              )}
+            </TabsContent>
+
             <TabsContent value="upload">
-              <VideoUploader onUploadSuccess={handleVideoUploadSuccess} userId={user?.id} />
+              <VideoUploader
+                onUploadSuccess={handleVideoUploadSuccess}
+                userId={user?.id}
+              />
+            </TabsContent>
+
+            <TabsContent value="upload-image">
+              <ImageUploader
+                onUploadSuccess={handleImageUploadSuccess}
+                userId={user?.id}
+              />
             </TabsContent>
           </Tabs>
         </div>
@@ -207,16 +592,21 @@ export default function Dashboard() {
             © 2024 Phoenix Recon. All rights reserved.
           </p>
           <nav className="flex items-center justify-center gap-4 md:gap-6">
-            <Link className="text-sm font-medium text-muted-foreground hover:text-foreground" href="#">
+            <Link
+              className="text-sm font-medium text-muted-foreground hover:text-foreground"
+              href="#"
+            >
               Terms of Service
             </Link>
-            <Link className="text-sm font-medium text-muted-foreground hover:text-foreground" href="#">
+            <Link
+              className="text-sm font-medium text-muted-foreground hover:text-foreground"
+              href="#"
+            >
               Privacy
             </Link>
           </nav>
         </div>
       </footer>
     </div>
-  )
+  );
 }
-
