@@ -1,10 +1,6 @@
 "use client"
 
 import { useState, useEffect, useRef } from "react"
-import { Button } from "@/components/ui/button"
-import { Maximize, Minimize, Play, Pause } from "lucide-react"
-import Plyr from 'plyr'
-import 'plyr/dist/plyr.css'
 
 interface VideoPlayerProps {
   url: string
@@ -14,85 +10,128 @@ interface VideoPlayerProps {
 export default function VideoPlayer({ url, name }: VideoPlayerProps) {
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const videoRef = useRef<HTMLVideoElement>(null)
-  const playerRef = useRef<Plyr | null>(null)
-  const containerRef = useRef<HTMLDivElement>(null)
+  const [isPanorama, setIsPanorama] = useState(false)
+  const playerRef = useRef<HTMLDivElement>(null)
+  const youtubePlayer = useRef<any>(null)
 
   useEffect(() => {
-    if (!videoRef.current || !url) return
-    
-    const handleCanPlay = () => {
-      console.log("Video can play")
-      setIsLoading(false)
-    }
-    
-    const handleError = () => {
-      console.error("Video error:", videoRef.current?.error)
-      setIsLoading(false)
-      setError(`Error loading video: ${videoRef.current?.error?.message || 'Unknown error'}`)
-      
-      // Try to provide more diagnostic information
-      if (videoRef.current?.error) {
-        const mediaError = videoRef.current.error;
-        const errorDetails = {
-          code: mediaError.code,
-          // 1: MEDIA_ERR_ABORTED - fetching process aborted by user
-          // 2: MEDIA_ERR_NETWORK - error occurred when downloading
-          // 3: MEDIA_ERR_DECODE - error occurred when decoding
-          // 4: MEDIA_ERR_SRC_NOT_SUPPORTED - audio/video not supported
-          message: mediaError.message
-        };
-        console.error("Media error details:", errorDetails);
+    // Function to extract video ID from various URL formats
+    const extractVideoId = (url: string): string | null => {
+      try {
+        // Handle YouTube URLs
+        if (url.includes('youtube.com') || url.includes('youtu.be')) {
+          const regExp = /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|&v=)([^#&?]*).*/;
+          const match = url.match(regExp);
+          return (match && match[2].length === 11) ? match[2] : null;
+        }
+        
+        // For direct video URLs, return null to use the native player
+        return null;
+      } catch (e) {
+        console.error("Error extracting video ID:", e);
+        return null;
       }
-    }
+    };
+
+    const videoId = extractVideoId(url);
     
-    // Initialize Plyr
-    try {
-      videoRef.current.addEventListener('canplay', handleCanPlay)
-      videoRef.current.addEventListener('error', handleError)
+    // Try to load the YouTube API
+    const loadYouTubeApi = () => {
+      if (!window.YT && videoId) {
+        // Load YouTube API
+        const tag = document.createElement('script');
+        tag.src = 'https://www.youtube.com/iframe_api';
+        const firstScriptTag = document.getElementsByTagName('script')[0];
+        firstScriptTag.parentNode?.insertBefore(tag, firstScriptTag);
+        
+        window.onYouTubeIframeAPIReady = initializeYouTubePlayer;
+      } else if (window.YT && videoId) {
+        // API already loaded
+        initializeYouTubePlayer();
+      } else {
+        // No video ID or not a YouTube URL
+        setIsLoading(false);
+        if (!url.startsWith('http')) {
+          setError("Invalid video URL");
+        }
+      }
+    };
+    
+    // Initialize YouTube player
+    const initializeYouTubePlayer = () => {
+      if (!playerRef.current || !videoId) return;
       
-      const plyr = new Plyr(videoRef.current, {
-        controls: [
-          'play-large', 'play', 'progress', 'current-time', 
-          'mute', 'volume', 'captions', 'settings', 'pip', 'fullscreen'
-        ],
-        seekTime: 10,
-        hideControls: false,
-        ratio: '16:9'
-      })
-      
-      playerRef.current = plyr
-      
-      plyr.on('ready', () => {
-        console.log("Plyr is ready")
-      })
-      
-      plyr.on('error', (event) => {
-        console.error("Plyr error:", event)
-      })
-    } catch (err) {
-      console.error("Error initializing Plyr:", err)
-      setError(`Error initializing player: ${err instanceof Error ? err.message : String(err)}`)
-    }
+      try {
+        // Destroy previous player if exists
+        if (youtubePlayer.current) {
+          youtubePlayer.current.destroy();
+        }
+        
+        // Force panorama/360 mode by adding the appropriate URL parameters
+        setIsPanorama(true);
+        
+        youtubePlayer.current = new window.YT.Player(playerRef.current, {
+          videoId: videoId,
+          height: '100%',
+          width: '100%',
+          playerVars: {
+            autoplay: 1,
+            modestbranding: 0, // Show full YouTube branding
+            rel: 0, 
+            showinfo: 1,
+            fs: 1, // Enable fullscreen
+            controls: 1, // Show controls
+            // Parameters for 360° videos
+            enablejsapi: 1,
+            origin: window.location.origin
+          },
+          events: {
+            onReady: (event: any) => {
+              setIsLoading(false);
+              // Check if video is 360°
+              if (event.target.getSphericalProperties) {
+                const props = event.target.getSphericalProperties();
+                setIsPanorama(!!props);
+              }
+            },
+            onError: (event: any) => {
+              console.error("YouTube player error:", event);
+              setError("Error loading video");
+              setIsLoading(false);
+            },
+          }
+        });
+      } catch (err) {
+        console.error("Error initializing YouTube player:", err);
+        setError(`Failed to initialize player: ${err instanceof Error ? err.message : String(err)}`);
+        setIsLoading(false);
+      }
+    };
+    
+    loadYouTubeApi();
     
     return () => {
-      if (videoRef.current) {
-        videoRef.current.removeEventListener('canplay', handleCanPlay)
-        videoRef.current.removeEventListener('error', handleError)
+      // Clean up YouTube player on unmount
+      if (youtubePlayer.current) {
+        youtubePlayer.current.destroy();
       }
       
-      if (playerRef.current) {
-        playerRef.current.destroy()
+      // Clean up global callback
+      if (window.onYouTubeIframeAPIReady === initializeYouTubePlayer) {
+        window.onYouTubeIframeAPIReady = null;
       }
-    }
-  }, [url])
+    };
+  }, [url]);
+
+  // Show native player for direct video URLs
+  const isDirectVideo = !url.includes('youtube.com') && !url.includes('youtu.be');
 
   if (!url) {
     return (
       <div className="relative w-full overflow-hidden rounded-lg bg-black cyber-border p-4 text-white">
         <p>No video available.</p>
       </div>
-    )
+    );
   }
   
   if (error) {
@@ -101,7 +140,6 @@ export default function VideoPlayer({ url, name }: VideoPlayerProps) {
         <p className="text-red-400">{error}</p>
         <p className="mt-2 text-sm">Please check that the video URL is accessible and in a supported format.</p>
         <p className="mt-2 text-sm break-all">URL: {url}</p>
-        <p className="mt-4 text-sm">Try accessing the video directly:</p>
         <a 
           href={url} 
           target="_blank" 
@@ -111,26 +149,32 @@ export default function VideoPlayer({ url, name }: VideoPlayerProps) {
           Open video in new tab
         </a>
       </div>
-    )
+    );
   }
 
   return (
-    <div 
-      ref={containerRef} 
-      className="relative w-full overflow-hidden rounded-lg bg-black cyber-border"
-    >
+    <div className="relative w-full overflow-hidden rounded-lg bg-black cyber-border">
       <div className="aspect-video relative">
-        <video
-          ref={videoRef}
-          className="w-full h-full plyr"
-          playsInline
-          controls
-          crossOrigin="anonymous"
-        >
-          <source src={url} type="video/mp4" />
-          {/* Add more source elements for different formats if needed */}
-          Your browser does not support the video tag.
-        </video>
+        {isDirectVideo ? (
+          // Native player for direct video URLs
+          <video
+            className="w-full h-full"
+            controls
+            playsInline
+            crossOrigin="anonymous"
+            onCanPlay={() => setIsLoading(false)}
+            onError={() => {
+              setError("Error loading video");
+              setIsLoading(false);
+            }}
+          >
+            <source src={url} type="video/mp4" />
+            Your browser does not support the video tag.
+          </video>
+        ) : (
+          // YouTube player div
+          <div ref={playerRef} className="w-full h-full"></div>
+        )}
         
         {isLoading && (
           <div className="absolute inset-0 flex items-center justify-center bg-black/50 text-white z-10">
@@ -147,6 +191,22 @@ export default function VideoPlayer({ url, name }: VideoPlayerProps) {
           <span className="text-sm font-medium">{name}</span>
         </div>
       )}
+      
+      {!isDirectVideo && !isLoading && !isPanorama && (
+        <div className="p-3 bg-yellow-500/10 border border-yellow-500/20 rounded-md mt-2">
+          <p className="text-sm text-center">
+            <strong>Note:</strong> For 360° viewing, please upload your video to YouTube as a 360° video.
+          </p>
+        </div>
+      )}
     </div>
-  )
+  );
+}
+
+// Add TypeScript declarations for YouTube API
+declare global {
+  interface Window {
+    YT: any;
+    onYouTubeIframeAPIReady: (() => void) | null;
+  }
 }
