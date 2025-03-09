@@ -1,11 +1,11 @@
 # Basic usage (will create [input-directory]-jpeg next to input directory)
-# python3 heic_to_jpeg_converter.py /path/to/photos
+# python3 heic_to_jpeg.py /path/to/photos
 
 # Specify custom output directory
-# python3 heic_to_jpeg_converter.py /path/to/photos -o /path/to/output
+# python3 heic_to_jpeg.py /path/to/photos -o /path/to/output
 
 # Set custom JPEG quality
-# python3 heic_to_jpeg_converter.py /path/to/photos -q 95
+# python3 heic_to_jpeg.py /path/to/photos -q 95
 
 #!/usr/bin/env python3
 import os
