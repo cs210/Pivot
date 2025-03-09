@@ -247,31 +247,6 @@ export default function Dashboard() {
     );
   };
 
-  const DraggableImage = ({
-    image,
-    onDragStart,
-  }: {
-    image: Image;
-    onDragStart: () => void;
-  }) => {
-    return (
-      <div
-        draggable
-        onDragStart={(e) => {
-          e.dataTransfer.setData("imageId", image.id);
-          onDragStart();
-        }}
-        className="cursor-grab"
-      >
-        <img
-          src={image.url}
-          alt={image.name}
-          className="h-16 w-16 object-cover rounded-md"
-        />
-      </div>
-    );
-  };
-
   return (
     <div className="flex flex-col min-h-screen bg-background text-foreground">
       <Header />
@@ -441,22 +416,29 @@ export default function Dashboard() {
                       Your Images
                     </h2>
                     <p className="text-sm text-muted-foreground mb-4">
-                      Drag images to the grid on the right
+                      Drag any image card to the grid on the right
                     </p>
                     <div className="space-y-4 max-h-[60vh] overflow-y-auto pr-2">
                       {images.map((image) => (
                         <Card
                           key={image.id}
-                          className={`cursor-pointer hover:border-primary transition-colors bg-background/80 backdrop-blur-sm border-border/50 ${
+                          className={`cursor-grab hover:border-primary transition-colors bg-background/80 backdrop-blur-sm border-border/50 ${
                             selectedImage?.id === image.id ? "cyber-border" : ""
                           }`}
                           onClick={() => setSelectedImage(image)}
+                          draggable={true}
+                          onDragStart={(e) => {
+                            e.dataTransfer.setData("imageId", image.id);
+                            setSelectedImage(image);
+                          }}
                         >
                           <CardContent className="p-4 flex justify-between items-center">
                             <div className="flex items-center space-x-3">
-                              <DraggableImage
-                                image={image}
-                                onDragStart={() => setSelectedImage(image)}
+                              <img
+                                src={image.url}
+                                alt={image.name}
+                                className="h-16 w-16 object-cover rounded-md"
+                                draggable={false} // Prevent default image drag behavior
                               />
                               <div>
                                 <p className="font-medium text-foreground">
@@ -473,10 +455,12 @@ export default function Dashboard() {
                               variant="ghost"
                               size="icon"
                               onClick={(e) => {
-                                e.stopPropagation();
+                                e.stopPropagation(); // Stop card click
+                                e.preventDefault(); // Prevent drag start
                                 handleDeleteImage(image.id);
                               }}
                               className="hover:bg-destructive/20 hover:text-destructive"
+                              draggable={false} // Prevent button from being draggable
                             >
                               <Trash2 className="h-4 w-4 text-destructive" />
                             </Button>
