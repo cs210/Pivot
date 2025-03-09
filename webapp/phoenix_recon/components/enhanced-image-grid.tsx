@@ -183,6 +183,10 @@ export function EnhancedImageGrid({
                   e.preventDefault();
                   setHighlightedCell(item.position);
                 }}
+                onDragEnter={(e) => {
+                  e.preventDefault();
+                  setHighlightedCell(item.position);
+                }}
                 onDragLeave={() => setHighlightedCell(null)}
                 onDrop={(e) => {
                   e.preventDefault();
@@ -192,10 +196,10 @@ export function EnhancedImageGrid({
                 }}
                 className={`w-20 h-20 rounded-full flex items-center justify-center border-2 transition-all ${
                   imageInSlot
-                    ? "border-primary"
+                    ? "border-primary shadow-md"
                     : highlightedCell === item.position
-                    ? "border-dashed border-primary scale-110"
-                    : "border-dashed border-muted-foreground/50"
+                    ? "border-dashed border-primary scale-110 bg-primary/10"
+                    : "border-dashed border-muted-foreground/50 hover:border-muted-foreground hover:bg-background/40"
                 }`}
                 style={{
                   background: imageInSlot
@@ -211,7 +215,13 @@ export function EnhancedImageGrid({
                     <Trash2 className="w-4 h-4 text-destructive" />
                   </button>
                 ) : (
-                  <div className="text-muted-foreground text-xs flex items-center justify-center">
+                  <div
+                    className={`text-muted-foreground text-xs flex items-center justify-center ${
+                      highlightedCell === item.position
+                        ? "text-primary animate-pulse"
+                        : ""
+                    }`}
+                  >
                     <ImageIcon className="w-4 h-4 mr-1" />
                     <span>Drop</span>
                   </div>
