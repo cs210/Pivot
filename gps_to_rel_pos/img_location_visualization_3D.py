@@ -85,7 +85,7 @@ def calculate_directional_distances(lat1, lon1, alt1, lat2, lon2, alt2):
     # Positive is when p2 is north and east, negative is south and west
     return north_south_distance, east_west_distance
 
-def visualize_positions(panorama_data):
+def visualize_positions(img360_data):
     # Create a 3D plot
     fig = plt.figure(figsize=(12, 10))
     ax = fig.add_subplot(111, projection='3d')
@@ -97,13 +97,13 @@ def visualize_positions(panorama_data):
     labels = []
     
     # Use the first point as reference
-    if panorama_data:
-        lat0 = panorama_data[0]['gps']['latitude']
-        lon0 = panorama_data[0]['gps']['longitude']
-        alt0 = panorama_data[0]['gps'].get('altitude', 0)
-        print(f"Using reference point from file {os.path.basename(panorama_data[0]['path'])}: {lat0}, {lon0}, {alt0}")
+    if img360_data:
+        lat0 = img360_data[0]['gps']['latitude']
+        lon0 = img360_data[0]['gps']['longitude']
+        alt0 = img360_data[0]['gps'].get('altitude', 0)
+        print(f"Using reference point from file {os.path.basename(img360_data[0]['path'])}: {lat0}, {lon0}, {alt0}")
         
-        for data in panorama_data:
+        for data in img360_data:
             # Calculate distance in meters
             dy, dx = calculate_directional_distances(lat0, lon0, alt0, data['gps']['latitude'], data['gps']['longitude'], data['gps'].get('altitude', 0))
             dz = data['gps'].get('altitude', 0) - alt0
@@ -140,7 +140,7 @@ def visualize_positions(panorama_data):
         ax.text(x_coords[i], y_coords[i], z_coords[i] + 0.2, labels[i], fontsize=12)
     
     # Add direction arrows if available
-    for i, data in enumerate(panorama_data):
+    for i, data in enumerate(img360_data):
         if 'direction' in data['gps']:
             direction_rad = math.radians(data['gps']['direction'])
             dx = math.sin(direction_rad)
@@ -154,7 +154,7 @@ def visualize_positions(panorama_data):
                 [z_min, z_coords[i]], 'k--', alpha=0.5)
     
     # Add annotation for altitude differences using filenames
-    if len(panorama_data) > 1:
+    if len(img360_data) > 1:
         alt_text = "Altitude differences (m):\n"
         for i, label in enumerate(labels):
             alt_text += f"{label}: {z_coords[i]:.2f}\n"
@@ -237,7 +237,7 @@ def main():
         print("   or: python img_location_visualization_3D.py <image1> [<image2> ...]")
         sys.exit(1)
     
-    panorama_data = []
+    img360_data = []
     
     for i, image_path in enumerate(image_paths):
         print(f"Processing {image_path}...")
@@ -253,7 +253,7 @@ def main():
                 print(f"Direction: {gps_info['direction']} degrees")
             
 
-            panorama_data.append({
+            img360_data.append({
                 'id': i,
                 'path': image_path,
                 'gps': gps_info,
@@ -264,9 +264,9 @@ def main():
             print(f"No GPS data found in {image_path}")
     
     # Visualize the image positions
-    if len(panorama_data) > 0:
+    if len(img360_data) > 0:
         # Visualize with the original matplotlib visualization
-        visualize_positions(panorama_data)
+        visualize_positions(img360_data)
     else:
         print("No images with GPS data found. Visualization cannot be created.")
 
