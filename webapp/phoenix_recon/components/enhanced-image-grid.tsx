@@ -88,29 +88,31 @@ export function EnhancedImageGrid({
   }, [locations]);
 
   const handleDragOver = (e: React.DragEvent, position: number) => {
-    // Always allow drop for both images and locations
-    e.preventDefault();
-    setHighlightedCell(position);
+    // Only allow drop for locations, not for images
+    const locationId = e.dataTransfer.getData("locationId");
+
+    // Since we can't access dataTransfer data during dragOver in some browsers,
+    // check if it's a location by looking for a specific format
+    const hasLocationData =
+      e.dataTransfer.types.includes("locationId") ||
+      e.dataTransfer.types.includes("location");
+
+    if (hasLocationData) {
+      e.preventDefault();
+      setHighlightedCell(position);
+    }
   };
 
   const handleDrop = (e: React.DragEvent, position: number) => {
     e.preventDefault();
     setHighlightedCell(null);
 
-    // Check if it's an image
-    const imageId = e.dataTransfer.getData("imageId");
-    if (imageId) {
-      const updatedItems = gridItems.map((item) =>
-        item.position === position
-          ? { ...item, imageId, locationId: null, itemType: "image" }
-          : item
-      );
-      setGridItems(updatedItems);
-      onGridChange?.(updatedItems);
+    // Skip if it's an image - only allow locations
+    if (e.dataTransfer.getData("imageId")) {
       return;
     }
 
-    // Check if it's a location
+    // Process only location drops
     const locationId = e.dataTransfer.getData("locationId");
     const locationName = e.dataTransfer.getData("locationName");
 
@@ -122,25 +124,15 @@ export function EnhancedImageGrid({
       // Find the location in our locations array
       const location = locations.find((loc) => loc.id === locationId);
 
-      // For debugging
-      if (location) {
-        console.log("Found location in locations array:", location);
-      } else {
-        console.log(
-          "Location not found in locations array, using data from drag event"
-        );
-      }
-
       // Use the location name from our locations array if available, otherwise use the one from the drag event
       const resolvedName = location?.name || locationName || "Unknown Location";
-      console.log(`Using location name: ${resolvedName}`);
 
       const updatedItems = gridItems.map((item) =>
         item.position === position
           ? {
               ...item,
               locationId,
-              locationName: resolvedName, // Store the name directly in the grid item
+              locationName: resolvedName,
               imageId: null,
               itemType: "location",
             }
@@ -332,8 +324,8 @@ export function EnhancedImageGrid({
                           : ""
                       }`}
                     >
-                      <ImageIcon className="w-4 h-4 mr-1" />
-                      <span>Drop</span>
+                      <MapPin className="w-4 h-4 mr-1" />
+                      <span>Drop Location</span>
                     </div>
                   )}
                 </div>
