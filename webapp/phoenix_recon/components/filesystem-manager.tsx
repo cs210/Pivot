@@ -417,7 +417,7 @@ export default function FileSystemManager({
                 <ImageIcon className="mr-2 h-4 w-4" /> Upload Image
               </Button>
             </DialogTrigger>
-            <DialogContent className="sm:max-w-md text-foreground bg-background">
+            <DialogContent className="sm:max-w-2xl w-[90vw] text-foreground bg-background">
               <DialogHeader>
                 <DialogTitle className="text-foreground">
                   Upload New Image
