@@ -1,33 +1,48 @@
-import type React from "react"
-import type { Metadata, Viewport } from "next"
-import localFont from "next/font/local"
-import "./globals.css"
-import { BodyWrapper } from "./BodyWrapper"
+import type React from "react";
+import type { Metadata, Viewport } from "next";
+import localFont from "next/font/local";
+import "./globals.css";
+import { BodyWrapper } from "./BodyWrapper";
+import { ensureImageStorageBucket } from "@/utils/setup-supabase";
 
 const geistSans = localFont({
   src: "./fonts/GeistVF.woff",
   variable: "--font-geist-sans",
   weight: "100 900",
-})
+});
 const geistMono = localFont({
   src: "./fonts/GeistMonoVF.woff",
   variable: "--font-geist-mono",
   weight: "100 900",
-})
+});
 
 export const metadata: Metadata = {
   title: "Phoenix Recon - 360° Video to VR Platform",
   description: "Transform your 360° videos into interactive VR experiences",
-}
+};
 
 export const viewport: Viewport = {
   themeColor: "#050517",
+};
+
+// Check bucket existence but don't try to create it (moved to useEffect in a client component)
+if (typeof window !== "undefined") {
+  // Only run in browser environment
+  ensureImageStorageBucket().then((exists) => {
+    if (exists) {
+      console.log("Images storage bucket is available");
+    } else {
+      console.warn(
+        "Images storage bucket may not exist - please create it in your Supabase dashboard"
+      );
+    }
+  });
 }
 
 export default function RootLayout({
   children,
 }: Readonly<{
-  children: React.ReactNode
+  children: React.ReactNode;
 }>) {
   return (
     <html lang="en">
@@ -47,5 +62,5 @@ export default function RootLayout({
         <div className="relative z-10">{children}</div>
       </body>
     </html>
-  )
+  );
 }
