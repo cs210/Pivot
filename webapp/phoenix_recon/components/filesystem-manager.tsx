@@ -331,56 +331,50 @@ export default function FileSystemManager({
   };
 
   const handleDragStart = (e: React.DragEvent, item: FSItem) => {
-    // Allow dragging both images and locations
-    if (item.type === "image" || item.type === "location") {
-      // Set data for file explorer internal dragging
+    // For internal file system dragging
+    e.dataTransfer.setData(
+      "application/phoenix-recon",
+      JSON.stringify({
+        id: item.id,
+        type: item.type,
+        name: item.name,
+      })
+    );
+
+    // For the grid drops, only set location data, not image data
+    if (item.type === "location") {
+      console.log(`Setting drag data for location: ${item.id}, ${item.name}`);
+      e.dataTransfer.setData("locationId", item.id);
+      e.dataTransfer.setData("locationName", item.name);
+
       e.dataTransfer.setData(
-        "application/phoenix-recon",
+        "location",
         JSON.stringify({
           id: item.id,
-          type: item.type,
           name: item.name,
         })
       );
-
-      // Set multiple data formats for compatibility
-      if (item.type === "image") {
-        e.dataTransfer.setData("imageId", item.id);
-      } else if (item.type === "location") {
-        // Add name explicitly
-        console.log(`Setting drag data for location: ${item.id}, ${item.name}`);
-        e.dataTransfer.setData("locationId", item.id);
-        e.dataTransfer.setData("locationName", item.name);
-
-        // Also set a combined format for browsers that might have issues with multiple setData calls
-        e.dataTransfer.setData(
-          "location",
-          JSON.stringify({
-            id: item.id,
-            name: item.name,
-          })
-        );
-      }
-
-      e.dataTransfer.effectAllowed = "copy";
-      setDraggedItem(item.id);
-
-      // Create a drag image
-      if (item.type === "image" && item.url) {
-        const img = new Image();
-        img.src = item.url;
-        e.dataTransfer.setDragImage(img, 25, 25);
-      } else if (item.type === "location") {
-        // Use MapPin icon for location dragging
-        const pinIcon = document.createElement("div");
-        pinIcon.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"></path><circle cx="12" cy="10" r="3"></circle></svg>`;
-        pinIcon.style.color = "var(--primary)";
-        pinIcon.style.opacity = "0.9";
-        document.body.appendChild(pinIcon);
-        e.dataTransfer.setDragImage(pinIcon, 20, 20);
-        setTimeout(() => document.body.removeChild(pinIcon), 0);
-      }
     }
+
+    // Set dragged item in state
+    setDraggedItem(item.id);
+
+    // Create appropriate drag image
+    if (item.type === "image" && item.url) {
+      const img = new Image();
+      img.src = item.url;
+      e.dataTransfer.setDragImage(img, 25, 25);
+    } else if (item.type === "location") {
+      // Use MapPin icon for location dragging
+      const pinIcon = document.createElement("div");
+      pinIcon.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"></path><circle cx="12" cy="10" r="3"></circle></svg>`;
+      pinIcon.style.color = "var(--primary)";
+      pinIcon.style.opacity = "0.9";
+      document.body.appendChild(pinIcon);
+      e.dataTransfer.setDragImage(pinIcon, 20, 20);
+      setTimeout(() => document.body.removeChild(pinIcon), 0);
+    }
+
     e.stopPropagation();
   };
 
@@ -578,7 +572,7 @@ export default function FileSystemManager({
                       navigateToLocation(item.id);
                     }
                   }}
-                  draggable={true} // Make all items draggable, not just images
+                  draggable={true} // Keep all items draggable for consistent UX
                   onDragStart={(e) => handleDragStart(e, item)}
                   onDragOver={(e) => handleDragOver(e, item)}
                   onDragLeave={handleDragLeave}
