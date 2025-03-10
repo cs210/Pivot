@@ -37,28 +37,34 @@
 }
 
 body {
-  background-color: #050517; /* Very dark navy background */
+  /* Keep the black (or near-black) background behind everything */
+  background-color: #050517;
 }
 
+/* Place blobs behind the main content by giving them a lower z-index
+   but above the body background */
 .blob-container {
   position: fixed;
-  width: 100vw;
-  height: 100vh;
   top: 0;
   left: 0;
-  z-index: 0;
+  width: 100vw;
+  height: 100vh;
+  z-index: 1; /* <--- behind .relative.z-10 in your layout, above body */
   overflow: hidden;
-  pointer-events: none;
+  pointer-events: none; /* So clicks pass through to the content */
 }
 
 .blob {
   position: absolute;
   border-radius: 50%;
-  filter: blur(40px);
-  opacity: 0.15;
-  mix-blend-mode: screen;
+  background-size: cover;
+  background-repeat: no-repeat;
+  filter: blur(5px);
+  opacity: 1;
+  mix-blend-mode: normal;
 }
 
+/* Example keyframe animations (optional) */
 @keyframes blob-movement-1 {
   0%,
   100% {
@@ -71,7 +77,6 @@ body {
     transform: translate(-5%, 5%) scale(0.9);
   }
 }
-
 @keyframes blob-movement-2 {
   0%,
   100% {
@@ -84,7 +89,6 @@ body {
     transform: translate(5%, -5%) scale(0.9);
   }
 }
-
 @keyframes blob-movement-3 {
   0%,
   100% {
@@ -98,33 +102,81 @@ body {
   }
 }
 
+/* Example positions for the nine blobs.
+   Adjust widths/heights & animations to your preference. */
+
 .blob-1 {
-  top: 10%;
-  left: 10%;
-  width: 600px;
-  height: 600px;
-  background: radial-gradient(circle at center, rgba(75, 0, 130, 0.7), rgba(25, 25, 112, 0.3));
+  top: 0;
+  left: 0;
+  width: 200px;
+  height: 200px;
   animation: blob-movement-1 20s infinite ease-in-out;
 }
 
 .blob-2 {
-  bottom: 10%;
-  right: 10%;
-  width: 500px;
-  height: 500px;
-  background: radial-gradient(circle at center, rgba(138, 43, 226, 0.7), rgba(72, 61, 139, 0.3));
+  top: 0;
+  right: 0;
+  width: 200px;
+  height: 200px;
   animation: blob-movement-2 25s infinite ease-in-out;
 }
 
 .blob-3 {
-  top: 50%;
-  left: 50%;
-  width: 400px;
-  height: 400px;
-  background: radial-gradient(circle at center, rgba(106, 90, 205, 0.7), rgba(65, 105, 225, 0.3));
+  bottom: 0;
+  left: 0;
+  width: 200px;
+  height: 200px;
   animation: blob-movement-3 22s infinite ease-in-out;
 }
 
+.blob-4 {
+  bottom: 0;
+  right: 0;
+  width: 200px;
+  height: 200px;
+}
+
+.blob-5 {
+  top: 50%;
+  left: 0;
+  width: 200px;
+  height: 200px;
+  transform: translateY(-50%);
+}
+
+.blob-6 {
+  top: 50%;
+  right: 0;
+  width: 200px;
+  height: 200px;
+  transform: translateY(-50%);
+}
+
+.blob-7 {
+  top: 0;
+  left: 50%;
+  width: 200px;
+  height: 200px;
+  transform: translateX(-50%);
+}
+
+.blob-8 {
+  bottom: 0;
+  left: 50%;
+  width: 200px;
+  height: 200px;
+  transform: translateX(-50%);
+}
+
+.blob-9 {
+  top: 50%;
+  left: 50%;
+  width: 200px;
+  height: 200px;
+  transform: translate(-50%, -50%);
+}
+
+/* Other styles remain the same */
 .geometric-text {
   letter-spacing: 0.05em;
   text-transform: uppercase;
@@ -147,7 +199,7 @@ body {
 .noise {
   position: fixed;
   inset: 0;
-  z-index: 1;
+  z-index: 2;
   pointer-events: none;
   opacity: 0.05;
   background: url("data:image/svg+xml,%3Csvg viewBox='0 0 2000 2000' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E");
@@ -166,13 +218,10 @@ body {
 .scrollbar-thin::-webkit-scrollbar {
   height: 6px;
 }
-
 .scrollbar-thumb-muted::-webkit-scrollbar-thumb {
   background-color: rgba(255, 255, 255, 0.2);
   border-radius: 3px;
 }
-
 .scrollbar-track-transparent::-webkit-scrollbar-track {
   background-color: transparent;
 }
-

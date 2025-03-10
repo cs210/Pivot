@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 
 export default function HowItWorks() {
   return (
-    <div className="flex flex-col min-h-screen bg-background text-foreground">
+    <div className="flex flex-col min-h-screen text-foreground">
       <Header />
       <main className="flex-1 relative">
         <div className="absolute inset-0 bg-cyber-gradient opacity-5"></div>
@@ -48,7 +48,7 @@ export default function HowItWorks() {
           </div>
         </div>
       </main>
-      <footer className="border-t border-border/40 bg-background">
+      <footer className="border-t border-border/40">
         <div className="container flex flex-col gap-2 py-4 md:h-16 md:flex-row md:items-center md:justify-between md:py-0">
           <p className="text-center text-sm text-muted-foreground md:text-left">
             © 2024 Phoenix Recon. All rights reserved.
