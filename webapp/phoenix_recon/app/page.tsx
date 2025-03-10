@@ -1,29 +1,30 @@
-"use client"
+"use client";
 
-import { useEffect, useState } from "react"
-import Link from "next/link"
-import { Button } from "@/components/ui/button"
-import { ArrowRight, CuboidIcon as Cube, Globe } from "lucide-react"
-import { createClient } from "@/utils/supabase/client"
-import { Header } from "@/components/header"
+import { useEffect, useState } from "react";
+import Link from "next/link";
+import { Button } from "@/components/ui/button";
+import { ArrowRight, CuboidIcon as Cube, Globe } from "lucide-react";
+import { createClient } from "@/utils/supabase/client";
+import { Header } from "@/components/header";
 
 export default function Home() {
-  const [user, setUser] = useState<any>(null)
-  const supabase = createClient()
+  const [user, setUser] = useState<any>(null);
+  const supabase = createClient();
 
   useEffect(() => {
     const checkUser = async () => {
       const {
         data: { user },
-      } = await supabase.auth.getUser()
-      setUser(user)
-    }
+      } = await supabase.auth.getUser();
+      setUser(user);
+    };
 
-    checkUser()
-  }, [supabase])
+    checkUser();
+  }, [supabase]);
 
+  // to activate background blobs, find and delete "bg-muted"
   return (
-    <div className="flex flex-col min-h-screen bg-background text-foreground">
+    <div className="flex flex-col min-h-screen  text-foreground">
       <Header />
       <main className="flex-1">
         <section className="w-full py-12 md:py-24 lg:py-32 relative overflow-hidden">
@@ -35,18 +36,27 @@ export default function Home() {
                     Transform 360° Videos Into Interactive VR Experiences
                   </h1>
                   <p className="max-w-[600px] text-muted-foreground md:text-xl">
-                    Upload your 360° videos and we'll convert them into immersive VR environments that users can
-                    navigate and explore.
+                    Upload your 360° videos and we'll convert them into
+                    immersive VR environments that users can navigate and
+                    explore.
                   </p>
                 </div>
                 <div className="flex flex-col gap-2 min-[400px]:flex-row">
                   <Link href={user ? "/dashboard" : "/register"}>
-                    <Button size="lg" className="bg-cyber-gradient hover:opacity-90 geometric-text">
-                      {user ? "Go to Dashboard" : "Start Creating"} <ArrowRight className="h-4 w-4 ml-2" />
+                    <Button
+                      size="lg"
+                      className="bg-cyber-gradient hover:opacity-90 geometric-text"
+                    >
+                      {user ? "Go to Dashboard" : "Start Creating"}{" "}
+                      <ArrowRight className="h-4 w-4 ml-2" />
                     </Button>
                   </Link>
                   <Link href="/how-it-works">
-                    <Button size="lg" variant="outline" className="glass-card geometric-text">
+                    <Button
+                      size="lg"
+                      variant="outline"
+                      className="glass-card geometric-text"
+                    >
                       How It Works
                     </Button>
                   </Link>
@@ -55,12 +65,14 @@ export default function Home() {
               <div className="flex items-center justify-center">
                 <div className="relative w-full aspect-video overflow-hidden rounded-xl glass-card p-1">
                   <div className="absolute inset-0 bg-cyber-gradient opacity-10" />
-                  <div className="relative h-full w-full rounded-lg bg-background/50 flex items-center justify-center">
+                  <div className="relative h-full w-full rounded-lg /50 flex items-center justify-center">
                     <div className="grid gap-2 place-items-center">
                       <div className="rounded-full bg-cyber-gradient p-4">
                         <Globe className="h-6 w-6 text-white" />
                       </div>
-                      <span className="text-sm font-medium geometric-text">360° VR Experience</span>
+                      <span className="text-sm font-medium geometric-text">
+                        360° VR Experience
+                      </span>
                     </div>
                   </div>
                 </div>
@@ -100,7 +112,9 @@ export default function Home() {
                     <path d="m16 16-4-4-4 4" />
                   </svg>
                 </div>
-                <h3 className="text-xl font-bold cyber-glow">Upload 360° Videos</h3>
+                <h3 className="text-xl font-bold cyber-glow">
+                  Upload 360° Videos
+                </h3>
                 <p className="text-center text-muted-foreground">
                   Upload your 360° video footage through our secure platform
                 </p>
@@ -109,7 +123,9 @@ export default function Home() {
                 <div className="rounded-full bg-cyber-gradient p-2">
                   <Cube className="h-6 w-6 text-foreground" />
                 </div>
-                <h3 className="text-xl font-bold cyber-glow">Automatic Processing</h3>
+                <h3 className="text-xl font-bold cyber-glow">
+                  Automatic Processing
+                </h3>
                 <p className="text-center text-muted-foreground">
                   Our system converts your videos into navigable 3D environments
                 </p>
@@ -133,13 +149,14 @@ export default function Home() {
                 </div>
                 <h3 className="text-xl font-bold cyber-glow">Explore in VR</h3>
                 <p className="text-center text-muted-foreground">
-                  Access your interactive VR environments on any compatible device
+                  Access your interactive VR environments on any compatible
+                  device
                 </p>
               </div>
             </div>
           </div>
         </section>
-        <section className="w-full py-12 md:py-24 lg:py-32 bg-background relative">
+        <section className="w-full py-12 md:py-24 lg:py-32  relative">
           <div className="absolute inset-0 bg-cyber-gradient opacity-5"></div>
           <div className="container px-4 md:px-6 relative z-10">
             <div className="grid gap-10 px-10 md:gap-16 lg:grid-cols-2">
@@ -151,18 +168,23 @@ export default function Home() {
                   Experience Locations Like You're Actually There
                 </h2>
                 <p className="text-muted-foreground md:text-xl/relaxed">
-                  Our technology transforms ordinary 360° videos into fully navigable virtual environments. Move through
-                  spaces, explore details, and experience locations from any angle.
+                  Our technology transforms ordinary 360° videos into fully
+                  navigable virtual environments. Move through spaces, explore
+                  details, and experience locations from any angle.
                 </p>
                 <Link
                   href="/register"
                   className="inline-flex h-9 items-center justify-center rounded-md px-4 py-2 text-sm font-medium shadow transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50"
                 >
-                  <Button className="bg-cyber-gradient hover:opacity-90">Get Started</Button>
+                  <Button className="bg-cyber-gradient hover:opacity-90">
+                    Get Started
+                  </Button>
                 </Link>
               </div>
               <div className="flex flex-col items-start space-y-4">
-                <div className="inline-block rounded-lg bg-primary/10 px-3 py-1 text-sm text-primary">Applications</div>
+                <div className="inline-block rounded-lg bg-primary/10 px-3 py-1 text-sm text-primary">
+                  Applications
+                </div>
                 <h3 className="text-2xl font-bold cyber-glow">Perfect For:</h3>
                 <ul className="grid gap-2">
                   <li className="flex items-center gap-2">
@@ -253,7 +275,7 @@ export default function Home() {
                 </ul>
                 <Link
                   href="/use-cases"
-                  className="inline-flex h-9 items-center justify-center rounded-md border border-input bg-background px-4 py-2 text-sm font-medium shadow-sm transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50"
+                  className="inline-flex h-9 items-center justify-center rounded-md border border-input  px-4 py-2 text-sm font-medium shadow-sm transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50"
                 >
                   <Button variant="outline" className="cyber-border">
                     View Use Cases
@@ -270,33 +292,43 @@ export default function Home() {
                 Ready to Transform Your 360° Videos?
               </h2>
               <p className="mx-auto max-w-[600px] text-muted-foreground md:text-xl/relaxed lg:text-base/relaxed xl:text-xl/relaxed">
-                Create immersive, interactive VR experiences from your 360° footage today.
+                Create immersive, interactive VR experiences from your 360°
+                footage today.
               </p>
             </div>
             <div className="mx-auto w-full max-w-sm space-y-2">
               <div className="flex justify-center">
-              <div className="flex justify-center">
-                <Link href="/register">
-                  <Button size="lg" className="w-full min-[400px]:w-auto bg-cyber-gradient hover:opacity-90">
-                    Get Started
-                  </Button>
-                </Link>
+                <div className="flex justify-center">
+                  <Link href="/register">
+                    <Button
+                      size="lg"
+                      className="w-full min-[400px]:w-auto bg-cyber-gradient hover:opacity-90"
+                    >
+                      Get Started
+                    </Button>
+                  </Link>
+                </div>
               </div>
             </div>
           </div>
-        </div>
         </section>
       </main>
-      <footer className="border-t border-border/40 bg-background">
+      <footer className="border-t border-border/40 ">
         <div className="container flex flex-col gap-2 py-4 md:h-16 md:flex-row md:items-center md:justify-between md:py-0">
           <p className="text-center text-sm text-muted-foreground md:text-left">
             © 2024 Phoenix Recon. All rights reserved.
           </p>
           <nav className="flex items-center justify-center gap-4 md:gap-6">
-            <Link className="text-sm font-medium text-muted-foreground hover:text-foreground" href="#">
+            <Link
+              className="text-sm font-medium text-muted-foreground hover:text-foreground"
+              href="#"
+            >
               Terms of Service
             </Link>
-            <Link className="text-sm font-medium text-muted-foreground hover:text-foreground" href="#">
+            <Link
+              className="text-sm font-medium text-muted-foreground hover:text-foreground"
+              href="#"
+            >
               Privacy
             </Link>
           </nav>
