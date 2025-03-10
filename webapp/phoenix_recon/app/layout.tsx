@@ -4,6 +4,9 @@ import localFont from "next/font/local";
 import "./globals.css";
 import { BodyWrapper } from "./BodyWrapper";
 import { ensureImageStorageBucket } from "@/utils/setup-supabase";
+import type { Metadata } from "next";
+import localFont from "next/font/local";
+import "./globals.css";
 
 const geistSans = localFont({
   src: "./fonts/GeistVF.woff",
@@ -53,11 +56,16 @@ export default function RootLayout({
         />
       </head>
       <body className="min-h-screen bg-background font-sans antialiased">
-        <div className="noise" />
         <div className="blob-container">
-          <div className="blob blob-1"></div>
-          <div className="blob blob-2"></div>
-          <div className="blob blob-3"></div>
+          {[...Array(9)].map((_, index) => (
+            <div
+              key={index}
+              className={`blob blob-${index + 1}`}
+              style={{
+                backgroundImage: `url(/images/blobs/blob-${index + 1}.png)`,
+              }}
+            />
+          ))}
         </div>
         <div className="relative z-10">{children}</div>
       </body>
