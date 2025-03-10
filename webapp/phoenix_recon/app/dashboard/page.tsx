@@ -15,6 +15,8 @@ import { Header } from "@/components/header";
 import ImageUploader from "@/components/image-uploader";
 import { StorageCheck } from "@/components/storage-check";
 import { EnhancedImageGrid } from "@/components/enhanced-image-grid";
+import LocationManager from "@/components/location-manager";
+import FileSystemManager from "@/components/filesystem-manager";
 
 interface Video {
   id: string;
@@ -58,6 +60,7 @@ export default function Dashboard() {
         position: i,
       }))
   );
+  const [locationsUpdated, setLocationsUpdated] = useState(false);
 
   useEffect(() => {
     const checkUser = async () => {
@@ -247,6 +250,16 @@ export default function Dashboard() {
     );
   };
 
+  const handleLocationImageChange = () => {
+    setLocationsUpdated(!locationsUpdated);
+  };
+
+  // Add handler for filesystem changes
+  const handleFileSystemChange = () => {
+    // Refresh images when the filesystem changes
+    fetchImages();
+  };
+
   return (
     <div className="flex flex-col min-h-screen bg-background text-foreground">
       <Header />
@@ -410,88 +423,34 @@ export default function Dashboard() {
                   </Button>
                 </div>
               ) : (
-                <div className="grid grid-cols-1 gap-8 md:grid-cols-12">
-                  <div className="md:col-span-4 space-y-4">
-                    <h2 className="text-xl font-semibold mb-4 cyber-glow">
-                      Your Images
-                    </h2>
-                    <p className="text-sm text-muted-foreground mb-4">
-                      Drag any image card to the grid on the right
-                    </p>
-                    <div className="space-y-4 max-h-[60vh] overflow-y-auto pr-2">
-                      {images.map((image) => (
-                        <Card
-                          key={image.id}
-                          className={`cursor-grab hover:border-primary transition-colors bg-background/80 backdrop-blur-sm border-border/50 ${
-                            selectedImage?.id === image.id ? "cyber-border" : ""
-                          }`}
-                          onClick={() => setSelectedImage(image)}
-                          draggable={true}
-                          onDragStart={(e) => {
-                            e.dataTransfer.setData("imageId", image.id);
-                            setSelectedImage(image);
-                          }}
-                        >
-                          <CardContent className="p-4 flex justify-between items-center">
-                            <div className="flex items-center space-x-3">
-                              <img
-                                src={image.url}
-                                alt={image.name}
-                                className="h-16 w-16 object-cover rounded-md"
-                                draggable={false} // Prevent default image drag behavior
-                              />
-                              <div>
-                                <p className="font-medium text-foreground">
-                                  {image.name}
-                                </p>
-                                <p className="text-sm text-muted-foreground">
-                                  {new Date(
-                                    image.created_at
-                                  ).toLocaleDateString()}
-                                </p>
-                              </div>
-                            </div>
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              onClick={(e) => {
-                                e.stopPropagation(); // Stop card click
-                                e.preventDefault(); // Prevent drag start
-                                handleDeleteImage(image.id);
-                              }}
-                              className="hover:bg-destructive/20 hover:text-destructive"
-                              draggable={false} // Prevent button from being draggable
-                            >
-                              <Trash2 className="h-4 w-4 text-destructive" />
-                            </Button>
-                          </CardContent>
-                        </Card>
-                      ))}
+                <div className="grid grid-cols-1 gap-8">
+                  {/* File System Explorer - Now the main component */}
+                  <div className="space-y-6">
+                    <div className="pt-2">
+                      <h2 className="text-xl font-semibold mb-4 cyber-glow">
+                        File Browser
+                      </h2>
+                      <p className="text-sm text-muted-foreground mb-4">
+                        Organize your images by location - drag and drop images
+                        between locations
+                      </p>
+                      <FileSystemManager
+                        userId={user?.id}
+                        images={images}
+                        onImageAssigned={handleFileSystemChange}
+                      />
                     </div>
-                  </div>
-                  <div className="md:col-span-8">
-                    <EnhancedImageGrid
-                      images={images}
-                      initialGridItems={gridItems}
-                      onGridChange={(newGridItems) =>
-                        setGridItems(newGridItems)
-                      }
-                    />
 
-                    {selectedImage && (
-                      <div className="mt-6">
-                        <h3 className="text-lg font-medium mb-3">
-                          Selected Image: {selectedImage.name}
-                        </h3>
-                        <div className="border border-border rounded-lg overflow-hidden">
-                          <img
-                            src={selectedImage.url}
-                            alt={selectedImage.name}
-                            className="w-full object-contain max-h-[300px]"
-                          />
-                        </div>
-                      </div>
-                    )}
+                    {/* Image Grid kept as secondary */}
+                    <div className="border-t border-border/50 pt-6 mt-6">
+                      <EnhancedImageGrid
+                        images={images}
+                        initialGridItems={gridItems}
+                        onGridChange={(newGridItems) =>
+                          setGridItems(newGridItems)
+                        }
+                      />
+                    </div>
                   </div>
                 </div>
               )}
