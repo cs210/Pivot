@@ -33,6 +33,7 @@ import {
   ArrowLeft,
   X,
 } from "lucide-react";
+import ImageUploader from "@/components/image-uploader";
 
 interface FileSystemManagerProps {
   userId: string;
@@ -63,9 +64,6 @@ export default function FileSystemManager({
   const [uploadDialogOpen, setUploadDialogOpen] = useState(false);
   const [locationName, setLocationName] = useState("");
   const [locationDesc, setLocationDesc] = useState("");
-  const [uploadingImage, setUploadingImage] = useState(false);
-  const [imageFile, setImageFile] = useState<File | null>(null);
-  const [imageName, setImageName] = useState("");
 
   // File system navigation state
   const [currentPath, setCurrentPath] = useState<string[]>(["root"]);
@@ -75,9 +73,6 @@ export default function FileSystemManager({
   // Add state to track drag operations
   const [draggedItem, setDraggedItem] = useState<string | null>(null);
   const [dropTarget, setDropTarget] = useState<string | null>(null);
-
-  const [uploadProgress, setUploadProgress] = useState(0);
-  const [dragActive, setDragActive] = useState(false);
 
   const supabase = createClient();
 
@@ -309,73 +304,9 @@ export default function FileSystemManager({
     }
   };
 
-  const handleImageUpload = async () => {
-    if (!imageFile) return;
-
-    try {
-      setUploadingImage(true);
-      setUploadProgress(0);
-
-      // Create a unique storage path
-      const fileExt = imageFile.name.split(".").pop();
-      const fileName = `${Math.random().toString(36).substring(2)}.${fileExt}`;
-      const filePath = `images/${userId}/${fileName}`;
-
-      // Simulate upload progress for better UX
-      const progressInterval = setInterval(() => {
-        setUploadProgress((prev) => {
-          if (prev >= 95) {
-            clearInterval(progressInterval);
-            return 95;
-          }
-          return prev + 5;
-        });
-      }, 100);
-
-      // Upload to Storage
-      const { error: uploadError } = await supabase.storage
-        .from("images")
-        .upload(filePath, imageFile);
-
-      if (uploadError) throw uploadError;
-
-      // Get the public URL
-      const { data: publicUrlData } = supabase.storage
-        .from("images")
-        .getPublicUrl(filePath);
-
-      const url = publicUrlData?.publicUrl;
-
-      // Save image metadata to database
-      const name = imageName || imageFile.name;
-      const { error: insertError } = await supabase.from("images").insert({
-        name,
-        url,
-        user_id: userId,
-        storage_path: filePath,
-      });
-
-      if (insertError) throw insertError;
-
-      // Complete progress bar
-      setUploadProgress(100);
-
-      // Reset form and refresh after a short delay to show 100% progress
-      setTimeout(() => {
-        setImageFile(null);
-        setImageName("");
-        setUploadDialogOpen(false);
-        setUploadProgress(0);
-
-        // Trigger refresh in parent component
-        onImageAssigned();
-      }, 500);
-    } catch (error) {
-      console.error("Error uploading image:", error);
-      setUploadProgress(0);
-    } finally {
-      setUploadingImage(false);
-    }
+  const handleUploadSuccess = () => {
+    setUploadDialogOpen(false);
+    onImageAssigned();
   };
 
   const navigateToLocation = (locationId: string) => {
@@ -493,101 +424,11 @@ export default function FileSystemManager({
                 </DialogTitle>
               </DialogHeader>
 
-              {!imageFile ? (
-                <div
-                  className={`border-2 border-dashed rounded-lg p-6 text-center ${
-                    dragActive ? "border-primary bg-primary/5" : "border-border"
-                  } transition-all flex flex-col items-center justify-center min-h-[200px]`}
-                  onDragEnter={handleDrag}
-                  onDragOver={handleDrag}
-                  onDragLeave={handleDrag}
-                  onDrop={(e) => handleDrag(e)}
-                >
-                  <ImageIcon className="h-10 w-10 text-muted-foreground mb-4" />
-                  <p className="text-sm text-muted-foreground mb-2">
-                    Drag and drop your image here, or click to browse
-                  </p>
-                  <Input
-                    id="image-upload"
-                    type="file"
-                    accept="image/*"
-                    className="hidden"
-                    onChange={(e) => {
-                      const file = e.target.files?.[0];
-                      if (file) {
-                        setImageFile(file);
-                        setImageName(file.name.split(".")[0]);
-                      }
-                    }}
-                  />
-                  <label htmlFor="image-upload">
-                    <Button
-                      variant="default"
-                      className="bg-cyber-gradient"
-                      size="sm"
-                      type="button"
-                      asChild
-                    >
-                      <span>Choose Image</span>
-                    </Button>
-                  </label>
-                </div>
-              ) : (
-                <div className="space-y-4">
-                  <div className="flex flex-col items-center justify-center">
-                    <div className="w-40 h-40 bg-muted rounded-md overflow-hidden mb-4">
-                      <img
-                        src={URL.createObjectURL(imageFile)}
-                        alt="Preview"
-                        className="w-full h-full object-contain"
-                      />
-                    </div>
-                    <p className="text-sm text-muted-foreground">
-                      {imageFile.name} ({(imageFile.size / 1024).toFixed(1)} KB)
-                    </p>
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label htmlFor="image-name">Image Name</Label>
-                    <Input
-                      id="image-name"
-                      placeholder="Enter image name"
-                      value={imageName}
-                      onChange={(e) => setImageName(e.target.value)}
-                    />
-                  </div>
-
-                  {uploadingImage && (
-                    <div className="w-full bg-muted rounded-full h-2 overflow-hidden">
-                      <div
-                        className="h-full bg-cyber-gradient"
-                        style={{ width: `${uploadProgress}%` }}
-                      ></div>
-                    </div>
-                  )}
-
-                  <div className="flex justify-between">
-                    <Button
-                      variant="outline"
-                      onClick={() => {
-                        setImageFile(null);
-                        setImageName("");
-                      }}
-                      disabled={uploadingImage}
-                    >
-                      Change Image
-                    </Button>
-
-                    <Button
-                      onClick={handleImageUpload}
-                      disabled={uploadingImage || !imageName.trim()}
-                      className="bg-cyber-gradient"
-                    >
-                      {uploadingImage ? "Uploading..." : "Upload"}
-                    </Button>
-                  </div>
-                </div>
-              )}
+              <ImageUploader
+                userId={userId}
+                onUploadSuccess={handleUploadSuccess}
+                embedded={true}
+              />
             </DialogContent>
           </Dialog>
 
