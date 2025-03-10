@@ -22,7 +22,7 @@ See more in `gps_to_rel_pos` and [issue #50](https://github.com/cs210/Phoenix-Re
 
 Includes script that converts HEIC to JPEG. JPEG is the required input format for PTGui.
 
-See more in `img_manipulation`
+See more in `img_manipulation`.
 
 ### 3D Reconstruction
 * This is a "Priority 3" feature. 
