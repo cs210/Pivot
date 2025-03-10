@@ -1,5 +1,7 @@
 "use client";
+"use client";
 
+import Link from "next/link";
 import Link from "next/link";
 
 import { useEffect, useState } from "react";
@@ -8,10 +10,15 @@ import { createClient } from "@/utils/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Video, Trash2 } from "lucide-react";
+import { Video, Trash2, Image as ImageIcon, Grid } from "lucide-react";
 import VideoUploader from "@/components/video-uploader";
 import VideoFrameViewer from "@/components/video-frame-viewer";
 import { Header } from "@/components/header";
+import ImageUploader from "@/components/image-uploader";
+import { StorageCheck } from "@/components/storage-check";
+import { EnhancedImageGrid } from "@/components/enhanced-image-grid";
+import LocationManager from "@/components/location-manager";
+import FileSystemManager from "@/components/filesystem-manager";
 
 interface Video {
   id: string;
@@ -21,14 +28,45 @@ interface Video {
   thumbnail?: string;
 }
 
+interface Image {
+  id: string;
+  name: string;
+  created_at: string;
+  url: string;
+  path: string;
+}
+
+interface GridItem {
+  id: string;
+  imageId: string | null;
+  locationId?: string | null;
+  position: number;
+  itemType?: "image" | "location";
+}
+
 export default function Dashboard() {
   const router = useRouter();
   const supabase = createClient();
   const [videos, setVideos] = useState<Video[]>([]);
+  const [images, setImages] = useState<Image[]>([]);
   const [loading, setLoading] = useState(true);
+  const [imageLoading, setImageLoading] = useState(true);
   const [user, setUser] = useState<any>(null);
   const [selectedVideo, setSelectedVideo] = useState<Video | null>(null);
+  const [selectedImage, setSelectedImage] = useState<Image | null>(null);
   const [activeTab, setActiveTab] = useState("videos");
+  const [gridItems, setGridItems] = useState<GridItem[]>(
+    Array(9)
+      .fill(null)
+      .map((_, i) => ({
+        id: `grid-${i}`,
+        imageId: null,
+        locationId: null,
+        position: i,
+      }))
+  );
+  const [locationsUpdated, setLocationsUpdated] = useState(false);
+  const [locations, setLocations] = useState<any[]>([]);
 
   useEffect(() => {
     const checkUser = async () => {
@@ -41,6 +79,8 @@ export default function Dashboard() {
       }
       setUser(user);
       fetchVideos();
+      fetchImages();
+      fetchLocations();
     };
 
     checkUser();
@@ -63,8 +103,65 @@ export default function Dashboard() {
     }
   };
 
+  const fetchImages = async () => {
+    try {
+      setImageLoading(true);
+
+      // First check if the images table exists
+      const { error: tableCheckError } = await supabase
+        .from("images")
+        .select("count")
+        .limit(1)
+        .single();
+
+      if (tableCheckError && tableCheckError.code === "PGRST116") {
+        console.warn(
+          "Images table doesn't exist yet. Creating empty images array."
+        );
+        setImages([]);
+        return;
+      }
+
+      // If table exists, proceed with fetching images
+      const { data, error } = await supabase
+        .from("images")
+        .select("*")
+        .order("created_at", { ascending: false });
+
+      if (error) throw error;
+      setImages(data || []);
+    } catch (error) {
+      console.error("Error fetching images:", error);
+      // Set images to empty array to prevent further errors
+      setImages([]);
+    } finally {
+      setImageLoading(false);
+    }
+  };
+
+  const fetchLocations = async () => {
+    try {
+      if (!user?.id) return;
+
+      const { data, error } = await supabase
+        .from("locations")
+        .select("*")
+        .eq("user_id", user.id);
+
+      if (error) throw error;
+      console.log("Fetched locations:", data);
+      setLocations(data || []);
+    } catch (error) {
+      console.error("Error fetching locations:", error);
+    }
+  };
+
   const handleVideoUploadSuccess = () => {
     fetchVideos();
+  };
+
+  const handleImageUploadSuccess = () => {
+    fetchImages();
   };
 
   const handleDeleteVideo = async (id: string) => {
@@ -103,6 +200,51 @@ export default function Dashboard() {
     }
   };
 
+  const handleDeleteImage = async (id: string) => {
+    try {
+      // First get the image to get the file path
+      const { data: image } = await supabase
+        .from("images")
+        .select("*")
+        .eq("id", id)
+        .single();
+
+      if (!image) return;
+
+      // Delete from storage
+      const { error: storageError } = await supabase.storage
+        .from("images")
+        .remove([image.path]);
+
+      if (storageError) throw storageError;
+
+      // Delete from database
+      const { error: dbError } = await supabase
+        .from("images")
+        .delete()
+        .eq("id", id);
+
+      if (dbError) throw dbError;
+
+      // Update the images list
+      setImages(images.filter((img) => img.id !== id));
+      if (selectedImage?.id === id) {
+        setSelectedImage(null);
+      }
+
+      // Remove image from any grid items
+      setGridItems(
+        gridItems.map((item) =>
+          item.imageId === id
+            ? { ...item, imageId: null, itemType: null }
+            : item
+        )
+      );
+    } catch (error) {
+      console.error("Error deleting image:", error);
+    }
+  };
+
   const handleSignOut = async () => {
     await supabase.auth.signOut();
     router.push("/");
@@ -113,16 +255,71 @@ export default function Dashboard() {
     setActiveTab("upload");
   };
 
+  const handleUploadFirstImage = () => {
+    setActiveTab("upload-image");
+  };
+
+  const handleDrop = (imageId: string, gridPosition: number) => {
+    // Update the grid item at the specified position with the image ID
+    setGridItems(
+      gridItems.map((item) =>
+        item.position === gridPosition ? { ...item, imageId } : item
+      )
+    );
+  };
+
+  const handleRemoveFromGrid = (position: number) => {
+    setGridItems(
+      gridItems.map((item) =>
+        item.position === position ? { ...item, imageId: null } : item
+      )
+    );
+  };
+
+  const handleLocationImageChange = () => {
+    setLocationsUpdated(!locationsUpdated);
+  };
+
+  // Add handler for filesystem changes
+  const handleFileSystemChange = () => {
+    // Refresh images when the filesystem changes
+    fetchImages();
+    fetchLocations(); // Make sure locations are fresh
+  };
+
+  // Add useEffect to update location names in grid items when locations update
+  useEffect(() => {
+    if (locations.length > 0) {
+      // Update any grid items that have locations to ensure they have the correct names
+      const updatedGridItems = gridItems.map((item) => {
+        if (item.itemType === "location" && item.locationId) {
+          const location = locations.find((loc) => loc.id === item.locationId);
+          if (location) {
+            return {
+              ...item,
+              locationName: location.name,
+            };
+          }
+        }
+        return item;
+      });
+
+      // Only update if there were changes
+      if (JSON.stringify(updatedGridItems) !== JSON.stringify(gridItems)) {
+        setGridItems(updatedGridItems);
+      }
+    }
+  }, [locations]);
+
   return (
     <div className="flex flex-col min-h-screen text-foreground">
       <Header />
       <main className="flex-1 relative">
         <div className="absolute inset-0 bg-cyber-gradient opacity-5"></div>
         <div className="container mx-auto px-4 py-8 relative z-10">
+          <StorageCheck />
           <div className="flex justify-between items-center mb-8">
-            <h1 className="text-3xl font-bold cyber-glow">
-              Your Video Dashboard
-            </h1>
+            <h1 className="text-3xl font-bold cyber-glow">Your Dashboard</h1>
             <Button
               onClick={handleSignOut}
               variant="outline"
@@ -149,6 +346,16 @@ export default function Dashboard() {
                 My Videos
               </TabsTrigger>
               <TabsTrigger
+                value="images"
+                className={`data-[state=active]:bg-cyber-gradient data-[state=active]:text-foreground ${
+                  activeTab === "images"
+                    ? "bg-cyber-gradient text-foreground"
+                    : ""
+                }`}
+              >
+                My Images
+              </TabsTrigger>
+              <TabsTrigger
                 value="upload"
                 className={`data-[state=active]:bg-cyber-gradient data-[state=active]:text-foreground ${
                   activeTab === "upload"
@@ -157,6 +364,16 @@ export default function Dashboard() {
                 }`}
               >
                 Upload Video
+              </TabsTrigger>
+              <TabsTrigger
+                value="upload-image"
+                className={`data-[state=active]:bg-cyber-gradient data-[state=active]:text-foreground ${
+                  activeTab === "upload-image"
+                    ? "bg-cyber-gradient text-foreground"
+                    : ""
+                }`}
+              >
+                Upload Image
               </TabsTrigger>
             </TabsList>
 
@@ -241,9 +458,66 @@ export default function Dashboard() {
               )}
             </TabsContent>
 
+            <TabsContent value="images">
+              {imageLoading ? (
+                <div className="text-center py-12">Loading your images...</div>
+              ) : images.length === 0 ? (
+                <div className="text-center py-12">
+                  <p className="text-muted-foreground mb-4">
+                    You haven't uploaded any images yet.
+                  </p>
+                  <Button
+                    onClick={handleUploadFirstImage}
+                    className="bg-cyber-gradient hover:opacity-90"
+                  >
+                    Upload Your First Image
+                  </Button>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 gap-8">
+                  {/* File System Explorer - Now the main component */}
+                  <div className="space-y-6">
+                    <div className="pt-2">
+                      <h2 className="text-xl font-semibold mb-4 cyber-glow">
+                        File Browser
+                      </h2>
+                      <p className="text-sm text-muted-foreground mb-4">
+                        Organize your images by location - drag and drop images
+                        between locations
+                      </p>
+                      <FileSystemManager
+                        userId={user?.id}
+                        images={images}
+                        onImageAssigned={handleFileSystemChange}
+                      />
+                    </div>
+
+                    {/* Image Grid kept as secondary */}
+                    <div className="border-t border-border/50 pt-6 mt-6">
+                      <EnhancedImageGrid
+                        images={images}
+                        initialGridItems={gridItems}
+                        onGridChange={(newGridItems) =>
+                          setGridItems(newGridItems)
+                        }
+                        locations={locations}
+                      />
+                    </div>
+                  </div>
+                </div>
+              )}
+            </TabsContent>
+
             <TabsContent value="upload">
               <VideoUploader
                 onUploadSuccess={handleVideoUploadSuccess}
+                userId={user?.id}
+              />
+            </TabsContent>
+
+            <TabsContent value="upload-image">
+              <ImageUploader
+                onUploadSuccess={handleImageUploadSuccess}
                 userId={user?.id}
               />
             </TabsContent>
