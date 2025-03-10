@@ -212,9 +212,9 @@ export function EnhancedImageGrid({
     <div className="space-y-6">
       <div className="flex justify-between items-center">
         <div>
-          <h2 className="text-xl font-semibold cyber-glow">Image Grid</h2>
+          <h2 className="text-xl font-semibold cyber-glow">Location Grid</h2>
           <p className="text-sm text-muted-foreground mt-1">
-            Drag and drop images onto the circles to arrange your grid
+            Drag and drop locations onto the circles to arrange your grid
           </p>
         </div>
         <div className="flex space-x-2">
@@ -317,16 +317,7 @@ export function EnhancedImageGrid({
                       </button>
                     </div>
                   ) : (
-                    <div
-                      className={`text-muted-foreground text-xs flex items-center justify-center ${
-                        highlightedCell === item.position
-                          ? "text-primary animate-pulse"
-                          : ""
-                      }`}
-                    >
-                      <MapPin className="w-4 h-4 mr-1" />
-                      <span>Drop Location</span>
-                    </div>
+                    <MapPin className="h-6 w-6 text-muted-foreground/50" />
                   )}
                 </div>
 
