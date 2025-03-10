@@ -4,8 +4,6 @@ import localFont from "next/font/local";
 import "./globals.css";
 import { BodyWrapper } from "./BodyWrapper";
 import { ensureImageStorageBucket } from "@/utils/setup-supabase";
-import type { Metadata } from "next";
-import localFont from "next/font/local";
 import "./globals.css";
 
 const geistSans = localFont({
