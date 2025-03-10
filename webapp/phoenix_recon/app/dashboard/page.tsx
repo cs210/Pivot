@@ -2,7 +2,6 @@
 "use client";
 
 import Link from "next/link";
-import Link from "next/link";
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
@@ -236,7 +235,7 @@ export default function Dashboard() {
       setGridItems(
         gridItems.map((item) =>
           item.imageId === id
-            ? { ...item, imageId: null, itemType: null }
+            ? { ...item, imageId: null, itemType: undefined }
             : item
         )
       );
