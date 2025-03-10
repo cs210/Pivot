@@ -73,6 +73,7 @@ export default function FileSystemManager({
   // Add state to track drag operations
   const [draggedItem, setDraggedItem] = useState<string | null>(null);
   const [dropTarget, setDropTarget] = useState<string | null>(null);
+  const [dragActive, setDragActive] = useState<boolean>(false);
 
   const supabase = createClient();
 
@@ -330,16 +331,54 @@ export default function FileSystemManager({
   };
 
   const handleDragStart = (e: React.DragEvent, item: FSItem) => {
-    // Only allow dragging images
-    if (item.type === "image") {
-      e.dataTransfer.setData("imageId", item.id);
+    // Allow dragging both images and locations
+    if (item.type === "image" || item.type === "location") {
+      // Set data for file explorer internal dragging
+      e.dataTransfer.setData(
+        "application/phoenix-recon",
+        JSON.stringify({
+          id: item.id,
+          type: item.type,
+          name: item.name,
+        })
+      );
+
+      // Set multiple data formats for compatibility
+      if (item.type === "image") {
+        e.dataTransfer.setData("imageId", item.id);
+      } else if (item.type === "location") {
+        // Add name explicitly
+        console.log(`Setting drag data for location: ${item.id}, ${item.name}`);
+        e.dataTransfer.setData("locationId", item.id);
+        e.dataTransfer.setData("locationName", item.name);
+
+        // Also set a combined format for browsers that might have issues with multiple setData calls
+        e.dataTransfer.setData(
+          "location",
+          JSON.stringify({
+            id: item.id,
+            name: item.name,
+          })
+        );
+      }
+
+      e.dataTransfer.effectAllowed = "copy";
       setDraggedItem(item.id);
 
       // Create a drag image
-      if (item.url) {
+      if (item.type === "image" && item.url) {
         const img = new Image();
         img.src = item.url;
         e.dataTransfer.setDragImage(img, 25, 25);
+      } else if (item.type === "location") {
+        // Use MapPin icon for location dragging
+        const pinIcon = document.createElement("div");
+        pinIcon.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"></path><circle cx="12" cy="10" r="3"></circle></svg>`;
+        pinIcon.style.color = "var(--primary)";
+        pinIcon.style.opacity = "0.9";
+        document.body.appendChild(pinIcon);
+        e.dataTransfer.setDragImage(pinIcon, 20, 20);
+        setTimeout(() => document.body.removeChild(pinIcon), 0);
       }
     }
     e.stopPropagation();
@@ -365,23 +404,47 @@ export default function FileSystemManager({
     // Only allow dropping into locations
     if (targetItem.type !== "location") return;
 
-    const imageId = e.dataTransfer.getData("imageId");
-    if (!imageId) return;
+    try {
+      // Get the data from our custom format
+      const dataString = e.dataTransfer.getData("application/phoenix-recon");
+      if (!dataString) {
+        console.log("No valid drag data found");
+        return;
+      }
 
-    // Find the source location of the image
-    const sourceItem = fileSystemItems.find((item) => item.id === imageId);
-    if (!sourceItem) return;
+      const { id: itemId, type: itemType } = JSON.parse(dataString);
 
-    // If coming from another location, remove it first
-    if (sourceItem.parent !== "root") {
-      await handleDeleteImage(imageId, sourceItem.parent);
+      console.log(
+        `Drop: itemId=${itemId}, itemType=${itemType}, target=${targetItem.id}`
+      );
+
+      // Find the source item
+      const sourceItem = fileSystemItems.find((item) => item.id === itemId);
+      if (!sourceItem) {
+        console.error("Source item not found");
+        return;
+      }
+
+      if (itemType === "image") {
+        // Handle image drop
+        if (sourceItem.parent !== "root") {
+          await handleDeleteImage(itemId, sourceItem.parent);
+        }
+        await handleAddImageToLocation(itemId, targetItem.id);
+
+        // Navigate into the target location
+        navigateToLocation(targetItem.id);
+      } else if (itemType === "location") {
+        // For locations, implement a location relationship
+        console.log(`Moving location ${sourceItem.name} to ${targetItem.name}`);
+
+        // This would be where you'd implement your location hierarchy logic
+        // For now, we'll just navigate to the target location
+        navigateToLocation(targetItem.id);
+      }
+    } catch (error) {
+      console.error("Error in drop handler:", error);
     }
-
-    // Add to the new location
-    await handleAddImageToLocation(imageId, targetItem.id);
-
-    // Navigate into the target location
-    navigateToLocation(targetItem.id);
   };
 
   const handleDrag = (e: React.DragEvent) => {
@@ -515,14 +578,15 @@ export default function FileSystemManager({
                       navigateToLocation(item.id);
                     }
                   }}
-                  draggable={item.type === "image"}
+                  draggable={true} // Make all items draggable, not just images
                   onDragStart={(e) => handleDragStart(e, item)}
                   onDragOver={(e) => handleDragOver(e, item)}
                   onDragLeave={handleDragLeave}
                   onDrop={(e) => handleDrop(e, item)}
                 >
                   {item.type === "location" ? (
-                    <Folder className="h-12 w-12 mb-2 text-primary opacity-80" />
+                    // Replace Folder icon with MapPin for locations
+                    <MapPin className="h-12 w-12 mb-2 text-primary opacity-80" />
                   ) : (
                     <div className="aspect-square w-full mb-2 bg-muted flex items-center justify-center overflow-hidden rounded-sm">
                       {item.url ? (
@@ -542,8 +606,8 @@ export default function FileSystemManager({
                     {item.name}
                   </p>
 
-                  {/* Add drag indicator for images */}
-                  {item.type === "image" && (
+                  {/* Add drag indicator for both images and locations */}
+                  {(item.type === "image" || item.type === "location") && (
                     <div className="absolute top-1 left-1 bg-background/70 rounded-full p-0.5 text-xs opacity-0 group-hover:opacity-100">
                       <MapPin className="h-3 w-3" />
                     </div>

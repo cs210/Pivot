@@ -1,14 +1,24 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Trash2, Image as ImageIcon, PlusCircle, Download } from "lucide-react";
+import {
+  Trash2,
+  Image as ImageIcon,
+  PlusCircle,
+  Download,
+  MapPin,
+  X,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ImageGridConfig } from "./image-grid-config";
 
 interface GridItem {
   id: string;
   imageId: string | null;
+  locationId?: string | null;
+  locationName?: string | null; // Add locationName field to store the name directly
   position: number;
+  itemType?: "image" | "location";
 }
 
 interface Image {
@@ -22,12 +32,14 @@ interface EnhancedImageGridProps {
   images: Image[];
   initialGridItems?: GridItem[];
   onGridChange?: (items: GridItem[]) => void;
+  locations?: any[];
 }
 
 export function EnhancedImageGrid({
   images,
   initialGridItems,
   onGridChange,
+  locations = [],
 }: EnhancedImageGridProps) {
   const [rows, setRows] = useState(3);
   const [cols, setCols] = useState(3);
@@ -70,17 +82,81 @@ export function EnhancedImageGrid({
     }
   }, [rows, cols]);
 
-  const handleDrop = (imageId: string, gridPosition: number) => {
-    const updatedItems = gridItems.map((item) =>
-      item.position === gridPosition ? { ...item, imageId } : item
-    );
-    setGridItems(updatedItems);
-    onGridChange?.(updatedItems);
+  useEffect(() => {
+    // Log locations when they change to help with debugging
+    console.log("Locations provided to EnhancedImageGrid:", locations);
+  }, [locations]);
+
+  const handleDragOver = (e: React.DragEvent, position: number) => {
+    // Always allow drop for both images and locations
+    e.preventDefault();
+    setHighlightedCell(position);
+  };
+
+  const handleDrop = (e: React.DragEvent, position: number) => {
+    e.preventDefault();
+    setHighlightedCell(null);
+
+    // Check if it's an image
+    const imageId = e.dataTransfer.getData("imageId");
+    if (imageId) {
+      const updatedItems = gridItems.map((item) =>
+        item.position === position
+          ? { ...item, imageId, locationId: null, itemType: "image" }
+          : item
+      );
+      setGridItems(updatedItems);
+      onGridChange?.(updatedItems);
+      return;
+    }
+
+    // Check if it's a location
+    const locationId = e.dataTransfer.getData("locationId");
+    const locationName = e.dataTransfer.getData("locationName");
+
+    if (locationId) {
+      console.log(
+        `Adding location to grid: ID=${locationId}, Name=${locationName}`
+      );
+
+      // Find the location in our locations array
+      const location = locations.find((loc) => loc.id === locationId);
+
+      // For debugging
+      if (location) {
+        console.log("Found location in locations array:", location);
+      } else {
+        console.log(
+          "Location not found in locations array, using data from drag event"
+        );
+      }
+
+      // Use the location name from our locations array if available, otherwise use the one from the drag event
+      const resolvedName = location?.name || locationName || "Unknown Location";
+      console.log(`Using location name: ${resolvedName}`);
+
+      const updatedItems = gridItems.map((item) =>
+        item.position === position
+          ? {
+              ...item,
+              locationId,
+              locationName: resolvedName, // Store the name directly in the grid item
+              imageId: null,
+              itemType: "location",
+            }
+          : item
+      );
+
+      setGridItems(updatedItems);
+      onGridChange?.(updatedItems);
+    }
   };
 
   const handleRemoveFromGrid = (position: number) => {
     const updatedItems = gridItems.map((item) =>
-      item.position === position ? { ...item, imageId: null } : item
+      item.position === position
+        ? { ...item, imageId: null, locationId: null, itemType: null }
+        : item
     );
     setGridItems(updatedItems);
     onGridChange?.(updatedItems);
@@ -118,6 +194,25 @@ export function EnhancedImageGrid({
       alert("Failed to export grid. Please try again.");
     } finally {
       setExporting(false);
+    }
+  };
+
+  // Debug log to check location data
+  console.log("Available locations:", locations);
+
+  // Improved helper function to get location name by ID
+  const getLocationName = (locationId: string | null) => {
+    if (!locationId) return "Unknown Location";
+
+    console.log(`Finding location name for ID: ${locationId}`);
+    const location = locations.find((loc) => loc.id === locationId);
+
+    if (location) {
+      console.log(`Found location: ${location.name}`);
+      return location.name;
+    } else {
+      console.log(`Location not found for ID: ${locationId}`);
+      return "Unknown Location";
     }
   };
 
@@ -175,56 +270,86 @@ export function EnhancedImageGrid({
           }}
         >
           {gridItems.map((item) => {
-            const imageInSlot = images.find((img) => img.id === item.imageId);
+            const imageInSlot = item.imageId
+              ? images.find((img) => img.id === item.imageId)
+              : null;
+            const isLocation = item.itemType === "location";
+
+            // Use the stored location name if available
+            const locationName =
+              item.locationName ||
+              (item.locationId
+                ? getLocationName(item.locationId)
+                : "Unknown Location");
+
+            console.log(
+              `Grid item ${item.position}: isLocation=${isLocation}, locationId=${item.locationId}, name=${locationName}`
+            );
+
             return (
-              <div
-                key={item.id}
-                onDragOver={(e) => {
-                  e.preventDefault();
-                  setHighlightedCell(item.position);
-                }}
-                onDragEnter={(e) => {
-                  e.preventDefault();
-                  setHighlightedCell(item.position);
-                }}
-                onDragLeave={() => setHighlightedCell(null)}
-                onDrop={(e) => {
-                  e.preventDefault();
-                  const imageId = e.dataTransfer.getData("imageId");
-                  handleDrop(imageId, item.position);
-                  setHighlightedCell(null);
-                }}
-                className={`w-20 h-20 rounded-full flex items-center justify-center border-2 transition-all ${
-                  imageInSlot
-                    ? "border-primary shadow-md"
-                    : highlightedCell === item.position
-                    ? "border-dashed border-primary scale-110 bg-primary/10"
-                    : "border-dashed border-muted-foreground/50 hover:border-muted-foreground hover:bg-background/40"
-                }`}
-                style={{
-                  background: imageInSlot
-                    ? `url(${imageInSlot.url}) center/cover no-repeat`
-                    : "transparent",
-                }}
-              >
-                {imageInSlot ? (
-                  <button
-                    onClick={() => handleRemoveFromGrid(item.position)}
-                    className="w-6 h-6 bg-background/80 rounded-full flex items-center justify-center opacity-0 hover:opacity-100 transition-opacity"
-                  >
-                    <Trash2 className="w-4 h-4 text-destructive" />
-                  </button>
-                ) : (
-                  <div
-                    className={`text-muted-foreground text-xs flex items-center justify-center ${
-                      highlightedCell === item.position
-                        ? "text-primary animate-pulse"
-                        : ""
-                    }`}
-                  >
-                    <ImageIcon className="w-4 h-4 mr-1" />
-                    <span>Drop</span>
-                  </div>
+              <div className="flex flex-col items-center" key={item.id}>
+                <div
+                  onDragOver={(e) => handleDragOver(e, item.position)}
+                  onDragEnter={(e) => handleDragOver(e, item.position)}
+                  onDragLeave={() => setHighlightedCell(null)}
+                  onDrop={(e) => handleDrop(e, item.position)}
+                  className={`w-20 h-20 rounded-full relative flex items-center justify-center border-2 transition-all ${
+                    imageInSlot || isLocation
+                      ? "border-primary shadow-md"
+                      : highlightedCell === item.position
+                      ? "border-dashed border-primary scale-110 bg-primary/10"
+                      : "border-dashed border-muted-foreground/50 hover:border-muted-foreground hover:bg-background/40"
+                  }`}
+                  style={{
+                    background: imageInSlot
+                      ? `url(${imageInSlot.url}) center/cover no-repeat`
+                      : "transparent",
+                  }}
+                >
+                  {imageInSlot || isLocation ? (
+                    <div className="relative w-full h-full flex items-center justify-center">
+                      {/* Display location pin if it's a location */}
+                      {isLocation && (
+                        <div className="absolute inset-0 flex items-center justify-center">
+                          <MapPin className="h-12 w-12 text-primary opacity-80" />
+                        </div>
+                      )}
+
+                      {/* Remove button - Now always visible and red */}
+                      <button
+                        onClick={() => handleRemoveFromGrid(item.position)}
+                        className="absolute -top-2 -right-2 w-6 h-6 bg-red-500 text-white rounded-full flex items-center justify-center shadow-sm hover:bg-red-600 transition-colors"
+                        aria-label="Remove"
+                      >
+                        <X className="w-4 h-4" />
+                      </button>
+                    </div>
+                  ) : (
+                    <div
+                      className={`text-muted-foreground text-xs flex items-center justify-center ${
+                        highlightedCell === item.position
+                          ? "text-primary animate-pulse"
+                          : ""
+                      }`}
+                    >
+                      <ImageIcon className="w-4 h-4 mr-1" />
+                      <span>Drop</span>
+                    </div>
+                  )}
+                </div>
+
+                {/* Display location name if it's a location */}
+                {isLocation && (
+                  <span className="text-xs font-medium mt-2 text-center max-w-[100px] truncate">
+                    {locationName}
+                  </span>
+                )}
+
+                {/* Display image name if it's an image */}
+                {imageInSlot && (
+                  <span className="text-xs text-muted-foreground mt-1 text-center max-w-[100px] truncate">
+                    {imageInSlot.name}
+                  </span>
                 )}
               </div>
             );

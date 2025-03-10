@@ -37,7 +37,9 @@ interface Image {
 interface GridItem {
   id: string;
   imageId: string | null;
+  locationId?: string | null;
   position: number;
+  itemType?: "image" | "location";
 }
 
 export default function Dashboard() {
@@ -57,10 +59,12 @@ export default function Dashboard() {
       .map((_, i) => ({
         id: `grid-${i}`,
         imageId: null,
+        locationId: null,
         position: i,
       }))
   );
   const [locationsUpdated, setLocationsUpdated] = useState(false);
+  const [locations, setLocations] = useState<any[]>([]);
 
   useEffect(() => {
     const checkUser = async () => {
@@ -74,6 +78,7 @@ export default function Dashboard() {
       setUser(user);
       fetchVideos();
       fetchImages();
+      fetchLocations();
     };
 
     checkUser();
@@ -129,6 +134,23 @@ export default function Dashboard() {
       setImages([]);
     } finally {
       setImageLoading(false);
+    }
+  };
+
+  const fetchLocations = async () => {
+    try {
+      if (!user?.id) return;
+
+      const { data, error } = await supabase
+        .from("locations")
+        .select("*")
+        .eq("user_id", user.id);
+
+      if (error) throw error;
+      console.log("Fetched locations:", data);
+      setLocations(data || []);
+    } catch (error) {
+      console.error("Error fetching locations:", error);
     }
   };
 
@@ -211,7 +233,9 @@ export default function Dashboard() {
       // Remove image from any grid items
       setGridItems(
         gridItems.map((item) =>
-          item.imageId === id ? { ...item, imageId: null } : item
+          item.imageId === id
+            ? { ...item, imageId: null, itemType: null }
+            : item
         )
       );
     } catch (error) {
@@ -258,7 +282,32 @@ export default function Dashboard() {
   const handleFileSystemChange = () => {
     // Refresh images when the filesystem changes
     fetchImages();
+    fetchLocations(); // Make sure locations are fresh
   };
+
+  // Add useEffect to update location names in grid items when locations update
+  useEffect(() => {
+    if (locations.length > 0) {
+      // Update any grid items that have locations to ensure they have the correct names
+      const updatedGridItems = gridItems.map((item) => {
+        if (item.itemType === "location" && item.locationId) {
+          const location = locations.find((loc) => loc.id === item.locationId);
+          if (location) {
+            return {
+              ...item,
+              locationName: location.name,
+            };
+          }
+        }
+        return item;
+      });
+
+      // Only update if there were changes
+      if (JSON.stringify(updatedGridItems) !== JSON.stringify(gridItems)) {
+        setGridItems(updatedGridItems);
+      }
+    }
+  }, [locations]);
 
   return (
     <div className="flex flex-col min-h-screen bg-background text-foreground">
@@ -449,6 +498,7 @@ export default function Dashboard() {
                         onGridChange={(newGridItems) =>
                           setGridItems(newGridItems)
                         }
+                        locations={locations}
                       />
                     </div>
                   </div>
