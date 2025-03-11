@@ -95,7 +95,11 @@ export default function ProjectPage() {
   const [processing, setProcessing] = useState(false);
   const [generate360DialogOpen, setGenerate360DialogOpen] = useState(false);
   const [imagesToConvert, setImagesToConvert] = useState<RawImage[]>([]);
-  
+
+  // Add these new state variables to store selected folders for conversion
+  const [foldersToConvert, setFoldersToConvert] = useState([]);
+  const [folderSelectionMode, setFolderSelectionMode] = useState(false);
+    
   useEffect(() => {
     const checkUser = async () => {
       const {
@@ -111,6 +115,115 @@ export default function ProjectPage() {
 
     checkUser();
   }, [router, supabase, projectId]);
+
+// Function to get all images in a folder
+const getImagesInFolder = (folderId) => {
+    return rawImages.filter(img => img.folder_id === folderId);
+  };
+  
+  // Updated function to handle 360 image generation from selected folders
+  const handleGenerate360ImagesFromFolders = async () => {
+    if (foldersToConvert.length === 0) {
+      alert("Please select at least one folder of images to convert to 360");
+      return;
+    }
+  
+    setProcessing(true);
+  
+    try {
+      // Collect all images from the selected folders
+      let allImagesToConvert = [];
+      
+      foldersToConvert.forEach(folderId => {
+        const folderImages = getImagesInFolder(folderId);
+        allImagesToConvert = [...allImagesToConvert, ...folderImages];
+      });
+      
+      if (allImagesToConvert.length === 0) {
+        alert("The selected folders don't contain any images");
+        setProcessing(false);
+        return;
+      }
+  
+      // Create processing records for each image
+      const newPanoramas = [];
+  
+      for (const image of allImagesToConvert) {
+        // Create a placeholder panorama record
+        const { data, error } = await supabase
+          .from("panorama_images")
+          .insert([
+            {
+              name: `${image.name.split('.')[0]}_360.jpg`,
+              project_id: projectId,
+              url: image.url, // Temporary URL until processing is complete
+              folder_id: image.folder_id,
+              source_image_id: image.id,
+              is_processing: true
+            },
+          ])
+          .select();
+  
+        if (error) {
+          console.error("Error creating panorama record:", error);
+          throw error;
+        }
+  
+        if (data && data.length > 0) {
+          newPanoramas.push(data[0]);
+        }
+      }
+  
+      // Update local state to show processing items
+      setPanoramas(prev => [...prev, ...newPanoramas]);
+  
+      // Simulate processing with a timeout (in a real app, this would be an API call)
+      setTimeout(async () => {
+        try {
+          // Update each panorama with "completed" status
+          for (const panorama of newPanoramas) {
+            const simulatedUrl = panorama.url.replace(/\.[^/.]+$/, "_360.jpg");
+  
+            const { error } = await supabase
+              .from("panorama_images")
+              .update({ 
+                is_processing: false,
+                url: simulatedUrl
+              })
+              .eq("id", panorama.id);
+              
+            if (error) throw error;
+          }
+  
+          // Refresh panoramas
+          fetchPanoramas();
+          alert(`Successfully generated ${newPanoramas.length} 360° images from ${foldersToConvert.length} folders`);
+        } catch (error) {
+          console.error("Error updating panorama status:", error);
+          alert("Error during 360 image processing. Please try again.");
+        } finally {
+          setProcessing(false);
+          setGenerate360DialogOpen(false);
+          setFoldersToConvert([]);
+          setFolderSelectionMode(false);
+        }
+      }, 3000); // Simulate 3 second processing time
+  
+    } catch (error) {
+      console.error("Error generating 360 images:", error);
+      alert("Failed to start 360 image generation");
+      setProcessing(false);
+    }
+  };
+  
+  // Toggle folder selection for 360 conversion
+  const toggleFolderSelection = (folderId) => {
+    setFoldersToConvert(prev => 
+      prev.includes(folderId) 
+        ? prev.filter(id => id !== folderId)
+        : [...prev, folderId]
+    );
+  };
 
   const fetchProjectDetails = async () => {
     try {
@@ -1628,67 +1741,126 @@ return (
                   {/* Generate 360 Images button */}
                   <Dialog open={generate360DialogOpen} onOpenChange={setGenerate360DialogOpen}>
                     <DialogTrigger asChild>
-                      <Button variant="outline">
+                        <Button variant="outline">
                         <Box className="mr-2 h-4 w-4" />
                         Generate 360° Images
-                      </Button>
+                        </Button>
                     </DialogTrigger>
                     <DialogContent className="sm:max-w-[525px] bg-background text-white">
-                                  <DialogHeader>
-                                    <DialogTitle className="text-white">Generate 360° Images</DialogTitle>
-                                    <DialogDescription className="text-white/70">
-                                      Select images to convert into 360° panoramas
-                                    </DialogDescription>
-                                  </DialogHeader>
-                                  <div className="max-h-[400px] overflow-y-auto py-4">
-                                    <div className="space-y-2">
-                                      {rawImages.map((image) => (
-                                        <div
-                                          key={image.id}
-                                          className={`flex items-center p-2 rounded border cursor-pointer ${
-                                            imagesToConvert.some(img => img.id === image.id) 
-                                              ? "border-primary bg-primary/10" 
-                                              : "border-border/50 hover:bg-muted/20"
-                                          }`}
-                                          onClick={() => {
-                                            setImagesToConvert(prev => 
-                                              prev.some(img => img.id === image.id)
-                                                ? prev.filter(img => img.id !== image.id)
-                                                : [...prev, image]
-                                            );
-                                          }}
-                                        >
-                                          <div className="h-10 w-10 mr-4 overflow-hidden rounded">
-                                            <img
-                                              src={image.url}
-                                              alt={image.name}
-                                              className="object-cover w-full h-full"
-                                            />
-                                          </div>
-                                          <div className="flex-1 truncate">{image.name}</div>
-                                        </div>
-                                      ))}
+                        <DialogHeader>
+                        <DialogTitle className="text-white">Generate 360° Images</DialogTitle>
+                        <DialogDescription className="text-white/70">
+                            {folderSelectionMode 
+                            ? "Select folders containing images to convert into 360° panoramas" 
+                            : "Select images to convert into 360° panoramas"
+                            }
+                        </DialogDescription>
+                        </DialogHeader>
+                        
+                        <div className="flex items-center justify-end mb-2">
+                        <Button 
+                            variant="outline" 
+                            size="sm" 
+                            onClick={() => {
+                            setFolderSelectionMode(!folderSelectionMode);
+                            // Clear selections when switching modes
+                            setImagesToConvert([]);
+                            setFoldersToConvert([]);
+                            }}
+                        >
+                            {folderSelectionMode 
+                            ? "Select Individual Images" 
+                            : "Select by Folder"
+                            }
+                        </Button>
+                        </div>
+                        
+                        <div className="max-h-[400px] overflow-y-auto py-4">
+                        {folderSelectionMode ? (
+                            <div className="space-y-2">
+                            {folders.map((folder) => {
+                                const folderImages = getImagesInFolder(folder.id);
+                                return (
+                                <div
+                                    key={folder.id}
+                                    className={`flex items-center p-2 rounded border cursor-pointer ${
+                                    foldersToConvert.includes(folder.id) 
+                                        ? "border-primary bg-primary/10" 
+                                        : "border-border/50 hover:bg-muted/20"
+                                    }`}
+                                    onClick={() => toggleFolderSelection(folder.id)}
+                                >
+                                    <FolderOpen className="h-5 w-5 mr-4" />
+                                    <div className="flex-1">
+                                    <div className="font-medium">{folder.name}</div>
+                                    <div className="text-xs text-muted-foreground">
+                                        Contains {folderImages.length} image{folderImages.length !== 1 ? 's' : ''}
                                     </div>
-                                  </div>
-                                  <DialogFooter>
-                                    <Button 
-                                      type="submit" 
-                                      onClick={handleGenerate360Images} 
-                                      className="text-white bg-cyber-gradient hover:opacity-90"
-                                      disabled={processing || imagesToConvert.length === 0}
-                                    >
-                                      {processing ? (
-                                        <>
-                                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                                          Processing...
-                                        </>
-                                      ) : (
-                                        <>Generate</>
-                                      )}
-                                    </Button>
-                                  </DialogFooter>
-                                </DialogContent>
-                              </Dialog>
+                                    </div>
+                                </div>
+                                );
+                            })}
+                            {folders.length === 0 && (
+                                <div className="text-center p-4 text-muted-foreground">
+                                No folders found. Create folders to organize your images.
+                                </div>
+                            )}
+                            </div>
+                        ) : (
+                            <div className="space-y-2">
+                            {rawImages.map((image) => (
+                                <div
+                                key={image.id}
+                                className={`flex items-center p-2 rounded border cursor-pointer ${
+                                    imagesToConvert.some(img => img.id === image.id) 
+                                    ? "border-primary bg-primary/10" 
+                                    : "border-border/50 hover:bg-muted/20"
+                                }`}
+                                onClick={() => {
+                                    setImagesToConvert(prev => 
+                                    prev.some(img => img.id === image.id)
+                                        ? prev.filter(img => img.id !== image.id)
+                                        : [...prev, image]
+                                    );
+                                }}
+                                >
+                                <div className="h-10 w-10 mr-4 overflow-hidden rounded">
+                                    <img
+                                    src={image.url}
+                                    alt={image.name}
+                                    className="object-cover w-full h-full"
+                                    />
+                                </div>
+                                <div className="flex-1 truncate">{image.name}</div>
+                                </div>
+                            ))}
+                            {rawImages.length === 0 && (
+                                <div className="text-center p-4 text-muted-foreground">
+                                No images found. Upload some images to get started.
+                                </div>
+                            )}
+                            </div>
+                        )}
+                        </div>
+                        <DialogFooter>
+                        <Button 
+                            type="submit" 
+                            onClick={folderSelectionMode ? handleGenerate360ImagesFromFolders : handleGenerate360Images} 
+                            className="text-white bg-cyber-gradient hover:opacity-90"
+                            disabled={processing || (folderSelectionMode ? foldersToConvert.length === 0 : imagesToConvert.length === 0)}
+                        >
+                            {processing ? (
+                            <>
+                                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                Processing...
+                            </>
+                            ) : (
+                            <>Generate</>
+                            )}
+                        </Button>
+                        </DialogFooter>
+                    </DialogContent>
+                    </Dialog>
                               
                               {/* Upload 360 Images button */}
                               <Button className="bg-cyber-gradient hover:opacity-90" disabled={uploading}>
