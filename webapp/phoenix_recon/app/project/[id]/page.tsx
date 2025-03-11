@@ -12,8 +12,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Label } from "@/components/ui/label";
-import { ChevronLeft, Save, Settings, FolderPlus, Upload, Image as ImageIcon, MoreVertical, FolderOpen, Edit, Trash2, MoveRight, Grid, List } from "lucide-react";
-
+// Update your import statement
+import { ChevronLeft, Save, Settings, FolderPlus, Upload, Image as ImageIcon, MoreVertical, FolderOpen, Edit, Trash2, MoveRight, Grid, List, Loader2, Cog, Box } from "lucide-react";
 interface Project {
   id: string;
   name: string;
@@ -38,6 +38,17 @@ interface RawImage {
   folder_id: string | null;
 }
 
+interface Panorama {
+  id: string;
+  project_id: string;
+  name: string;
+  url: string;
+  created_at: string;
+  source_image_id?: string | null;
+  folder_id?: string | null;
+  is_processing?: boolean;
+}
+
 export default function ProjectPage() {
   const router = useRouter();
   const params = useParams();
@@ -45,6 +56,7 @@ export default function ProjectPage() {
   const supabase = createClient();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const folderInputRef = useRef<HTMLInputElement>(null);
+  const panoramaFileInputRef = useRef<HTMLInputElement>(null);
   
   const [loading, setLoading] = useState(true);
   const [project, setProject] = useState<Project | null>(null);
@@ -56,8 +68,10 @@ export default function ProjectPage() {
   const [activeTab, setActiveTab] = useState("raw-images");
   const [folders, setFolders] = useState<Folder[]>([]);
   const [rawImages, setRawImages] = useState<RawImage[]>([]);
+  const [panoramas, setPanoramas] = useState<Panorama[]>([]);
   const [currentFolder, setCurrentFolder] = useState<Folder | null>(null);
   const [selectedImages, setSelectedImages] = useState<string[]>([]);
+  const [selectedPanoramas, setSelectedPanoramas] = useState<string[]>([]);
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
   
   // Dialog states
@@ -65,14 +79,22 @@ export default function ProjectPage() {
   const [createFolderDialogOpen, setCreateFolderDialogOpen] = useState(false);
   const [renameFolderDialogOpen, setRenameFolderDialogOpen] = useState(false);
   const [renameImageDialogOpen, setRenameImageDialogOpen] = useState(false);
+  const [renamePanoramaDialogOpen, setRenamePanoramaDialogOpen] = useState(false);
   const [moveFolderDialogOpen, setMoveFolderDialogOpen] = useState(false);
   const [moveImageDialogOpen, setMoveImageDialogOpen] = useState(false);
+  const [movePanoramaDialogOpen, setMovePanoramaDialogOpen] = useState(false);
   const [folderToRename, setFolderToRename] = useState<Folder | null>(null);
   const [imageToRename, setImageToRename] = useState<RawImage | null>(null);
+  const [panoramaToRename, setPanoramaToRename] = useState<Panorama | null>(null);
   const [newImageName, setNewImageName] = useState("");
+  const [newPanoramaName, setNewPanoramaName] = useState("");
   const [imagesToMove, setImagesToMove] = useState<RawImage[]>([]);
+  const [panoramasToMove, setPanoramasToMove] = useState<Panorama[]>([]);
   const [targetFolderId, setTargetFolderId] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
+  const [processing, setProcessing] = useState(false);
+  const [generate360DialogOpen, setGenerate360DialogOpen] = useState(false);
+  const [imagesToConvert, setImagesToConvert] = useState<RawImage[]>([]);
   
   useEffect(() => {
     const checkUser = async () => {
@@ -103,10 +125,11 @@ export default function ProjectPage() {
       setProject(data);
       setProjectName(data.name);
       
-      // After fetching project details, fetch folders and images
+      // After fetching project details, fetch folders, images and panoramas
       await Promise.all([
         fetchFolders(),
-        fetchRawImages()
+        fetchRawImages(),
+        fetchPanoramas()
       ]);
     } catch (error) {
       console.error("Error fetching project:", error);
@@ -149,6 +172,33 @@ export default function ProjectPage() {
       setRawImages([]);
     }
   };
+
+  const fetchPanoramas = async () => {
+    try {
+      const { data, error } = await supabase
+        .from("panorama_images")
+        .select("*")
+        .eq("project_id", projectId)
+        .order("name", { ascending: true });
+
+      if (error) throw error;
+      
+      // Transform the data to match our Panorama interface
+      const transformedData = (data || []).map(item => ({
+        ...item,
+        folder_id: item.folder_id || null,
+        source_image_id: item.source_image_id || null,
+        is_processing: item.is_processing || false
+      }));
+      
+      setPanoramas(transformedData);
+    } catch (error) {
+      console.error("Error fetching panoramas:", error);
+      setPanoramas([]);
+    }
+  };
+
+  // Remove the createPanoramasTable function since we're using an existing table
 
   const handleUpdateProject = async () => {
     if (!projectName.trim()) {
@@ -277,12 +327,13 @@ export default function ProjectPage() {
   };
 
   const handleDeleteFolder = async (folderId: string) => {
-    // Check if folder has images
+    // Check if folder has images or panoramas
     const folderImages = rawImages.filter(img => img.folder_id === folderId);
+    const folderPanoramas = panoramas.filter(pano => pano.folder_id === folderId);
     
-    if (folderImages.length > 0) {
+    if (folderImages.length > 0 || folderPanoramas.length > 0) {
       const confirmDelete = window.confirm(
-        `This folder contains ${folderImages.length} images. Deleting it will also delete all images inside. Continue?`
+        `This folder contains ${folderImages.length} images and ${folderPanoramas.length} panoramas. Deleting it will also delete all contents inside. Continue?`
       );
       
       if (!confirmDelete) return;
@@ -292,6 +343,11 @@ export default function ProjectPage() {
       // First delete all images in the folder
       for (const image of folderImages) {
         await handleDeleteImage(image.id, false); // Don't show alerts for each image
+      }
+      
+      // Delete all panoramas in the folder
+      for (const panorama of folderPanoramas) {
+        await handleDeletePanorama(panorama.id, false); // Don't show alerts for each panorama
       }
       
       // Then delete the folder
@@ -390,6 +446,81 @@ export default function ProjectPage() {
     }
   };
 
+  // Panorama (360 image) management
+  const handleRenamePanorama = async () => {
+    if (!newPanoramaName.trim() || !panoramaToRename) {
+      alert("Please enter a panorama name");
+      return;
+    }
+
+    try {
+      const { error } = await supabase
+        .from("panorama_images")
+        .update({ name: newPanoramaName.trim() })
+        .eq("id", panoramaToRename.id);
+
+      if (error) throw error;
+
+      setPanoramas(
+        panoramas.map((pano) =>
+          pano.id === panoramaToRename.id
+            ? { ...pano, name: newPanoramaName.trim() }
+            : pano
+        )
+      );
+      
+      setRenamePanoramaDialogOpen(false);
+      setPanoramaToRename(null);
+      setNewPanoramaName("");
+      alert("360 image renamed successfully");
+    } catch (error) {
+      console.error("Error renaming panorama:", error);
+      alert("Failed to rename 360 image");
+    }
+  };
+
+  const handleDeletePanorama = async (panoramaId: string, showAlert = true) => {
+    try {
+      // First get the panorama to get the file path
+      const panoramaToDelete = panoramas.find(pano => pano.id === panoramaId);
+      
+      if (!panoramaToDelete) return;
+
+      // Delete from storage (assuming the URL contains the path)
+      const url = new URL(panoramaToDelete.url);
+      const storagePath = url.pathname.split("/").slice(2).join("/");
+      
+      if (storagePath) {
+        const { error: storageError } = await supabase.storage
+          .from("panoramas")
+          .remove([storagePath]);
+
+        if (storageError) throw storageError;
+      }
+
+      // Delete from database
+      const { error: dbError } = await supabase
+        .from("panorama_images")
+        .delete()
+        .eq("id", panoramaId);
+
+      if (dbError) throw dbError;
+
+      // Update local state
+      setPanoramas(panoramas.filter((pano) => pano.id !== panoramaId));
+      setSelectedPanoramas(selectedPanoramas.filter(id => id !== panoramaId));
+      
+      if (showAlert) {
+        alert("360 image deleted successfully");
+      }
+    } catch (error) {
+      console.error("Error deleting panorama:", error);
+      if (showAlert) {
+        alert("Failed to delete 360 image");
+      }
+    }
+  };
+
   const handleMoveImages = async () => {
     if (imagesToMove.length === 0) return;
     
@@ -420,6 +551,39 @@ export default function ProjectPage() {
     } catch (error) {
       console.error("Error moving images:", error);
       alert("Failed to move images");
+    }
+  };
+
+  const handleMovePanoramas = async () => {
+    if (panoramasToMove.length === 0) return;
+    
+    try {
+      // Update each panorama's folder_id
+      for (const panorama of panoramasToMove) {
+        const { error } = await supabase
+          .from("panorama_images")
+          .update({ folder_id: targetFolderId })
+          .eq("id", panorama.id);
+        
+        if (error) throw error;
+      }
+      
+      // Update local state
+      setPanoramas(
+        panoramas.map((pano) =>
+          panoramasToMove.some(movePano => movePano.id === pano.id)
+            ? { ...pano, folder_id: targetFolderId }
+            : pano
+        )
+      );
+      
+      setMovePanoramaDialogOpen(false);
+      setPanoramasToMove([]);
+      setTargetFolderId(null);
+      alert(`${panoramasToMove.length} 360 image(s) moved successfully`);
+    } catch (error) {
+      console.error("Error moving 360 images:", error);
+      alert("Failed to move 360 images");
     }
   };
 
@@ -525,6 +689,107 @@ export default function ProjectPage() {
     }
   };
   
+  const handlePanoramaUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const files = event.target.files;
+    if (!files || files.length === 0) return;
+    
+    setUploading(true);
+    
+    try {
+      for (let i = 0; i < files.length; i++) {
+        const file = files[i];
+        const fileName = file.name;
+        const filePath = `${projectId}/${fileName}`;
+        
+        console.log(`Uploading panorama: ${fileName} to path: ${filePath}`);
+        
+        // Upload to storage
+        const { data: uploadData, error: uploadError } = await supabase.storage
+          .from("panoramas")
+          .upload(filePath, file, {
+            cacheControl: "3600",
+            upsert: true
+          });
+        
+        if (uploadError) {
+          console.error("Storage upload error:", {
+            message: uploadError.message,
+            name: uploadError.name,
+            code: uploadError.code,
+            details: uploadError.details,
+            hint: uploadError.hint,
+            fullError: JSON.stringify(uploadError, null, 2)
+          });
+          throw uploadError;
+        }
+        
+        console.log("Panorama uploaded successfully:", uploadData?.path);
+        
+        // Get public URL
+        const { data: urlData } = supabase.storage
+          .from("panoramas")
+          .getPublicUrl(uploadData.path);
+        
+        if (!urlData || !urlData.publicUrl) {
+          console.error("Failed to get public URL for panorama:", uploadData?.path);
+          throw new Error("Failed to get public URL");
+        }
+        
+        console.log("Public URL generated for panorama:", urlData.publicUrl);
+        
+        // Save to database
+        const { data, error } = await supabase
+          .from("panorama_images")
+          .insert([
+            {
+              name: fileName,
+              project_id: projectId,
+              url: urlData.publicUrl,
+              folder_id: currentFolder?.id || null
+            },
+          ])
+          .select();
+        
+        if (error) {
+          console.error("Database insert error:", {
+            message: error.message,
+            code: error.code,
+            details: error.details,
+            hint: error.hint,
+            fullError: JSON.stringify(error, null, 2)
+          });
+          throw error;
+        }
+        
+        console.log("Panorama record created in database:", data);
+        
+        // Add to local state
+        if (data && data.length > 0) {
+          setPanoramas(prev => [...prev, ...data]);
+        }
+      }
+      
+      alert("360 images uploaded successfully");
+    } catch (error) {
+      console.error("Error uploading 360 images:", {
+        message: error.message,
+        code: error.code,
+        details: error.details,
+        hint: error.hint,
+        name: error.name,
+        stack: error.stack,
+        fullError: JSON.stringify(error, null, 2)
+      });
+      alert(`Failed to upload 360 images: ${error.message || "Unknown error"}`);
+    } finally {
+      setUploading(false);
+      // Reset the file input
+      if (panoramaFileInputRef.current) {
+        panoramaFileInputRef.current.value = "";
+      }
+    }
+  };
+  
   const handleFolderUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const files = event.target.files;
     if (!files || files.length === 0) return;
@@ -609,346 +874,834 @@ export default function ProjectPage() {
           const filePath = `${projectId}/${folderId}/${fileName}`;
           
           console.log(`Uploading file: ${fileName} to path: ${filePath}`);
-          
-          // Upload to storage
-          const { data: uploadData, error: uploadError } = await supabase.storage
-            .from("raw_images")
-            .upload(filePath, file, {
-              cacheControl: "3600",
-              upsert: true
-            });
-          
-          if (uploadError) {
-            console.error("Storage upload error:", {
-              message: uploadError.message,
-              name: uploadError.name,
-              code: uploadError.code,
-              details: uploadError.details,
-              hint: uploadError.hint,
-              fullError: JSON.stringify(uploadError, null, 2)
-            });
-            throw uploadError;
-          }
-          
-          console.log("File uploaded successfully:", uploadData?.path);
-          
-          // Get public URL
-          const { data: urlData } = supabase.storage
-            .from("raw_images")
-            .getPublicUrl(uploadData.path);
-          
-          // Save to database
-          const { data, error } = await supabase
-            .from("raw_images")
-            .insert([
-              {
-                name: fileName,
-                project_id: projectId,
-                url: urlData.publicUrl,
-                folder_id: folderId
-              },
-            ])
-            .select();
-          
-          if (error) {
-            console.error("Database insert error:", {
-              message: error.message,
-              code: error.code,
-              details: error.details,
-              hint: error.hint,
-              fullError: JSON.stringify(error, null, 2)
-            });
-            throw error;
-          }
-          
-          // Add to local state
-          if (data && data.length > 0) {
-            setRawImages(prev => [...prev, ...data]);
-          }
-        }
-      }
-      
-      alert("Folders and images uploaded successfully");
-    } catch (error) {
-      console.error("Error uploading folders:", {
-        message: error.message,
-        code: error.code,
-        details: error.details,
-        hint: error.hint,
-        name: error.name,
-        stack: error.stack,
-        fullError: JSON.stringify(error, null, 2)
-      });
-      alert(`Failed to upload folders: ${error.message || "Unknown error"}`);
-    } finally {
-      setUploading(false);
-      // Reset the folder input
-      if (folderInputRef.current) {
-        folderInputRef.current.value = "";
-      }
-    }
-  };
-  
-  // Helper function to toggle image selection
-  const toggleImageSelection = (imageId: string) => {
-    setSelectedImages(prev => 
-      prev.includes(imageId) 
-        ? prev.filter(id => id !== imageId)
-        : [...prev, imageId]
-    );
-  };
-  
-  // Get current folder images
-  const getCurrentFolderImages = () => {
-    return rawImages.filter(img => img.folder_id === currentFolder?.id);
-  };
-  
-  // Get root level images (no folder)
-  const getRootImages = () => {
-    return rawImages.filter(img => img.folder_id === null);
-  };
 
-  return (
-    <div className="flex flex-col min-h-screen text-foreground">
-      <Header />
-      <main className="flex-1 relative">
-        <div className="absolute inset-0 bg-cyber-gradient opacity-5"></div>
-        <div className="container mx-auto px-4 py-8 relative z-10">
-          {loading ? (
-            <div className="text-center py-12">Loading project...</div>
-          ) : (
-            <>
-              <div className="flex items-center gap-4 mb-8">
-                <Button 
-                  variant="outline" 
-                  className="cyber-border" 
-                  onClick={() => router.push("/dashboard")}
-                >
-                  <ChevronLeft className="mr-2 h-4 w-4" />
-                  Back to Dashboard
-                </Button>
-                
-                <div className="flex-1">
-                  {isEditing ? (
-                    <div className="flex items-center gap-4">
+// Upload to storage
+const { data: uploadData, error: uploadError } = await supabase.storage
+.from("raw_images")
+.upload(filePath, file, {
+  cacheControl: "3600",
+  upsert: true
+});
+
+if (uploadError) {
+console.error("Storage upload error:", {
+  message: uploadError.message,
+  name: uploadError.name,
+  code: uploadError.code,
+  details: uploadError.details,
+  hint: uploadError.hint,
+  fullError: JSON.stringify(uploadError, null, 2)
+});
+throw uploadError;
+}
+
+console.log("File uploaded successfully:", uploadData?.path);
+
+// Get public URL
+const { data: urlData } = supabase.storage
+.from("raw_images")
+.getPublicUrl(uploadData.path);
+
+// Save to database
+const { data, error } = await supabase
+.from("raw_images")
+.insert([
+  {
+    name: fileName,
+    project_id: projectId,
+    url: urlData.publicUrl,
+    folder_id: folderId
+  },
+])
+.select();
+
+if (error) {
+console.error("Database insert error:", {
+  message: error.message,
+  code: error.code,
+  details: error.details,
+  hint: error.hint,
+  fullError: JSON.stringify(error, null, 2)
+});
+throw error;
+}
+
+// Add to local state
+if (data && data.length > 0) {
+setRawImages(prev => [...prev, ...data]);
+}
+}
+}
+
+alert("Folders and images uploaded successfully");
+} catch (error) {
+console.error("Error uploading folders:", {
+message: error.message,
+code: error.code,
+details: error.details,
+hint: error.hint,
+name: error.name,
+stack: error.stack,
+fullError: JSON.stringify(error, null, 2)
+});
+alert(`Failed to upload folders: ${error.message || "Unknown error"}`);
+} finally {
+setUploading(false);
+// Reset the folder input
+if (folderInputRef.current) {
+folderInputRef.current.value = "";
+}
+}
+};
+
+// 360 Image Generation
+const handleGenerate360Images = async () => {
+if (imagesToConvert.length === 0) {
+alert("Please select at least one image to convert to 360");
+return;
+}
+
+setProcessing(true);
+
+try {
+// Create processing records for each image
+const newPanoramas: Panorama[] = [];
+
+for (const image of imagesToConvert) {
+// Create a placeholder panorama record
+const { data, error } = await supabase
+.from("panorama_images")
+.insert([
+{
+  name: `${image.name.split('.')[0]}_360.jpg`,
+  project_id: projectId,
+  url: image.url, // Temporary URL until processing is complete
+  folder_id: image.folder_id,
+  source_image_id: image.id,
+  is_processing: true
+},
+])
+.select();
+
+if (error) {
+console.error("Error creating panorama record:", error);
+throw error;
+}
+
+if (data && data.length > 0) {
+newPanoramas.push(data[0]);
+}
+}
+
+// Update local state to show processing items
+setPanoramas(prev => [...prev, ...newPanoramas]);
+
+// Call the 360 generation function (this would be an API endpoint in a real app)
+// For demo purposes, we'll simulate processing with a timeout
+
+// In a real app, you would make an API call like:
+// const { data, error } = await supabase.functions.invoke('generate-360-images', {
+//   body: { panoramaIds: newPanoramas.map(p => p.id) }
+// });
+
+// Simulate processing with a timeout
+setTimeout(async () => {
+try {
+// Update each panorama with "completed" status
+for (const panorama of newPanoramas) {
+// In a real app, this would be the result URL from your 360 generation service
+const simulatedUrl = panorama.url.replace(/\.[^/.]+$/, "_360.jpg");
+
+const { error } = await supabase
+  .from("panorama_images")
+  .update({ 
+    is_processing: false,
+    url: simulatedUrl
+  })
+  .eq("id", panorama.id);
+  
+if (error) throw error;
+}
+
+// Refresh panoramas
+fetchPanoramas();
+alert("360 image generation completed");
+} catch (error) {
+console.error("Error updating panorama status:", error);
+alert("Error during 360 image processing. Please try again.");
+} finally {
+setProcessing(false);
+setGenerate360DialogOpen(false);
+setImagesToConvert([]);
+}
+}, 3000); // Simulate 3 second processing time
+
+} catch (error) {
+console.error("Error generating 360 images:", error);
+alert("Failed to start 360 image generation");
+setProcessing(false);
+}
+};
+
+// Helper function to toggle image selection
+const toggleImageSelection = (imageId: string) => {
+setSelectedImages(prev => 
+prev.includes(imageId) 
+? prev.filter(id => id !== imageId)
+: [...prev, imageId]
+);
+};
+
+// Helper function to toggle panorama selection
+const togglePanoramaSelection = (panoramaId: string) => {
+setSelectedPanoramas(prev => 
+prev.includes(panoramaId) 
+? prev.filter(id => id !== panoramaId)
+: [...prev, panoramaId]
+);
+};
+
+// Get current folder images
+const getCurrentFolderImages = () => {
+return rawImages.filter(img => img.folder_id === currentFolder?.id);
+};
+
+// Get current folder panoramas
+const getCurrentFolderPanoramas = () => {
+return panoramas.filter(pano => pano.folder_id === currentFolder?.id);
+};
+
+// Get root level images (no folder)
+const getRootImages = () => {
+return rawImages.filter(img => img.folder_id === null);
+};
+
+// Get root level panoramas (no folder)
+const getRootPanoramas = () => {
+return panoramas.filter(pano => pano.folder_id === null);
+};
+
+return (
+<div className="flex flex-col min-h-screen text-foreground">
+<Header />
+<main className="flex-1 relative">
+<div className="absolute inset-0 bg-cyber-gradient opacity-5"></div>
+<div className="container mx-auto px-4 py-8 relative z-10">
+{loading ? (
+<div className="text-center py-12">Loading project...</div>
+) : (
+<>
+  <div className="flex items-center gap-4 mb-8">
+    <Button 
+      variant="outline" 
+      className="cyber-border" 
+      onClick={() => router.push("/dashboard")}
+    >
+      <ChevronLeft className="mr-2 h-4 w-4" />
+      Back to Dashboard
+    </Button>
+    
+    <div className="flex-1">
+      {isEditing ? (
+        <div className="flex items-center gap-4">
+          <Input
+            value={projectName}
+            onChange={(e) => setProjectName(e.target.value)}
+            className="text-xl font-bold text-white bg-background/70 border-white/20"
+          />
+          <Button 
+            onClick={handleUpdateProject}
+            className="bg-cyber-gradient hover:opacity-90"
+          >
+            <Save className="mr-2 h-4 w-4" />
+            Save
+          </Button>
+          <Button 
+            variant="outline" 
+            onClick={() => {
+              setProjectName(project?.name || "");
+              setIsEditing(false);
+            }}
+          >
+            Cancel
+          </Button>
+        </div>
+      ) : (
+        <div className="flex items-center">
+          <h1 className="text-3xl font-bold cyber-glow">{project?.name}</h1>
+          <Button 
+            variant="ghost" 
+            className="ml-2"
+            onClick={() => setIsEditing(true)}
+          >
+            <Settings className="h-4 w-4" />
+          </Button>
+        </div>
+      )}
+    </div>
+  </div>
+
+  <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+    <TabsList className="mb-6 bg-muted/50 border border-border/50">
+      <TabsTrigger
+        value="raw-images"
+        className={`data-[state=active]:bg-cyber-gradient data-[state=active]:text-foreground ${
+          activeTab === "raw-images" ? "bg-cyber-gradient text-foreground" : ""
+        }`}
+      >
+        Raw Images
+      </TabsTrigger>
+      <TabsTrigger
+        value="360-images"
+        className={`data-[state=active]:bg-cyber-gradient data-[state=active]:text-foreground ${
+          activeTab === "360-images" ? "bg-cyber-gradient text-foreground" : ""
+        }`}
+      >
+        360° Images
+      </TabsTrigger>
+      <TabsTrigger
+        value="settings"
+        className={`data-[state=active]:bg-cyber-gradient data-[state=active]:text-foreground ${
+          activeTab === "settings" ? "bg-cyber-gradient text-foreground" : ""
+        }`}
+      >
+        Project Settings
+      </TabsTrigger>
+    </TabsList>
+    
+    <TabsContent value="raw-images">
+      <div className="grid grid-cols-1 gap-6 md:grid-cols-12">
+        {/* Folders sidebar */}
+        <div className="md:col-span-3">
+          <Card className="bg-background/80 backdrop-blur-sm border-border/50">
+            <CardHeader className="flex flex-row items-center justify-between pb-2">
+              <CardTitle>Folders</CardTitle>
+              <Dialog open={createFolderDialogOpen} onOpenChange={setCreateFolderDialogOpen}>
+                <DialogTrigger asChild>
+                  <Button variant="ghost" size="icon">
+                    <FolderPlus className="h-5 w-5" />
+                  </Button>
+                </DialogTrigger>
+                <DialogContent className="sm:max-w-[425px] bg-background text-white">
+                  <DialogHeader>
+                    <DialogTitle className="text-white">Create New Folder</DialogTitle>
+                    <DialogDescription className="text-white/70">
+                      Enter a name for your new folder
+                    </DialogDescription>
+                  </DialogHeader>
+                  <div className="grid gap-4 py-4">
+                    <div className="grid grid-cols-4 items-center gap-4">
+                      <Label htmlFor="folder-name" className="text-right text-white">
+                        Name
+                      </Label>
                       <Input
-                        value={projectName}
-                        onChange={(e) => setProjectName(e.target.value)}
-                        className="text-xl font-bold text-white bg-background/70 border-white/20"
+                        id="folder-name"
+                        value={newFolderName}
+                        onChange={(e) => setNewFolderName(e.target.value)}
+                        className="col-span-3 text-white bg-background/70 border-white/20"
+                        placeholder="Location Name"
                       />
-                      <Button 
-                        onClick={handleUpdateProject}
-                        className="bg-cyber-gradient hover:opacity-90"
-                      >
-                        <Save className="mr-2 h-4 w-4" />
-                        Save
-                      </Button>
-                      <Button 
-                        variant="outline" 
-                        onClick={() => {
-                          setProjectName(project?.name || "");
-                          setIsEditing(false);
-                        }}
-                      >
-                        Cancel
-                      </Button>
                     </div>
-                  ) : (
-                    <div className="flex items-center">
-                      <h1 className="text-3xl font-bold cyber-glow">{project?.name}</h1>
-                      <Button 
-                        variant="ghost" 
-                        className="ml-2"
-                        onClick={() => setIsEditing(true)}
-                      >
-                        <Settings className="h-4 w-4" />
-                      </Button>
-                    </div>
+                  </div>
+                  <DialogFooter>
+                    <Button type="submit" onClick={handleCreateFolder} className="text-white bg-cyber-gradient hover:opacity-90">
+                      Create
+                    </Button>
+                  </DialogFooter>
+                </DialogContent>
+              </Dialog>
+            </CardHeader>
+            <CardContent>
+              <nav className="flex flex-col space-y-1">
+                <Button 
+                  variant={currentFolder === null ? "default" : "ghost"} 
+                  className="justify-start"
+                  onClick={() => setCurrentFolder(null)}
+                >
+                  <FolderOpen className="mr-2 h-4 w-4" />
+                  All Images
+                </Button>
+                {folders.map((folder) => (
+                  <div key={folder.id} className="flex items-center">
+                    <Button 
+                      variant={currentFolder?.id === folder.id ? "default" : "ghost"} 
+                      className="justify-start flex-1"
+                      onClick={() => setCurrentFolder(folder)}
+                    >
+                      <FolderOpen className="mr-2 h-4 w-4" />
+                      {folder.name}
+                    </Button>
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button variant="ghost" size="icon" className="h-8 w-8">
+                          <MoreVertical className="h-4 w-4" />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end">
+                        <DropdownMenuItem 
+                          onClick={() => {
+                            setFolderToRename(folder);
+                            setNewFolderName(folder.name);
+                            setRenameFolderDialogOpen(true);
+                          }}
+                        >
+                          <Edit className="mr-2 h-4 w-4" />
+                          Rename
+                        </DropdownMenuItem>
+                        <DropdownMenuItem 
+                          className="text-destructive"
+                          onClick={() => handleDeleteFolder(folder.id)}
+                        >
+                          <Trash2 className="mr-2 h-4 w-4" />
+                          Delete
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  </div>
+                ))}
+              </nav>
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Images content area */}
+        <div className="md:col-span-9">
+          <Card className="bg-background/80 backdrop-blur-sm border-border/50">
+            <CardHeader>
+              <div className="flex justify-between items-center">
+                <CardTitle>
+                  {currentFolder 
+                    ? `Images in ${currentFolder.name}`
+                    : 'All Images'
+                  }
+                </CardTitle>
+                <div className="flex space-x-2">
+                  <Button
+                    variant="outline"
+                    size="icon"
+                    onClick={() => setViewMode(viewMode === "grid" ? "list" : "grid")}
+                    title={viewMode === "grid" ? "Switch to list view" : "Switch to grid view"}
+                  >
+                    {viewMode === "grid" ? <List className="h-4 w-4" /> : <Grid className="h-4 w-4" />}
+                  </Button>
+                  
+                  {selectedImages.length > 0 && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        setImagesToMove(rawImages.filter(img => selectedImages.includes(img.id)));
+                        setMoveImageDialogOpen(true);
+                      }}
+                    >
+                      <MoveRight className="mr-2 h-4 w-4" />
+                      Move {selectedImages.length} Selected
+                    </Button>
                   )}
+                  
+                  {/* Image upload button */}
+                  <Button className="bg-cyber-gradient hover:opacity-90" disabled={uploading}>
+                    <Upload className="mr-2 h-4 w-4" />
+                    <label className="cursor-pointer">
+                      Upload Images
+                      <input
+                        ref={fileInputRef}
+                        type="file"
+                        className="hidden"
+                        multiple
+                        accept="image/*"
+                        onChange={handleFileUpload}
+                        disabled={uploading}
+                      />
+                    </label>
+                  </Button>
+                  
+                  {/* Folder upload button */}
+                  <Button className="bg-cyber-gradient hover:opacity-90" disabled={uploading}>
+                    <FolderPlus className="mr-2 h-4 w-4" />
+                    <label className="cursor-pointer">
+                      Upload Folders
+                      <input
+                        ref={folderInputRef}
+                        type="file"
+                        className="hidden"
+                        webkitdirectory="true"
+                        directory="true"
+                        multiple
+                        accept="image/*"
+                        onChange={handleFolderUpload}
+                        disabled={uploading}
+                      />
+                    </label>
+                  </Button>
                 </div>
               </div>
-
-              <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-                <TabsList className="mb-6 bg-muted/50 border border-border/50">
-                  <TabsTrigger
-                    value="raw-images"
-                    className={`data-[state=active]:bg-cyber-gradient data-[state=active]:text-foreground ${
-                      activeTab === "raw-images" ? "bg-cyber-gradient text-foreground" : ""
-                    }`}
-                  >
-                    Raw Images
-                  </TabsTrigger>
-                  <TabsTrigger
-                    value="settings"
-                    className={`data-[state=active]:bg-cyber-gradient data-[state=active]:text-foreground ${
-                      activeTab === "settings" ? "bg-cyber-gradient text-foreground" : ""
-                    }`}
-                  >
-                    Project Settings
-                  </TabsTrigger>
-                </TabsList>
-                
-                <TabsContent value="raw-images">
-                  <div className="grid grid-cols-1 gap-6 md:grid-cols-12">
-                    {/* Folders sidebar */}
-                    <div className="md:col-span-3">
-                      <Card className="bg-background/80 backdrop-blur-sm border-border/50">
-                        <CardHeader className="flex flex-row items-center justify-between pb-2">
-                          <CardTitle>Folders</CardTitle>
-                          <Dialog open={createFolderDialogOpen} onOpenChange={setCreateFolderDialogOpen}>
-                            <DialogTrigger asChild>
-                              <Button variant="ghost" size="icon">
-                                <FolderPlus className="h-5 w-5" />
+            </CardHeader>
+            <CardContent>
+              {uploading ? (
+                <div className="text-center py-12">
+                  <p className="text-muted-foreground mb-4">Uploading images...</p>
+                </div>
+              ) : viewMode === "grid" ? (
+                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+                  {(currentFolder 
+                    ? getCurrentFolderImages() 
+                    : rawImages).map((image) => (
+                    <Card
+                      key={image.id}
+                      className={`cursor-pointer overflow-hidden hover:border-primary transition-colors ${
+                        selectedImages.includes(image.id) ? "border-2 border-primary" : "border-border/50"
+                      }`}
+                      onClick={() => toggleImageSelection(image.id)}
+                    >
+                      <div className="aspect-square relative">
+                        <img
+                          src={image.url}
+                          alt={image.name}
+                          className="object-cover w-full h-full"
+                        />
+                        <div className="absolute bottom-0 left-0 right-0 bg-background/70 p-2 text-xs truncate">
+                          {image.name}
+                        </div>
+                        <div className="absolute top-2 right-2">
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
+                              <Button variant="ghost" size="icon" className="h-8 w-8 bg-background/50">
+                                <MoreVertical className="h-4 w-4" />
                               </Button>
-                            </DialogTrigger>
-                            <DialogContent className="sm:max-w-[425px] bg-background text-white">
-                              <DialogHeader>
-                                <DialogTitle className="text-white">Create New Folder</DialogTitle>
-                                <DialogDescription className="text-white/70">
-                                  Enter a name for your new folder
-                                </DialogDescription>
-                              </DialogHeader>
-                              <div className="grid gap-4 py-4">
-                                <div className="grid grid-cols-4 items-center gap-4">
-                                  <Label htmlFor="folder-name" className="text-right text-white">
-                                    Name
-                                  </Label>
-                                  <Input
-                                    id="folder-name"
-                                    value={newFolderName}
-                                    onChange={(e) => setNewFolderName(e.target.value)}
-                                    className="col-span-3 text-white bg-background/70 border-white/20"
-                                    placeholder="Location Name"
-                                  />
-                                </div>
-                              </div>
-                              <DialogFooter>
-                                <Button type="submit" onClick={handleCreateFolder} className="text-white bg-cyber-gradient hover:opacity-90">
-                                  Create
-                                </Button>
-                              </DialogFooter>
-                            </DialogContent>
-                          </Dialog>
-                        </CardHeader>
-                        <CardContent>
-                          <nav className="flex flex-col space-y-1">
-                            <Button 
-                              variant={currentFolder === null ? "default" : "ghost"} 
-                              className="justify-start"
-                              onClick={() => setCurrentFolder(null)}
-                            >
-                              <FolderOpen className="mr-2 h-4 w-4" />
-                              All Images
-                            </Button>
-                            {folders.map((folder) => (
-                              <div key={folder.id} className="flex items-center">
-                                <Button 
-                                  variant={currentFolder?.id === folder.id ? "default" : "ghost"} 
-                                  className="justify-start flex-1"
-                                  onClick={() => setCurrentFolder(folder)}
-                                >
-                                  <FolderOpen className="mr-2 h-4 w-4" />
-                                  {folder.name}
-                                </Button>
-                                <DropdownMenu>
-                                  <DropdownMenuTrigger asChild>
-                                    <Button variant="ghost" size="icon" className="h-8 w-8">
-                                      <MoreVertical className="h-4 w-4" />
-                                    </Button>
-                                  </DropdownMenuTrigger>
-                                  <DropdownMenuContent align="end">
-                                    <DropdownMenuItem 
-                                      onClick={() => {
-                                        setFolderToRename(folder);
-                                        setNewFolderName(folder.name);
-                                        setRenameFolderDialogOpen(true);
-                                      }}
-                                    >
-                                      <Edit className="mr-2 h-4 w-4" />
-                                      Rename
-                                    </DropdownMenuItem>
-                                    <DropdownMenuItem 
-                                      className="text-destructive"
-                                      onClick={() => handleDeleteFolder(folder.id)}
-                                    >
-                                      <Trash2 className="mr-2 h-4 w-4" />
-                                      Delete
-                                    </DropdownMenuItem>
-                                  </DropdownMenuContent>
-                                </DropdownMenu>
-                              </div>
-                            ))}
-                          </nav>
-                        </CardContent>
-                      </Card>
-                    </div>
-
-                    {/* Images content area */}
-                    <div className="md:col-span-9">
-                      <Card className="bg-background/80 backdrop-blur-sm border-border/50">
-                        <CardHeader>
-                          <div className="flex justify-between items-center">
-                            <CardTitle>
-                              {currentFolder 
-                                ? `Images in ${currentFolder.name}`
-                                : 'All Images'
-                              }
-                            </CardTitle>
-                            <div className="flex space-x-2">
-                              <Button
-                                variant="outline"
-                                size="icon"
-                                onClick={() => setViewMode(viewMode === "grid" ? "list" : "grid")}
-                                title={viewMode === "grid" ? "Switch to list view" : "Switch to grid view"}
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end">
+                              <DropdownMenuItem 
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setImageToRename(image);
+                                  setNewImageName(image.name);
+                                  setRenameImageDialogOpen(true);
+                                }}
                               >
-                                {viewMode === "grid" ? <List className="h-4 w-4" /> : <Grid className="h-4 w-4" />}
-                              </Button>
+                                <Edit className="mr-2 h-4 w-4" />
+                                Rename
+                              </DropdownMenuItem>
+                              <DropdownMenuItem 
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setImagesToMove([image]);
+                                  setMoveImageDialogOpen(true);
+                                }}
+                              >
+                                <MoveRight className="mr-2 h-4 w-4" />
+                                Move
+                              </DropdownMenuItem>
+                              <DropdownMenuItem 
+                                className="text-destructive"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleDeleteImage(image.id);
+                                }}
+                              >
+                                <Trash2 className="mr-2 h-4 w-4" />
+                                Delete
+                              </DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                        </div>
+                      </div>
+                    </Card>
+                  ))}
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  {(currentFolder 
+                    ? getCurrentFolderImages() 
+                    : rawImages).map((image) => (
+                    <div
+                      key={image.id}
+                      className={`flex items-center p-2 rounded border ${
+                        selectedImages.includes(image.id) 
+                          ? "border-primary bg-primary/10" 
+                          : "border-border/50 hover:bg-muted/20"
+                      }`}
+                      onClick={() => toggleImageSelection(image.id)}
+                    >
+                      <div className="h-10 w-10 mr-4 overflow-hidden rounded">
+                        <img
+                          src={image.url}
+                          alt={image.name}
+                          className="object-cover w-full h-full"
+                        />
+                      </div>
+                      <div className="flex-1 truncate">{image.name}</div>
+                      <div className="flex items-center">
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
+                            <Button variant="ghost" size="icon" className="h-8 w-8">
+                              <MoreVertical className="h-4 w-4" />
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end">
+                            <DropdownMenuItem 
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setImageToRename(image);
+                                setNewImageName(image.name);
+                                setRenameImageDialogOpen(true);
+                              }}
+                            >
+                              <Edit className="mr-2 h-4 w-4" />
+                              Rename
+                            </DropdownMenuItem>
+                            <DropdownMenuItem 
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setImagesToMove([image]);
+                                setMoveImageDialogOpen(true);
+                              }}
+                            >
+                              <MoveRight className="mr-2 h-4 w-4" />
+                              Move
+                            </DropdownMenuItem>
+                            <DropdownMenuItem 
+                              className="text-destructive"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleDeleteImage(image.id);
+                              }}
+                            >
+                              <Trash2 className="mr-2 h-4 w-4" />
+                              Delete
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+              
+              {(currentFolder 
+                ? getCurrentFolderImages().length === 0
+                : rawImages.length === 0) && (
+                <div className="text-center py-12">
+                  <ImageIcon className="h-16 w-16 text-muted-foreground mx-auto mb-4" />
+                  <p className="text-muted-foreground mb-4">
+                    No images found. Upload some images to get started.
+                  </p>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </div>
+      </div>
+    </TabsContent>
+    
+    {/* New 360 Images Tab */}
+    <TabsContent value="360-images">
+      <div className="grid grid-cols-1 gap-6 md:grid-cols-12">
+        {/* Folders sidebar */}
+        <div className="md:col-span-3">
+          <Card className="bg-background/80 backdrop-blur-sm border-border/50">
+            <CardHeader className="flex flex-row items-center justify-between pb-2">
+              <CardTitle>Folders</CardTitle>
+              <Dialog open={createFolderDialogOpen} onOpenChange={setCreateFolderDialogOpen}>
+                <DialogTrigger asChild>
+                  <Button variant="ghost" size="icon">
+                    <FolderPlus className="h-5 w-5" />
+                  </Button>
+                </DialogTrigger>
+                <DialogContent className="sm:max-w-[425px] bg-background text-white">
+                  <DialogHeader>
+                    <DialogTitle className="text-white">Create New Folder</DialogTitle>
+                    <DialogDescription className="text-white/70">
+                      Enter a name for your new folder
+                    </DialogDescription>
+                  </DialogHeader>
+                  <div className="grid gap-4 py-4">
+                    <div className="grid grid-cols-4 items-center gap-4">
+                      <Label htmlFor="folder-name" className="text-right text-white">
+                        Name
+                      </Label>
+                      <Input
+                        id="folder-name"
+                        value={newFolderName}
+                        onChange={(e) => setNewFolderName(e.target.value)}
+                        className="col-span-3 text-white bg-background/70 border-white/20"
+                        placeholder="Location Name"
+                      />
+                    </div>
+                  </div>
+                  <DialogFooter>
+                    <Button type="submit" onClick={handleCreateFolder} className="text-white bg-cyber-gradient hover:opacity-90">
+                      Create
+                    </Button>
+                  </DialogFooter>
+                </DialogContent>
+              </Dialog>
+            </CardHeader>
+            <CardContent>
+              <nav className="flex flex-col space-y-1">
+                <Button 
+                  variant={currentFolder === null ? "default" : "ghost"} 
+                  className="justify-start"
+                  onClick={() => setCurrentFolder(null)}
+                >
+                  <FolderOpen className="mr-2 h-4 w-4" />
+                  All 360° Images
+                </Button>
+                {folders.map((folder) => (
+                  <div key={folder.id} className="flex items-center">
+                    <Button 
+                      variant={currentFolder?.id === folder.id ? "default" : "ghost"} 
+                      className="justify-start flex-1"
+                      onClick={() => setCurrentFolder(folder)}
+                    >
+                      <FolderOpen className="mr-2 h-4 w-4" />
+                      {folder.name}
+                    </Button>
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button variant="ghost" size="icon" className="h-8 w-8">
+                          <MoreVertical className="h-4 w-4" />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end">
+                        <DropdownMenuItem 
+                          onClick={() => {
+                            setFolderToRename(folder);
+                            setNewFolderName(folder.name);
+                            setRenameFolderDialogOpen(true);
+                          }}
+                        >
+                          <Edit className="mr-2 h-4 w-4" />
+                          Rename
+                        </DropdownMenuItem>
+                        <DropdownMenuItem 
+                          className="text-destructive"
+                          onClick={() => handleDeleteFolder(folder.id)}
+                        >
+                          <Trash2 className="mr-2 h-4 w-4" />
+                          Delete
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  </div>
+                ))}
+              </nav>
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* 360 Images content area */}
+        <div className="md:col-span-9">
+          <Card className="bg-background/80 backdrop-blur-sm border-border/50">
+            <CardHeader>
+              <div className="flex justify-between items-center">
+                <CardTitle>
+                  {currentFolder 
+                    ? `360° Images in ${currentFolder.name}`
+                    : 'All 360° Images'
+                  }
+                </CardTitle>
+                <div className="flex space-x-2">
+                  <Button
+                    variant="outline"
+                    size="icon"
+                    onClick={() => setViewMode(viewMode === "grid" ? "list" : "grid")}
+                    title={viewMode === "grid" ? "Switch to list view" : "Switch to grid view"}
+                  >
+                    {viewMode === "grid" ? <List className="h-4 w-4" /> : <Grid className="h-4 w-4" />}
+                  </Button>
+                  
+                  {selectedPanoramas.length > 0 && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        setPanoramasToMove(panoramas.filter(p => selectedPanoramas.includes(p.id)));
+                        setMovePanoramaDialogOpen(true);
+                      }}
+                    >
+                      <MoveRight className="mr-2 h-4 w-4" />
+                      Move {selectedPanoramas.length} Selected
+                    </Button>
+                  )}
+                  
+                  {/* Generate 360 Images button */}
+                  <Dialog open={generate360DialogOpen} onOpenChange={setGenerate360DialogOpen}>
+                    <DialogTrigger asChild>
+                      <Button variant="outline">
+                        <Box className="mr-2 h-4 w-4" />
+                        Generate 360° Images
+                      </Button>
+                    </DialogTrigger>
+                    <DialogContent className="sm:max-w-[525px] bg-background text-white">
+                                  <DialogHeader>
+                                    <DialogTitle className="text-white">Generate 360° Images</DialogTitle>
+                                    <DialogDescription className="text-white/70">
+                                      Select images to convert into 360° panoramas
+                                    </DialogDescription>
+                                  </DialogHeader>
+                                  <div className="max-h-[400px] overflow-y-auto py-4">
+                                    <div className="space-y-2">
+                                      {rawImages.map((image) => (
+                                        <div
+                                          key={image.id}
+                                          className={`flex items-center p-2 rounded border cursor-pointer ${
+                                            imagesToConvert.some(img => img.id === image.id) 
+                                              ? "border-primary bg-primary/10" 
+                                              : "border-border/50 hover:bg-muted/20"
+                                          }`}
+                                          onClick={() => {
+                                            setImagesToConvert(prev => 
+                                              prev.some(img => img.id === image.id)
+                                                ? prev.filter(img => img.id !== image.id)
+                                                : [...prev, image]
+                                            );
+                                          }}
+                                        >
+                                          <div className="h-10 w-10 mr-4 overflow-hidden rounded">
+                                            <img
+                                              src={image.url}
+                                              alt={image.name}
+                                              className="object-cover w-full h-full"
+                                            />
+                                          </div>
+                                          <div className="flex-1 truncate">{image.name}</div>
+                                        </div>
+                                      ))}
+                                    </div>
+                                  </div>
+                                  <DialogFooter>
+                                    <Button 
+                                      type="submit" 
+                                      onClick={handleGenerate360Images} 
+                                      className="text-white bg-cyber-gradient hover:opacity-90"
+                                      disabled={processing || imagesToConvert.length === 0}
+                                    >
+                                      {processing ? (
+                                        <>
+                                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                          Processing...
+                                        </>
+                                      ) : (
+                                        <>Generate</>
+                                      )}
+                                    </Button>
+                                  </DialogFooter>
+                                </DialogContent>
+                              </Dialog>
                               
-                              {selectedImages.length > 0 && (
-                                <Button
-                                  variant="outline"
-                                  size="sm"
-                                  onClick={() => {
-                                    setImagesToMove(rawImages.filter(img => selectedImages.includes(img.id)));
-                                    setMoveImageDialogOpen(true);
-                                  }}
-                                >
-                                  <MoveRight className="mr-2 h-4 w-4" />
-                                  Move {selectedImages.length} Selected
-                                </Button>
-                              )}
-                              
-                              {/* Image upload button */}
+                              {/* Upload 360 Images button */}
                               <Button className="bg-cyber-gradient hover:opacity-90" disabled={uploading}>
                                 <Upload className="mr-2 h-4 w-4" />
                                 <label className="cursor-pointer">
-                                  Upload Images
+                                  Upload 360° Images
                                   <input
-                                    ref={fileInputRef}
+                                    ref={panoramaFileInputRef}
                                     type="file"
                                     className="hidden"
                                     multiple
                                     accept="image/*"
-                                    onChange={handleFileUpload}
-                                    disabled={uploading}
-                                  />
-                                </label>
-                              </Button>
-                              
-                              {/* Folder upload button */}
-                              <Button className="bg-cyber-gradient hover:opacity-90" disabled={uploading}>
-                                <FolderPlus className="mr-2 h-4 w-4" />
-                                <label className="cursor-pointer">
-                                  Upload Folders
-                                  <input
-                                    ref={folderInputRef}
-                                    type="file"
-                                    className="hidden"
-                                    webkitdirectory="true"
-                                    directory="true"
-                                    multiple
-                                    accept="image/*"
-                                    onChange={handleFolderUpload}
+                                    onChange={handlePanoramaUpload}
                                     disabled={uploading}
                                   />
                                 </label>
@@ -957,30 +1710,39 @@ export default function ProjectPage() {
                           </div>
                         </CardHeader>
                         <CardContent>
-                          {uploading ? (
+                          {uploading || processing ? (
                             <div className="text-center py-12">
-                              <p className="text-muted-foreground mb-4">Uploading images...</p>
+                              <Loader2 className="h-8 w-8 animate-spin mx-auto mb-4" />
+                              <p className="text-muted-foreground mb-4">
+                                {uploading ? "Uploading images..." : "Processing 360° images..."}
+                              </p>
                             </div>
                           ) : viewMode === "grid" ? (
                             <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
                               {(currentFolder 
-                                ? getCurrentFolderImages() 
-                                : rawImages).map((image) => (
+                                ? getCurrentFolderPanoramas() 
+                                : panoramas).map((panorama) => (
                                 <Card
-                                  key={image.id}
+                                  key={panorama.id}
                                   className={`cursor-pointer overflow-hidden hover:border-primary transition-colors ${
-                                    selectedImages.includes(image.id) ? "border-2 border-primary" : "border-border/50"
+                                    selectedPanoramas.includes(panorama.id) ? "border-2 border-primary" : "border-border/50"
                                   }`}
-                                  onClick={() => toggleImageSelection(image.id)}
+                                  onClick={() => togglePanoramaSelection(panorama.id)}
                                 >
                                   <div className="aspect-square relative">
                                     <img
-                                      src={image.url}
-                                      alt={image.name}
+                                      src={panorama.url}
+                                      alt={panorama.name}
                                       className="object-cover w-full h-full"
                                     />
+                                    {panorama.is_processing && (
+                                      <div className="absolute inset-0 bg-background/60 flex items-center justify-center">
+                                        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+                                      </div>
+                                    )}
                                     <div className="absolute bottom-0 left-0 right-0 bg-background/70 p-2 text-xs truncate">
-                                      {image.name}
+                                      {panorama.name}
+                                      {panorama.is_processing && " (Processing)"}
                                     </div>
                                     <div className="absolute top-2 right-2">
                                       <DropdownMenu>
@@ -993,10 +1755,11 @@ export default function ProjectPage() {
                                           <DropdownMenuItem 
                                             onClick={(e) => {
                                               e.stopPropagation();
-                                              setImageToRename(image);
-                                              setNewImageName(image.name);
-                                              setRenameImageDialogOpen(true);
+                                              setPanoramaToRename(panorama);
+                                              setNewPanoramaName(panorama.name);
+                                              setRenamePanoramaDialogOpen(true);
                                             }}
+                                            disabled={panorama.is_processing}
                                           >
                                             <Edit className="mr-2 h-4 w-4" />
                                             Rename
@@ -1004,9 +1767,10 @@ export default function ProjectPage() {
                                           <DropdownMenuItem 
                                             onClick={(e) => {
                                               e.stopPropagation();
-                                              setImagesToMove([image]);
-                                              setMoveImageDialogOpen(true);
+                                              setPanoramasToMove([panorama]);
+                                              setMovePanoramaDialogOpen(true);
                                             }}
+                                            disabled={panorama.is_processing}
                                           >
                                             <MoveRight className="mr-2 h-4 w-4" />
                                             Move
@@ -1015,8 +1779,9 @@ export default function ProjectPage() {
                                             className="text-destructive"
                                             onClick={(e) => {
                                               e.stopPropagation();
-                                              handleDeleteImage(image.id);
+                                              handleDeletePanorama(panorama.id);
                                             }}
+                                            disabled={panorama.is_processing}
                                           >
                                             <Trash2 className="mr-2 h-4 w-4" />
                                             Delete
@@ -1031,25 +1796,33 @@ export default function ProjectPage() {
                           ) : (
                             <div className="space-y-2">
                               {(currentFolder 
-                                ? getCurrentFolderImages() 
-                                : rawImages).map((image) => (
+                                ? getCurrentFolderPanoramas() 
+                                : panoramas).map((panorama) => (
                                 <div
-                                  key={image.id}
+                                  key={panorama.id}
                                   className={`flex items-center p-2 rounded border ${
-                                    selectedImages.includes(image.id) 
+                                    selectedPanoramas.includes(panorama.id) 
                                       ? "border-primary bg-primary/10" 
                                       : "border-border/50 hover:bg-muted/20"
                                   }`}
-                                  onClick={() => toggleImageSelection(image.id)}
+                                  onClick={() => togglePanoramaSelection(panorama.id)}
                                 >
                                   <div className="h-10 w-10 mr-4 overflow-hidden rounded">
                                     <img
-                                      src={image.url}
-                                      alt={image.name}
+                                      src={panorama.url}
+                                      alt={panorama.name}
                                       className="object-cover w-full h-full"
                                     />
+                                    {panorama.is_processing && (
+                                      <div className="absolute inset-0 bg-background/60 flex items-center justify-center">
+                                        <Loader2 className="h-4 w-4 animate-spin text-primary" />
+                                      </div>
+                                    )}
                                   </div>
-                                  <div className="flex-1 truncate">{image.name}</div>
+                                  <div className="flex-1 truncate">
+                                    {panorama.name}
+                                    {panorama.is_processing && " (Processing)"}
+                                  </div>
                                   <div className="flex items-center">
                                     <DropdownMenu>
                                       <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
@@ -1061,10 +1834,11 @@ export default function ProjectPage() {
                                         <DropdownMenuItem 
                                           onClick={(e) => {
                                             e.stopPropagation();
-                                            setImageToRename(image);
-                                            setNewImageName(image.name);
-                                            setRenameImageDialogOpen(true);
+                                            setPanoramaToRename(panorama);
+                                            setNewPanoramaName(panorama.name);
+                                            setRenamePanoramaDialogOpen(true);
                                           }}
+                                          disabled={panorama.is_processing}
                                         >
                                           <Edit className="mr-2 h-4 w-4" />
                                           Rename
@@ -1072,9 +1846,10 @@ export default function ProjectPage() {
                                         <DropdownMenuItem 
                                           onClick={(e) => {
                                             e.stopPropagation();
-                                            setImagesToMove([image]);
-                                            setMoveImageDialogOpen(true);
+                                            setPanoramasToMove([panorama]);
+                                            setMovePanoramaDialogOpen(true);
                                           }}
+                                          disabled={panorama.is_processing}
                                         >
                                           <MoveRight className="mr-2 h-4 w-4" />
                                           Move
@@ -1083,8 +1858,9 @@ export default function ProjectPage() {
                                           className="text-destructive"
                                           onClick={(e) => {
                                             e.stopPropagation();
-                                            handleDeleteImage(image.id);
+                                            handleDeletePanorama(panorama.id);
                                           }}
+                                          disabled={panorama.is_processing}
                                         >
                                           <Trash2 className="mr-2 h-4 w-4" />
                                           Delete
@@ -1098,13 +1874,37 @@ export default function ProjectPage() {
                           )}
                           
                           {(currentFolder 
-                            ? getCurrentFolderImages().length === 0
-                            : rawImages.length === 0) && (
+                            ? getCurrentFolderPanoramas().length === 0
+                            : panoramas.length === 0) && (
                             <div className="text-center py-12">
-                              <ImageIcon className="h-16 w-16 text-muted-foreground mx-auto mb-4" />
+                              <Box className="h-16 w-16 text-muted-foreground mx-auto mb-4" />
                               <p className="text-muted-foreground mb-4">
-                                No images found. Upload some images to get started.
+                                No 360° images found. Upload or generate some images to get started.
                               </p>
+                              <div className="flex justify-center gap-4">
+                                <Dialog open={generate360DialogOpen} onOpenChange={setGenerate360DialogOpen}>
+                                  <DialogTrigger asChild>
+                                    <Button variant="outline">
+                                      <Box className="mr-2 h-4 w-4" />
+                                      Generate from Images
+                                    </Button>
+                                  </DialogTrigger>
+                                </Dialog>
+                                <Button className="bg-cyber-gradient hover:opacity-90">
+                                  <Upload className="mr-2 h-4 w-4" />
+                                  <label className="cursor-pointer">
+                                    Upload 360° Images
+                                    <input
+                                      ref={panoramaFileInputRef}
+                                      type="file"
+                                      className="hidden"
+                                      multiple
+                                      accept="image/*"
+                                      onChange={handlePanoramaUpload}
+                                    />
+                                  </label>
+                                </Button>
+                              </div>
                             </div>
                           )}
                         </CardContent>
@@ -1231,6 +2031,36 @@ export default function ProjectPage() {
                 </DialogContent>
               </Dialog>
               
+              {/* Rename 360 image dialog */}
+              <Dialog open={renamePanoramaDialogOpen} onOpenChange={setRenamePanoramaDialogOpen}>
+                <DialogContent className="sm:max-w-[425px] bg-background text-white">
+                  <DialogHeader>
+                    <DialogTitle className="text-white">Rename 360° Image</DialogTitle>
+                    <DialogDescription className="text-white/70">
+                      Enter a new name for this 360° image
+                    </DialogDescription>
+                  </DialogHeader>
+                  <div className="grid gap-4 py-4">
+                    <div className="grid grid-cols-4 items-center gap-4">
+                      <Label htmlFor="rename-panorama-name" className="text-right text-white">
+                        Name
+                      </Label>
+                      <Input
+                        id="rename-panorama-name"
+                        value={newPanoramaName}
+                        onChange={(e) => setNewPanoramaName(e.target.value)}
+                        className="col-span-3 text-white bg-background/70 border-white/20"
+                      />
+                    </div>
+                  </div>
+                  <DialogFooter>
+                    <Button type="submit" onClick={handleRenamePanorama} className="text-white bg-cyber-gradient hover:opacity-90">
+                      Save
+                    </Button>
+                  </DialogFooter>
+                </DialogContent>
+              </Dialog>
+              
               {/* Move image dialog */}
               <Dialog open={moveImageDialogOpen} onOpenChange={setMoveImageDialogOpen}>
                 <DialogContent className="sm:max-w-[425px] bg-background text-white">
@@ -1263,6 +2093,44 @@ export default function ProjectPage() {
                   </div>
                   <DialogFooter>
                     <Button type="submit" onClick={handleMoveImages} className="text-white bg-cyber-gradient hover:opacity-90">
+                      Move
+                    </Button>
+                  </DialogFooter>
+                </DialogContent>
+              </Dialog>
+              
+              {/* Move 360 image dialog */}
+              <Dialog open={movePanoramaDialogOpen} onOpenChange={setMovePanoramaDialogOpen}>
+                <DialogContent className="sm:max-w-[425px] bg-background text-white">
+                  <DialogHeader>
+                    <DialogTitle className="text-white">Move 360° Images</DialogTitle>
+                    <DialogDescription className="text-white/70">
+                      Select a destination folder for {panoramasToMove.length} 360° image(s)
+                    </DialogDescription>
+                  </DialogHeader>
+                  <div className="space-y-4 py-4 max-h-[300px] overflow-y-auto">
+                    <Button 
+                      variant={targetFolderId === null ? "default" : "outline"}
+                      className="w-full justify-start"
+                      onClick={() => setTargetFolderId(null)}
+                    >
+                      <FolderOpen className="mr-2 h-4 w-4" />
+                      Root (No Folder)
+                    </Button>
+                    {folders.map((folder) => (
+                      <Button 
+                        key={folder.id}
+                        variant={targetFolderId === folder.id ? "default" : "outline"}
+                        className="w-full justify-start"
+                        onClick={() => setTargetFolderId(folder.id)}
+                      >
+                        <FolderOpen className="mr-2 h-4 w-4" />
+                        {folder.name}
+                      </Button>
+                    ))}
+                  </div>
+                  <DialogFooter>
+                    <Button type="submit" onClick={handleMovePanoramas} className="text-white bg-cyber-gradient hover:opacity-90">
                       Move
                     </Button>
                   </DialogFooter>
