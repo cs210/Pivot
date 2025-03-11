@@ -84,12 +84,19 @@ export default function Dashboard() {
         .select();
 
       if (error) throw error;
-
-      setProjects([...(data || []), ...projects]);
+      
+      // Close dialog and reset form
       setNewProjectName("");
       setCreateDialogOpen(false);
       
-      alert("Project created successfully");
+      // Redirect to the new project's page
+      if (data && data.length > 0) {
+        router.push(`/project/${data[0].id}`);
+      } else {
+        // Fallback if no data returned
+        setProjects(prev => [...prev]);
+        alert("Project created successfully");
+      }
     } catch (error) {
       console.error("Error creating project:", error);
       alert("Failed to create project");
