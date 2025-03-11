@@ -5,8 +5,8 @@ import { useRouter, useParams } from "next/navigation";
 import Link from "next/link";
 import { Header } from "@/components/header";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import PlaceLocationsTabContent from "@/components/enhanced-enhanced-image-grid";
-import PanoramaViewerPage from "@/components/panorama-viewer-page";
+import PlaceLocationsTabContent from "./components/EnhancedEnhancedImageGrid";
+import PanoramaViewerPage from "./components/PanoramaViewerPage";
 import ProjectHeader from "./components/ProjectHeader";
 import ProjectSettings from "./components/ProjectSettings";
 import RawImagesTab from "./components/tabs/RawImagesTab";
@@ -18,8 +18,16 @@ export default function ProjectPage() {
   const params = useParams();
   const projectId = params.id as string;
   const [activeTab, setActiveTab] = useState("raw-images");
-  
-  const { project, loading, projectName, setProjectName, isEditing, setIsEditing, handleUpdateProject } = useProject(projectId, router);
+
+  const {
+    project,
+    loading,
+    projectName,
+    setProjectName,
+    isEditing,
+    setIsEditing,
+    handleUpdateProject,
+  } = useProject(projectId, router);
 
   if (loading) {
     return (
@@ -41,8 +49,8 @@ export default function ProjectPage() {
       <main className="flex-1 relative">
         <div className="absolute inset-0 bg-cyber-gradient opacity-5"></div>
         <div className="container mx-auto px-4 py-8 relative z-10">
-          <ProjectHeader 
-            project={project} 
+          <ProjectHeader
+            project={project}
             projectName={projectName}
             setProjectName={setProjectName}
             isEditing={isEditing}
@@ -106,11 +114,11 @@ export default function ProjectPage() {
             </TabsContent>
 
             <TabsContent value="settings">
-              <ProjectSettings 
-                projectId={projectId} 
-                projectName={projectName} 
-                setProjectName={setProjectName} 
-                handleUpdateProject={handleUpdateProject} 
+              <ProjectSettings
+                projectId={projectId}
+                projectName={projectName}
+                setProjectName={setProjectName}
+                handleUpdateProject={handleUpdateProject}
               />
             </TabsContent>
           </Tabs>
