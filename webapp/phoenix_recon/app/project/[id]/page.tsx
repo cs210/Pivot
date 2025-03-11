@@ -179,8 +179,32 @@ export default function ProjectPage() {
       alert("Please enter a folder name");
       return;
     }
-
+  
     try {
+      console.log("Creating folder:", {
+        name: newFolderName.trim(),
+        project_id: projectId,
+        parent_id: null
+      });
+  
+      // Step 1: Check if the folders table exists
+      const { error: tableCheckError } = await supabase
+        .from("folders")
+        .select("id")
+        .limit(1);
+      
+      if (tableCheckError) {
+        console.error("Error checking folders table:", {
+          message: tableCheckError.message,
+          code: tableCheckError.code,
+          details: tableCheckError.details,
+          hint: tableCheckError.hint,
+          fullError: JSON.stringify(tableCheckError, null, 2)
+        });
+        throw new Error(`Table check failed: ${tableCheckError.message}`);
+      }
+  
+      // Step 2: Attempt to create the folder
       const { data, error } = await supabase
         .from("folders")
         .insert([
@@ -191,16 +215,32 @@ export default function ProjectPage() {
           },
         ])
         .select();
-
-      if (error) throw error;
-
-      setFolders([...(data || []), ...folders]);
-      setNewFolderName("");
-      setCreateFolderDialogOpen(false);
-      alert("Folder created successfully");
+  
+      if (error) {
+        console.error("Folder creation error:", {
+          message: error.message,
+          code: error.code,
+          details: error.details,
+          hint: error.hint,
+          fullError: JSON.stringify(error, null, 2)
+        });
+        throw new Error(`Insert failed: ${error.message}`);
+      }
+  
+      console.log("Folder created successfully:", data);
+  
+      // Step 3: Update local state only if we have data
+      if (data && data.length > 0) {
+        setFolders(prev => [...prev, ...data]);
+        setNewFolderName("");
+        setCreateFolderDialogOpen(false);
+        alert("Folder created successfully");
+      } else {
+        throw new Error("No data returned from insert operation");
+      }
     } catch (error) {
       console.error("Error creating folder:", error);
-      alert("Failed to create folder");
+      alert(`Failed to create folder: ${error.message || "Unknown error"}`);
     }
   };
 
