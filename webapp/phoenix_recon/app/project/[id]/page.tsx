@@ -117,7 +117,7 @@ export default function ProjectPage() {
   }, [router, supabase, projectId]);
 
 // Function to get all images in a folder
-const getImagesInFolder = (folderId) => {
+  const getImagesInFolder = (folderId) => {
     return rawImages.filter(img => img.folder_id === folderId);
   };
   
@@ -1255,33 +1255,47 @@ return (
   </div>
 
   <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-    <TabsList className="mb-6 bg-muted/50 border border-border/50">
-      <TabsTrigger
-        value="raw-images"
-        className={`data-[state=active]:bg-cyber-gradient data-[state=active]:text-foreground ${
-          activeTab === "raw-images" ? "bg-cyber-gradient text-foreground" : ""
-        }`}
-      >
-        Raw Images
-      </TabsTrigger>
-      <TabsTrigger
-        value="360-images"
-        className={`data-[state=active]:bg-cyber-gradient data-[state=active]:text-foreground ${
-          activeTab === "360-images" ? "bg-cyber-gradient text-foreground" : ""
-        }`}
-      >
-        360° Images
-      </TabsTrigger>
-      <TabsTrigger
-        value="settings"
-        className={`data-[state=active]:bg-cyber-gradient data-[state=active]:text-foreground ${
-          activeTab === "settings" ? "bg-cyber-gradient text-foreground" : ""
-        }`}
-      >
-        Project Settings
-      </TabsTrigger>
-    </TabsList>
-    
+  <TabsList className="mb-6 bg-muted/50 border border-border/50">
+  <TabsTrigger
+    value="raw-images"
+    className="data-[state=active]:bg-cyber-gradient data-[state=active]:text-foreground"
+  >
+    Raw Images
+  </TabsTrigger>
+  <TabsTrigger
+    value="360-images"
+    className="data-[state=active]:bg-cyber-gradient data-[state=active]:text-foreground"
+  >
+    360° Images
+  </TabsTrigger>
+  <TabsTrigger
+    value="place-locations"
+    className="data-[state=active]:bg-cyber-gradient data-[state=active]:text-foreground"
+    onClick={() => router.push(`/project/${projectId}/locations`)}
+  >
+    Place Locations
+  </TabsTrigger>
+  <TabsTrigger
+    value="walkthrough"
+    className="data-[state=active]:bg-cyber-gradient data-[state=active]:text-foreground"
+    onClick={() => router.push(`/project/${projectId}/walkthrough`)}
+  >
+    Walkthrough
+  </TabsTrigger>
+  <TabsTrigger
+    value="settings"
+    className="data-[state=active]:bg-cyber-gradient data-[state=active]:text-foreground"
+  >
+    Project Settings
+  </TabsTrigger>
+</TabsList>
+
+    <TabsContent value="place-locations">
+    {/* This content won't be shown as we're redirecting */}
+    </TabsContent>
+    <TabsContent value="walkthrough">
+    {/* This content won't be shown as we're redirecting */}
+    </TabsContent>
     <TabsContent value="raw-images">
       <div className="grid grid-cols-1 gap-6 md:grid-cols-12">
         {/* Folders sidebar */}
