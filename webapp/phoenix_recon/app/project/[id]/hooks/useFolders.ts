@@ -174,6 +174,7 @@ export function useFolders(projectId: string) {
 
   return {
     folders,
+    setFolders,
     currentFolder,
     setCurrentFolder,
     newFolderName,

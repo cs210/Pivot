@@ -43,6 +43,7 @@ export default function RawImagesTab({ projectId }: RawImagesTabProps) {
   // Use the folders hook
   const {
     folders,
+    setFolders,
     currentFolder,
     setCurrentFolder,
     newFolderName,
