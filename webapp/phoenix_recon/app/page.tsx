@@ -6,6 +6,20 @@ import { Button } from "@/components/ui/button";
 import { ArrowRight, CuboidIcon as Cube, Globe } from "lucide-react";
 import { createClient } from "@/utils/supabase/client";
 import { Header } from "@/components/header";
+import dynamic from "next/dynamic";
+
+// the URL of the default 360° image to display on the homepage
+const HOMEPAGE_360_URL =
+  "https://ymfbqixkknwxtriytkun.supabase.co/storage/v1/object/public/panoramas/8811827b-595d-4072-88c0-35d629d08adb/285F28B4-5B06-49ED-B248-BAA51E989F91.JPG";
+
+// Dynamically import ReactPhotoSphereViewer to avoid SSR issues
+const ReactPhotoSphereViewer = dynamic(
+  () =>
+    import("react-photo-sphere-viewer").then(
+      (mod) => mod.ReactPhotoSphereViewer
+    ),
+  { ssr: false }
+);
 
 export default function Home() {
   const [user, setUser] = useState<any>(null);
@@ -24,7 +38,7 @@ export default function Home() {
 
   // to activate background blobs, find and delete "bg-muted"
   return (
-    <div className="flex flex-col min-h-screen  text-foreground">
+    <div className="flex flex-col min-h-screen text-foreground">
       <Header />
       <main className="flex-1">
         <section className="w-full py-12 md:py-24 lg:py-32 relative overflow-hidden">
@@ -64,17 +78,14 @@ export default function Home() {
               </div>
               <div className="flex items-center justify-center">
                 <div className="relative w-full aspect-video overflow-hidden rounded-xl glass-card p-1">
-                  <div className="absolute inset-0 bg-cyber-gradient opacity-10" />
-                  <div className="relative h-full w-full rounded-lg /50 flex items-center justify-center">
-                    <div className="grid gap-2 place-items-center">
-                      <div className="rounded-full bg-cyber-gradient p-4">
-                        <Globe className="h-6 w-6 text-white" />
-                      </div>
-                      <span className="text-sm font-medium geometric-text">
-                        360° VR Experience
-                      </span>
-                    </div>
-                  </div>
+                  <ReactPhotoSphereViewer
+                    src={HOMEPAGE_360_URL}
+                    width="100%"
+                    height="100%"
+                    defaultZoomLvl={0}
+                    defaultYaw={0.3}
+                    defaultPitch={0.65}
+                  />
                 </div>
               </div>
             </div>
@@ -156,7 +167,7 @@ export default function Home() {
             </div>
           </div>
         </section>
-        <section className="w-full py-12 md:py-24 lg:py-32  relative">
+        <section className="w-full py-12 md:py-24 lg:py-32 relative">
           <div className="absolute inset-0 bg-cyber-gradient opacity-5"></div>
           <div className="container px-4 md:px-6 relative z-10">
             <div className="grid gap-10 px-10 md:gap-16 lg:grid-cols-2">
@@ -275,7 +286,7 @@ export default function Home() {
                 </ul>
                 <Link
                   href="/use-cases"
-                  className="inline-flex h-9 items-center justify-center rounded-md border border-input  px-4 py-2 text-sm font-medium shadow-sm transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50"
+                  className="inline-flex h-9 items-center justify-center rounded-md border border-input px-4 py-2 text-sm font-medium shadow-sm transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50"
                 >
                   <Button variant="outline" className="cyber-border">
                     View Use Cases
@@ -313,7 +324,7 @@ export default function Home() {
           </div>
         </section>
       </main>
-      <footer className="border-t border-border/40 ">
+      <footer className="border-t border-border/40">
         <div className="container flex flex-col gap-2 py-4 md:h-16 md:flex-row md:items-center md:justify-between md:py-0">
           <p className="text-center text-sm text-muted-foreground md:text-left">
             © 2024 Phoenix Recon. All rights reserved.

@@ -81,13 +81,13 @@ export default function ProjectPage() {
                 value="place-locations"
                 className="data-[state=active]:bg-cyber-gradient data-[state=active]:text-foreground"
               >
-                Assign to Grid
+                Place on Grid
               </TabsTrigger>
               <TabsTrigger
                 value="walkthrough"
                 className="data-[state=active]:bg-cyber-gradient data-[state=active]:text-foreground"
               >
-                View on Web
+                View & Annotate
               </TabsTrigger>
               <TabsTrigger
                 value="settings"
