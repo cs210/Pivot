@@ -4,7 +4,7 @@ import React, { useEffect, useState, useRef } from "react";
 import dynamic from "next/dynamic";
 import { createClient } from "@/utils/supabase/client";
 
-// Dynamically import ReactPhotoSphereViewer to avoid SSR issues
+// Dynamically import ReactPhotoSphereViewer
 const ReactPhotoSphereViewer = dynamic(
   () =>
     import("react-photo-sphere-viewer").then(
@@ -13,11 +13,10 @@ const ReactPhotoSphereViewer = dynamic(
   { ssr: false }
 );
 
-interface Annotation {
-  longitude: number; // in radians, center of bounding box
-  latitude: number; // in radians, center of bounding box
-  angularWidth: number; // in radians, width of bounding box
-  angularHeight: number; // in radians, height of bounding box
+interface Marker {
+  id: string;
+  longitude: number; // in radians
+  latitude: number; // in radians
   note: string;
 }
 
@@ -26,7 +25,7 @@ interface PanoramaImage {
   project_id: string;
   name: string;
   url: string;
-  annotations: Annotation[];
+  annotations: any; // This will store our markers
 }
 
 /** The shape of grid_items: index => imageId or null */
@@ -50,27 +49,51 @@ export default function PanoramaViewerPage({
     null
   );
 
-  // State and refs for annotation drawing
-  const [isAnnotating, setIsAnnotating] = useState<boolean>(false);
-  const [viewerInitialized, setViewerInitialized] = useState<boolean>(false);
-  const [forceRerender, setForceRerender] = useState<number>(0);
+  // State for marker creation
+  const [isMarkerMode, setIsMarkerMode] = useState<boolean>(false);
+  const [showMarkerDialog, setShowMarkerDialog] = useState<boolean>(false);
+  const [markerNote, setMarkerNote] = useState<string>("");
+  const [pendingMarkerPosition, setPendingMarkerPosition] = useState<any>(null);
   const [showDebugOverlay, setShowDebugOverlay] = useState<boolean>(true);
 
-  interface Rect {
-    startX: number;
-    startY: number;
-    endX: number;
-    endY: number;
-  }
-  const [drawingRect, setDrawingRect] = useState<Rect | null>(null);
-  const [pendingAnnotation, setPendingAnnotation] = useState<Rect | null>(null);
-  const [annotationNote, setAnnotationNote] = useState<string>("");
+  // Keep track of DOM markers
+  const [markerElements, setMarkerElements] = useState<React.ReactNode[]>([]);
+  const [markers, setMarkers] = useState<Marker[]>([]);
 
-  // This state is updated on each camera change so we recalc overlay positions
-  const [viewerUpdate, setViewerUpdate] = useState<number>(Date.now());
+  // Refs
+  const viewerRef = useRef<any>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
 
-  const viewerRef = useRef<HTMLDivElement>(null);
-  const photoViewerRef = useRef<any>(null);
+  // Custom CSS for markers
+  useEffect(() => {
+    // Add CSS for markers if it doesn't exist
+    if (!document.getElementById("marker-styles")) {
+      const style = document.createElement("style");
+      style.id = "marker-styles";
+      style.innerHTML = `
+        .psv-marker {
+          cursor: pointer;
+          opacity: 0.8;
+          transition: opacity 0.2s;
+        }
+        .psv-marker:hover {
+          opacity: 1;
+        }
+        .psv-marker--pin {
+          width: 30px;
+          height: 30px;
+          background-color: rgba(0, 170, 0, 0.5);
+          border: 2px solid white;
+          border-radius: 50%;
+          box-shadow: 0 0 5px rgba(0, 0, 0, 0.5);
+        }
+        .psv-marker--selected {
+          background-color: rgba(255, 0, 0, 0.5);
+        }
+      `;
+      document.head.appendChild(style);
+    }
+  }, []);
 
   // Fetch grid + images on mount
   useEffect(() => {
@@ -105,58 +128,8 @@ export default function PanoramaViewerPage({
         }
 
         if (imagesData) {
-          // Make sure annotation arrays are properly initialized and valid
-          const processedImages = imagesData.map((img) => {
-            // Validate annotation format - must be an array
-            let processedAnnotations = [];
-
-            // Handle null or undefined annotations
-            if (!img.annotations) {
-              processedAnnotations = [];
-            }
-            // Handle array annotations (correct format)
-            else if (Array.isArray(img.annotations)) {
-              processedAnnotations = img.annotations;
-            }
-            // Handle object annotations (incorrect format - convert to array)
-            else if (typeof img.annotations === "object") {
-              console.warn(
-                `Image ${img.id} had non-array annotations, converting to array`
-              );
-              processedAnnotations = [img.annotations];
-            }
-
-            // Ensure each annotation has all required fields
-            processedAnnotations = processedAnnotations.filter((anno) => {
-              if (!anno || typeof anno !== "object") return false;
-              const hasRequiredFields =
-                typeof anno.longitude === "number" &&
-                typeof anno.latitude === "number" &&
-                typeof anno.angularWidth === "number" &&
-                typeof anno.angularHeight === "number";
-
-              if (!hasRequiredFields) {
-                console.warn("Filtered out invalid annotation:", anno);
-              }
-
-              return hasRequiredFields;
-            });
-
-            console.log(
-              `Image ${img.id} has ${processedAnnotations.length} valid annotations`
-            );
-
-            return {
-              ...img,
-              annotations: processedAnnotations,
-            };
-          });
-
-          console.log(
-            "Loaded panorama images with annotations:",
-            processedImages
-          );
-          setAllPanoramas(processedImages);
+          // Process the images - we'll parse the markers from the annotations field
+          setAllPanoramas(imagesData);
         }
       } catch (err) {
         console.error("Unexpected error:", err);
@@ -166,71 +139,66 @@ export default function PanoramaViewerPage({
     fetchGridAndImages();
   }, [projectId, supabase]);
 
-  // Direct data verification function - check Supabase for annotations
-  const verifyAnnotationsInDatabase = async (imageId) => {
-    try {
-      console.log("Directly querying Supabase for image:", imageId);
-      const { data, error } = await supabase
-        .from("panorama_images")
-        .select("annotations")
-        .eq("id", imageId)
-        .single();
-
-      if (error) {
-        console.error("Error querying annotations:", error);
-        return;
-      }
-
-      console.log("Raw annotation data from Supabase:", data.annotations);
-      if (data.annotations) {
-        if (Array.isArray(data.annotations)) {
-          console.log(
-            `Found ${data.annotations.length} annotations in database`
-          );
-        } else {
-          console.log(
-            "Warning: annotations in database is not an array:",
-            typeof data.annotations
-          );
-        }
-      } else {
-        console.log("No annotations found in database");
-      }
-    } catch (err) {
-      console.error("Error verifying annotations:", err);
-    }
-  };
-
-  // Force a rerender every 2 seconds when viewing an image
+  // Parse markers from annotations when current panorama changes
   useEffect(() => {
-    if (!currentPanorama) return;
+    if (!currentPanorama) {
+      setMarkers([]);
+      return;
+    }
 
-    const interval = setInterval(() => {
-      // Only force update if there are annotations to display
-      if (currentPanorama?.annotations?.length > 0) {
-        console.log("Forcing rerender to update annotation positions");
-        setForceRerender((prev) => prev + 1);
-        setViewerUpdate(Date.now());
+    try {
+      // Extract markers from the annotations field
+      let panoramaMarkers: Marker[] = [];
+
+      // Handle different possible formats of the annotations field
+      if (Array.isArray(currentPanorama.annotations)) {
+        // If annotations is already an array of markers
+        panoramaMarkers = currentPanorama.annotations.filter(
+          (item) =>
+            item &&
+            typeof item === "object" &&
+            "longitude" in item &&
+            "latitude" in item
+        );
+      } else if (
+        currentPanorama.annotations &&
+        typeof currentPanorama.annotations === "object"
+      ) {
+        // If annotations is an object with markers property
+        if (Array.isArray(currentPanorama.annotations.markers)) {
+          panoramaMarkers = currentPanorama.annotations.markers;
+        }
       }
-    }, 2000);
 
-    return () => clearInterval(interval);
+      // Ensure each marker has an id
+      panoramaMarkers = panoramaMarkers.map((marker, index) => ({
+        ...marker,
+        id: marker.id || `marker-${index}-${Date.now()}`,
+      }));
+
+      console.log("Parsed markers:", panoramaMarkers);
+      setMarkers(panoramaMarkers);
+
+      // Create marker elements when markers change
+      createMarkerElements(panoramaMarkers);
+    } catch (err) {
+      console.error("Error parsing markers:", err);
+      setMarkers([]);
+    }
   }, [currentPanorama]);
 
-  // Update annotations when viewer position changes or when panorama changes
+  // Position markers whenever the view changes
   useEffect(() => {
-    if (photoViewerRef.current?.viewer) {
-      setViewerInitialized(true);
-      console.log(
-        "Viewer updated, annotations should be visible",
-        currentPanorama?.annotations?.length > 0
-          ? "and has annotations"
-          : "but no annotations"
-      );
-    }
-  }, [viewerUpdate, currentPanorama, forceRerender]);
+    if (viewerRef.current && markers.length > 0) {
+      const intervalId = setInterval(() => {
+        positionMarkers();
+      }, 100);
 
-  /** Handle clicking a cell in the grid. If assigned, show that panorama in the viewer. */
+      return () => clearInterval(intervalId);
+    }
+  }, [viewerRef.current, markers]);
+
+  // Handle clicking a cell in the grid
   const handleCellClick = (cellIndex: number) => {
     const imageId = gridItems[String(cellIndex)];
     if (!imageId) return; // unassigned => do nothing
@@ -239,22 +207,11 @@ export default function PanoramaViewerPage({
     const pano = allPanoramas.find((p) => p.id === imageId);
     if (pano) {
       console.log("Selected panorama:", pano.id);
-      console.log(
-        "Panorama has annotations:",
-        pano.annotations ? `Yes (${pano.annotations.length})` : "No"
-      );
-      if (pano.annotations && pano.annotations.length > 0) {
-        console.log("Annotations:", pano.annotations);
-      }
 
-      // Verify annotations directly from database
-      verifyAnnotationsInDatabase(pano.id);
-
-      // Reset state for clean initialization
-      setIsAnnotating(false);
-      setViewerInitialized(false);
-      setPendingAnnotation(null);
-      setDrawingRect(null);
+      // Reset state when selecting a new panorama
+      setIsMarkerMode(false);
+      setShowMarkerDialog(false);
+      setPendingMarkerPosition(null);
 
       // Set the new panorama
       setCurrentPanorama(pano);
@@ -263,348 +220,299 @@ export default function PanoramaViewerPage({
     }
   };
 
-  const handleMouseDown = (e: React.MouseEvent<HTMLDivElement>) => {
-    if (!isAnnotating) return;
-    // If an annotation pop-up is already open, don't start a new one
-    if (pendingAnnotation) return;
-    if (!viewerRef.current) return;
-    // If the click originates from an element with class 'prevent-draw', do nothing
-    if ((e.target as HTMLElement).closest(".prevent-draw")) return;
-    const rect = viewerRef.current.getBoundingClientRect();
-    const startX = e.clientX - rect.left;
-    const startY = e.clientY - rect.top;
-    setDrawingRect({ startX, startY, endX: startX, endY: startY });
+  // Create DOM marker elements from markers data
+  const createMarkerElements = (markersData: Marker[]) => {
+    if (!markersData?.length) {
+      setMarkerElements([]);
+      return;
+    }
+
+    const elements = markersData.map((marker, index) => {
+      return (
+        <div
+          key={`marker-${marker.id}-${index}`}
+          className="psv-marker psv-marker--pin"
+          data-marker-id={marker.id}
+          style={{
+            position: "absolute",
+            left: "50%",
+            top: "50%",
+            transform: "translate(-50%, -50%)",
+            zIndex: 10,
+            // These will be positioned by the positioning function
+            display: "none",
+          }}
+          onClick={(e) => {
+            e.stopPropagation();
+            alert(`Marker: ${marker.note || "No description"}`);
+          }}
+          title={marker.note || "No description"}
+        />
+      );
+    });
+
+    setMarkerElements(elements);
   };
 
-  const handleMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
-    if (!isAnnotating || !drawingRect) return;
-    if (!viewerRef.current) return;
-    const rect = viewerRef.current.getBoundingClientRect();
-    const endX = e.clientX - rect.left;
-    const endY = e.clientY - rect.top;
-    setDrawingRect({ ...drawingRect, endX, endY });
-  };
-
-  const handleMouseUp = (e: React.MouseEvent<HTMLDivElement>) => {
-    if (!isAnnotating || !drawingRect) return;
-    setPendingAnnotation(drawingRect);
-    setDrawingRect(null);
-  };
-
-  // Render the active drawing rectangle during annotation
-  const renderDrawingRect = () => {
-    if (!drawingRect || !isAnnotating) return null;
-
-    const left = Math.min(drawingRect.startX, drawingRect.endX);
-    const top = Math.min(drawingRect.startY, drawingRect.endY);
-    const width = Math.abs(drawingRect.endX - drawingRect.startX);
-    const height = Math.abs(drawingRect.endY - drawingRect.startY);
-
-    return (
-      <div
-        className="absolute border-2 border-red-500 bg-red-200 bg-opacity-30 z-20 pointer-events-none"
-        style={{
-          left: `${left}px`,
-          top: `${top}px`,
-          width: `${width}px`,
-          height: `${height}px`,
-        }}
-      />
-    );
-  };
-
-  // Function to render all annotations safely
-  const renderAnnotations = () => {
-    if (
-      !currentPanorama?.annotations?.length ||
-      !viewerRef.current ||
-      !photoViewerRef.current?.viewer
-    ) {
-      return null;
+  // Position marker elements based on their spherical coordinates
+  const positionMarkers = () => {
+    if (!markers.length || !viewerRef.current || !containerRef.current) {
+      return;
     }
 
     try {
-      return currentPanorama.annotations.map((anno, index) => {
-        try {
-          const containerRect = viewerRef.current.getBoundingClientRect();
+      // Get the container dimensions
+      const container = containerRef.current;
+      const containerRect = container.getBoundingClientRect();
+      const containerWidth = containerRect.width;
+      const containerHeight = containerRect.height;
 
-          // Skip if the viewer doesn't have toScreenPosition method
-          if (
-            typeof photoViewerRef.current.viewer.toScreenPosition !== "function"
-          ) {
-            console.warn("toScreenPosition method not available");
-            return null;
-          }
+      // Get the current position from the viewer
+      let position;
+      try {
+        position = viewerRef.current.getPosition();
+      } catch (e) {
+        console.warn("Could not get viewer position:", e);
+        return;
+      }
 
-          // Convert the spherical coordinate to screen position
-          const screenPos = photoViewerRef.current.viewer.toScreenPosition({
-            longitude: anno.longitude,
-            latitude: anno.latitude,
-          });
+      if (!position) return;
 
-          // Skip if screenPos is null or undefined
-          if (!screenPos) {
-            // console.warn("Couldn't calculate screen position for annotation", index);
-            return null;
-          }
+      // Current camera position in radians
+      const cameraLong = position.longitude;
+      const cameraLat = position.latitude;
 
-          // Calculate box dimensions
-          const boxWidth =
-            (anno.angularWidth / (2 * Math.PI)) * containerRect.width;
-          const boxHeight =
-            (anno.angularHeight / Math.PI) * containerRect.height;
-          const left = screenPos.x - boxWidth / 2;
-          const top = screenPos.y - boxHeight / 2;
+      // Update each marker's position
+      markers.forEach((marker) => {
+        const markerElement = container.querySelector(
+          `[data-marker-id="${marker.id}"]`
+        ) as HTMLElement;
+        if (!markerElement) return;
 
-          // Check if the point is within the visible area with some margin
-          const margin = 50; // pixels
-          const isVisible =
-            screenPos.x >= -margin &&
-            screenPos.x <= containerRect.width + margin &&
-            screenPos.y >= -margin &&
-            screenPos.y <= containerRect.height + margin;
+        // Calculate position difference between marker and camera
+        const diffLong = marker.longitude - cameraLong;
+        const diffLat = marker.latitude - cameraLat;
 
-          // Skip rendering if point is not in view
-          if (!isVisible) {
-            return null;
-          }
+        // Normalize longitude difference to handle wrap-around (-PI to PI)
+        const normalizedDiffLong =
+          ((diffLong + Math.PI) % (2 * Math.PI)) - Math.PI;
 
-          return (
-            <div
-              key={index}
-              style={{
-                position: "absolute",
-                left,
-                top,
-                width: boxWidth,
-                height: boxHeight,
-                border: "2px solid green",
-                backgroundColor: "rgba(0, 255, 0, 0.2)",
-                zIndex: 15,
-                pointerEvents: "auto",
-              }}
-              className="group"
-              onClick={(e) => {
-                e.stopPropagation();
-                console.log("Clicked annotation:", anno);
-              }}
-            >
-              <div className="hidden group-hover:block absolute bg-green-500 text-white text-xs p-1 -top-8 left-0 z-20 min-w-[100px]">
-                {anno.note || "No description"}
-              </div>
-            </div>
-          );
-        } catch (error) {
-          console.error("Error rendering annotation:", error);
-          return null;
+        // Calculate if marker is in view (simplified approach)
+        const inView =
+          Math.abs(normalizedDiffLong) < Math.PI / 2 &&
+          Math.abs(diffLat) < Math.PI / 2;
+
+        if (inView) {
+          // Convert spherical coordinates to screen position
+          const relX = 0.5 + normalizedDiffLong / Math.PI;
+          const relY = 0.5 - diffLat / Math.PI;
+
+          // Apply to the marker element
+          markerElement.style.left = `${relX * 100}%`;
+          markerElement.style.top = `${relY * 100}%`;
+          markerElement.style.display = "block";
+        } else {
+          // Hide if not in view
+          markerElement.style.display = "none";
         }
       });
-    } catch (error) {
-      console.error("Error in renderAnnotations:", error);
-      return null;
+    } catch (err) {
+      console.error("Error positioning markers:", err);
     }
+  };
+
+  // Save a new marker
+  const saveMarker = async () => {
+    if (!currentPanorama || !pendingMarkerPosition) return;
+
+    try {
+      // Create new marker object
+      const newMarker: Marker = {
+        id: `marker-${Date.now()}`,
+        longitude: pendingMarkerPosition.longitude,
+        latitude: pendingMarkerPosition.latitude,
+        note: markerNote,
+      };
+
+      // Add to current markers
+      const updatedMarkers = [...markers, newMarker];
+
+      // Prepare annotations object - preserve existing annotations structure but update markers
+      let updatedAnnotations;
+      if (
+        typeof currentPanorama.annotations === "object" &&
+        !Array.isArray(currentPanorama.annotations)
+      ) {
+        // If annotations is an object with other properties, preserve them
+        updatedAnnotations = {
+          ...currentPanorama.annotations,
+          markers: updatedMarkers,
+        };
+      } else {
+        // Otherwise just use the markers array directly
+        updatedAnnotations = updatedMarkers;
+      }
+
+      // Update current panorama in state
+      const updatedPanorama = {
+        ...currentPanorama,
+        annotations: updatedAnnotations,
+      };
+
+      // Save to database
+      const { error } = await supabase
+        .from("panorama_images")
+        .update({ annotations: updatedAnnotations })
+        .eq("id", currentPanorama.id);
+
+      if (error) {
+        console.error("Error saving marker:", error);
+        alert("Failed to save marker: " + error.message);
+        return;
+      }
+
+      // Update state
+      setCurrentPanorama(updatedPanorama);
+      setAllPanoramas((prev) =>
+        prev.map((p) => (p.id === currentPanorama.id ? updatedPanorama : p))
+      );
+
+      // Update markers
+      setMarkers(updatedMarkers);
+      createMarkerElements(updatedMarkers);
+
+      console.log("Marker saved successfully:", newMarker);
+
+      // Reset UI
+      setMarkerNote("");
+      setShowMarkerDialog(false);
+      setPendingMarkerPosition(null);
+    } catch (err) {
+      console.error("Error saving marker:", err);
+      alert("An error occurred while saving the marker: " + err.message);
+    }
+  };
+
+  // Toggle marker creation mode
+  const toggleMarkerMode = () => {
+    setIsMarkerMode((prev) => !prev);
   };
 
   return (
     <div className="flex flex-col h-screen">
       {/* TOP: Panorama Viewer */}
       <div
-        ref={viewerRef}
-        onMouseDown={handleMouseDown}
-        onMouseMove={handleMouseMove}
-        onMouseUp={handleMouseUp}
+        ref={containerRef}
         className="flex-1 p-4 relative bg-gray-50"
+        style={{
+          cursor: isMarkerMode ? "crosshair" : "grab",
+        }}
       >
-        {isAnnotating && (
-          <div
-            onMouseDown={handleMouseDown}
-            onMouseMove={handleMouseMove}
-            onMouseUp={handleMouseUp}
-            style={{
-              position: "absolute",
-              top: 0,
-              left: 0,
-              width: "100%",
-              height: "100%",
-              zIndex: 5,
-              background: "transparent",
-              pointerEvents: "all",
+        {/* Panorama Viewer */}
+        {currentPanorama ? (
+          <ReactPhotoSphereViewer
+            ref={viewerRef}
+            src={currentPanorama.url}
+            height="100%"
+            width="100%"
+            navbar={["zoom", "fullscreen"]}
+            minFov={30}
+            maxFov={90}
+            onClick={(e) => {
+              // Only handle clicks in marker mode
+              if (!isMarkerMode) return;
+
+              try {
+                // Get click position - should be in spherical coordinates
+                const position = e.data.viewer.getPosition();
+                const clickPosition = e.data.texture;
+
+                if (!clickPosition) {
+                  console.error("No click position data available");
+                  return;
+                }
+
+                console.log("Click position:", clickPosition);
+
+                // Prepare to add a new marker
+                setPendingMarkerPosition({
+                  longitude: clickPosition.longitude,
+                  latitude: clickPosition.latitude,
+                });
+                setShowMarkerDialog(true);
+              } catch (err) {
+                console.error("Error handling click:", err);
+              }
+            }}
+            onPositionUpdate={(position) => {
+              // Update marker positions when the view changes
+              positionMarkers();
+            }}
+            onReady={(instance) => {
+              console.log("Panorama viewer ready");
+              viewerRef.current = instance;
+
+              // Position markers initially
+              setTimeout(() => {
+                positionMarkers();
+              }, 500);
             }}
           />
+        ) : (
+          <div className="flex items-center justify-center w-full h-full text-gray-500">
+            Select a grid location to view its panorama
+          </div>
         )}
 
-        {/* Render the current drawing rectangle during active annotation */}
-        {renderDrawingRect()}
+        {/* Markers overlay */}
+        <div className="absolute inset-0 pointer-events-none">
+          {/* This div is just a container - markers will be positioned absolutely */}
+          {markerElements.map((marker) => marker)}
+        </div>
 
-        {/* Control buttons */}
-        <div className="absolute top-2 right-2 z-10 flex space-x-2">
+        {/* Controls */}
+        <div className="absolute top-2 right-2 z-50 flex space-x-2">
           {currentPanorama && (
             <button
-              className="prevent-draw bg-blue-500 text-white px-3 py-1 rounded"
-              onMouseDown={(e) => e.stopPropagation()}
-              onClick={(e) => {
-                e.stopPropagation();
-                setIsAnnotating((prev) => !prev);
-              }}
+              className="bg-blue-500 text-white px-3 py-1 rounded pointer-events-auto"
+              onClick={toggleMarkerMode}
             >
-              {isAnnotating ? "Exit Annotation Mode" : "Enter Annotation Mode"}
+              {isMarkerMode ? "Exit Marker Mode" : "Add Markers"}
             </button>
           )}
 
           <button
-            className="prevent-draw bg-gray-500 text-white px-3 py-1 rounded"
-            onMouseDown={(e) => e.stopPropagation()}
-            onClick={(e) => {
-              e.stopPropagation();
-              setShowDebugOverlay((prev) => !prev);
-            }}
+            className="bg-gray-500 text-white px-3 py-1 rounded pointer-events-auto"
+            onClick={() => setShowDebugOverlay((prev) => !prev)}
           >
             {showDebugOverlay ? "Hide Debug" : "Show Debug"}
           </button>
-
-          <button
-            className="prevent-draw bg-green-500 text-white px-3 py-1 rounded"
-            onMouseDown={(e) => e.stopPropagation()}
-            onClick={(e) => {
-              e.stopPropagation();
-              setViewerUpdate(Date.now());
-              setForceRerender((prev) => prev + 1);
-            }}
-          >
-            Refresh View
-          </button>
         </div>
 
-        {pendingAnnotation && viewerRef.current && (
-          <div
-            onMouseDown={(e) => e.stopPropagation()}
-            onClick={(e) => e.stopPropagation()}
-            className="prevent-draw absolute bg-black border border-gray-300 p-2 z-20"
-            style={{
-              left: Math.min(pendingAnnotation.startX, pendingAnnotation.endX),
-              top:
-                Math.min(pendingAnnotation.startY, pendingAnnotation.endY) - 40,
-            }}
-          >
+        {/* Marker Dialog */}
+        {showMarkerDialog && (
+          <div className="fixed top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 bg-black border border-gray-300 p-4 z-50 rounded shadow-lg pointer-events-auto">
+            <h3 className="text-white font-bold mb-2">Add Marker</h3>
             <textarea
-              className="w-48 h-16 border bg-gray-800"
-              value={annotationNote}
-              onChange={(e) => setAnnotationNote(e.target.value)}
-              placeholder="Enter annotation note..."
+              className="w-64 h-24 border bg-gray-800 text-white p-2 mb-2 rounded"
+              value={markerNote}
+              onChange={(e) => setMarkerNote(e.target.value)}
+              placeholder="Enter marker note..."
             />
-            <div className="mt-2 flex justify-end">
+            <div className="flex justify-end space-x-2">
               <button
-                className="mr-2 px-2 py-1 bg-gray-800 rounded"
+                className="px-3 py-1 bg-gray-600 text-white rounded"
                 onClick={() => {
-                  setPendingAnnotation(null);
-                  setAnnotationNote("");
+                  setShowMarkerDialog(false);
+                  setMarkerNote("");
+                  setPendingMarkerPosition(null);
                 }}
               >
                 Cancel
               </button>
               <button
-                className="px-2 py-1 bg-blue-500 text-white rounded"
-                onClick={async () => {
-                  if (!currentPanorama || !viewerRef.current) return;
-                  const containerRect =
-                    viewerRef.current.getBoundingClientRect();
-                  const rectX = Math.min(
-                    pendingAnnotation.startX,
-                    pendingAnnotation.endX
-                  );
-                  const rectY = Math.min(
-                    pendingAnnotation.startY,
-                    pendingAnnotation.endY
-                  );
-                  const rectWidth = Math.abs(
-                    pendingAnnotation.endX - pendingAnnotation.startX
-                  );
-                  const rectHeight = Math.abs(
-                    pendingAnnotation.endY - pendingAnnotation.startY
-                  );
-                  const centerX = rectX + rectWidth / 2;
-                  const centerY = rectY + rectHeight / 2;
-                  const percentageX = centerX / containerRect.width;
-                  const percentageY = centerY / containerRect.height;
-                  const longitude = (percentageX - 0.5) * 2 * Math.PI;
-                  const latitude = (0.5 - percentageY) * Math.PI;
-                  const angularWidth =
-                    (rectWidth / containerRect.width) * (2 * Math.PI);
-                  const angularHeight =
-                    (rectHeight / containerRect.height) * Math.PI;
-                  const newAnnotation = {
-                    longitude,
-                    latitude,
-                    angularWidth,
-                    angularHeight,
-                    note: annotationNote,
-                  };
-
-                  // Make sure we have an annotations array to work with
-                  const currentAnnotations = Array.isArray(
-                    currentPanorama.annotations
-                  )
-                    ? currentPanorama.annotations
-                    : [];
-
-                  const updatedAnnotations = [
-                    ...currentAnnotations,
-                    newAnnotation,
-                  ];
-
-                  console.log("Creating new annotation:", newAnnotation);
-                  console.log("Updated annotations array:", updatedAnnotations);
-
-                  // Create a new panorama object to ensure state updates properly
-                  const updatedPanorama = {
-                    ...currentPanorama,
-                    annotations: updatedAnnotations,
-                  };
-
-                  // Save to backend
-                  try {
-                    const { data, error } = await supabase
-                      .from("panorama_images")
-                      .update({ annotations: updatedAnnotations })
-                      .eq("id", currentPanorama.id)
-                      .select();
-
-                    if (error) {
-                      console.error("Error updating annotations:", error);
-                      alert("Failed to save annotation: " + error.message);
-                    } else {
-                      console.log(
-                        "Successfully saved annotations to Supabase, response:",
-                        data
-                      );
-
-                      // Verify the annotations were saved correctly
-                      await verifyAnnotationsInDatabase(currentPanorama.id);
-
-                      // Update current panorama state
-                      setCurrentPanorama(updatedPanorama);
-
-                      // Also update the panorama in allPanoramas
-                      setAllPanoramas((prev) =>
-                        prev.map((p) =>
-                          p.id === currentPanorama.id ? updatedPanorama : p
-                        )
-                      );
-
-                      // Force a viewer update
-                      setViewerUpdate(Date.now());
-                      setForceRerender((prev) => prev + 1);
-                    }
-                  } catch (err) {
-                    console.error("Unexpected error saving annotation:", err);
-                    alert(
-                      "An unexpected error occurred when saving the annotation"
-                    );
-                  }
-
-                  setPendingAnnotation(null);
-                  setAnnotationNote("");
-                }}
+                className="px-3 py-1 bg-blue-500 text-white rounded"
+                onClick={saveMarker}
               >
                 Save
               </button>
@@ -612,106 +520,64 @@ export default function PanoramaViewerPage({
           </div>
         )}
 
-        {/* Render annotations overlay using our safe renderer function */}
-        <div
-          className="annotation-overlay"
-          key={`overlay-${forceRerender}-${viewerUpdate}`}
-        >
-          {renderAnnotations()}
-        </div>
+        {/* Marker Mode Indicator */}
+        {isMarkerMode && (
+          <div className="absolute top-10 left-1/2 transform -translate-x-1/2 bg-red-500 text-white px-4 py-2 rounded z-40">
+            Marker Mode: Click anywhere to add a marker
+          </div>
+        )}
 
-        {/* Add a debug panel to show annotation status */}
+        {/* Debug overlay */}
         {currentPanorama && showDebugOverlay && (
-          <div className="absolute bottom-4 left-4 bg-black p-4 rounded shadow z-30 max-w-md">
+          <div className="absolute bottom-4 left-4 bg-black p-4 rounded shadow z-50 max-w-md text-white pointer-events-auto">
             <h3 className="font-bold">Debug Information</h3>
             <div className="mt-2 text-xs space-y-1">
               <p>
                 <strong>Panorama ID:</strong> {currentPanorama.id}
               </p>
               <p>
-                <strong>Annotations:</strong>{" "}
-                {currentPanorama.annotations?.length || 0}
+                <strong>Markers:</strong> {markers?.length || 0}
               </p>
               <p>
-                <strong>Viewer initialized:</strong>{" "}
-                {viewerInitialized ? "Yes" : "No"}
+                <strong>Marker Mode:</strong> {isMarkerMode ? "Yes" : "No"}
               </p>
               <p>
-                <strong>Annotation mode:</strong> {isAnnotating ? "Yes" : "No"}
-              </p>
-              <p>
-                <strong>Force rerender count:</strong> {forceRerender}
-              </p>
-              <p>
-                <strong>Viewer update:</strong>{" "}
-                {new Date(viewerUpdate).toLocaleTimeString()}
+                <strong>Show Dialog:</strong> {showMarkerDialog ? "Yes" : "No"}
               </p>
             </div>
 
-            {currentPanorama.annotations &&
-              currentPanorama.annotations.length > 0 && (
-                <div className="mt-2">
-                  <p className="font-bold text-sm">Annotation Data:</p>
-                  <div className="mt-1 bg-gray-800 p-2 rounded overflow-auto max-h-32 text-xs">
-                    <pre>
-                      {JSON.stringify(currentPanorama.annotations, null, 2)}
-                    </pre>
-                  </div>
+            {markers && markers.length > 0 && (
+              <div className="mt-2">
+                <p className="font-bold text-sm">Marker Data:</p>
+                <div className="mt-1 bg-gray-800 p-2 rounded overflow-auto max-h-32 text-xs">
+                  <pre className="text-white">
+                    {JSON.stringify(markers.slice(0, 3), null, 2)}
+                    {markers.length > 3 && "... (more markers)"}
+                  </pre>
                 </div>
-              )}
+              </div>
+            )}
+
+            <div className="mt-2">
+              <p className="font-bold text-sm">Raw Annotations:</p>
+              <div className="mt-1 bg-gray-800 p-2 rounded overflow-auto max-h-32 text-xs">
+                <pre className="text-white">
+                  {JSON.stringify(currentPanorama.annotations, null, 2)}
+                </pre>
+              </div>
+            </div>
 
             <div className="mt-2 flex space-x-2">
               <button
-                onClick={async () => {
-                  console.log("Current panorama:", currentPanorama);
-                  console.log("Viewer ref:", photoViewerRef.current);
-                  await verifyAnnotationsInDatabase(currentPanorama.id);
-                }}
-                className="bg-gray-200 px-2 py-1 rounded text-xs"
-              >
-                Log Details
-              </button>
-
-              <button
                 onClick={() => {
-                  setViewerUpdate(Date.now());
-                  setForceRerender((prev) => prev + 1);
+                  // Force marker update
+                  positionMarkers();
                 }}
-                className="bg-blue-200 px-2 py-1 rounded text-xs"
+                className="bg-blue-200 px-2 py-1 rounded text-xs text-black"
               >
-                Force Refresh
+                Refresh Markers
               </button>
             </div>
-          </div>
-        )}
-
-        {currentPanorama ? (
-          <ReactPhotoSphereViewer
-            ref={photoViewerRef}
-            src={currentPanorama.url}
-            height="100%"
-            width="100%"
-            navbar={["zoom", "fullscreen"]}
-            minFov={30}
-            maxFov={90}
-            onPositionChange={() => {
-              // Update the view state when camera moves
-              setViewerUpdate(Date.now());
-            }}
-            onReady={() => {
-              console.log("Panorama viewer is ready!");
-              setViewerInitialized(true);
-              // Force an update after viewer is ready
-              setTimeout(() => {
-                setViewerUpdate(Date.now());
-                setForceRerender((prev) => prev + 1);
-              }, 500);
-            }}
-            plugins={[]}
-          />
-        ) : (
-          <div className="flex items-center justify-center w-full h-full text-gray-500">
-            Select a grid location to view its panorama
           </div>
         )}
       </div>
@@ -730,10 +596,22 @@ export default function PanoramaViewerPage({
             {Array.from({ length: rows * cols }).map((_, i) => {
               const imageId = gridItems[String(i)];
               const isAssigned = Boolean(imageId);
-              // If assigned, find the panorama's URL for a small preview
               const assignedPano = isAssigned
                 ? allPanoramas.find((p) => p.id === imageId)
                 : null;
+
+              // Count markers
+              let markerCount = 0;
+              if (assignedPano?.annotations) {
+                if (Array.isArray(assignedPano.annotations)) {
+                  markerCount = assignedPano.annotations.length;
+                } else if (
+                  assignedPano.annotations.markers &&
+                  Array.isArray(assignedPano.annotations.markers)
+                ) {
+                  markerCount = assignedPano.annotations.markers.length;
+                }
+              }
 
               return (
                 <div
@@ -753,9 +631,9 @@ export default function PanoramaViewerPage({
                         alt={`Panorama ${imageId}`}
                         className="w-full h-full object-cover rounded-full"
                       />
-                      {assignedPano.annotations?.length > 0 && (
+                      {markerCount > 0 && (
                         <div className="absolute -top-2 -right-2 bg-red-500 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center">
-                          {assignedPano.annotations.length}
+                          {markerCount}
                         </div>
                       )}
                     </>
