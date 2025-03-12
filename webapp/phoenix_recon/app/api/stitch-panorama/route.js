@@ -1,86 +1,113 @@
+// 1. First, let's fix the API route - replace app/api/stitch-panorama/route.js with this
+
 // app/api/stitch-panorama/route.js
 import { NextResponse } from 'next/server';
 import { writeFile, mkdir, readdir } from 'fs/promises';
 import { existsSync } from 'fs';
-import { exec } from 'child_process';
-import { promisify } from 'util';
 import path from 'path';
 import { v4 as uuidv4 } from 'uuid';
+import { promisify } from 'util';
+import { exec } from 'child_process';
 
+// Convert exec to Promise-based
 const execPromise = promisify(exec);
 
-// Set the AWS instance details
-const AWS_HOST = 'ec2-44-200-180-134.compute-1.amazonaws.com';
-const AWS_USER = 'ubuntu';
-const SSH_KEY_PATH = process.env.SSH_KEY_PATH || '/Users/majdnasra/cs210.pem';
-const TEMP_DIR = path.join(process.cwd(), 'tmp');
+// Get environment variables
+const AWS_HOST = process.env.AWS_HOST;
+const AWS_USER = process.env.AWS_USER;
+const SSH_KEY_PATH = process.env.SSH_KEY_PATH;
 
-// Helper to log debug info
+// Debug logging helper
 const debugLog = [];
 function log(message) {
-  console.log(`[API] ${message}`);
-  debugLog.push(`${new Date().toISOString()}: ${message}`);
+  console.log(`[Panorama Stitcher] ${message}`);
+  debugLog.push(`[${new Date().toISOString()}] ${message}`);
 }
 
 export async function POST(request) {
   try {
-    log('Starting panorama processing request');
+    log('Received panorama stitching request');
     
-    // Reset debug log for new request
-    debugLog.length = 0;
-    
-    const formData = await request.formData();
-    const files = formData.getAll('files');
-    const userId = formData.get('userId');
-    const panoramaName = formData.get('panoramaName');
-    
-    log(`Received request: userId=${userId}, panoramaName=${panoramaName}, files=${files.length}`);
-    
-    if (!files || files.length === 0) {
-      log('Error: No files uploaded');
+    // Check if SSH key path is set
+    if (!SSH_KEY_PATH) {
+      log('Error: SSH_KEY_PATH environment variable not set');
       return NextResponse.json(
-        { error: 'No files uploaded', debug: debugLog },
+        { error: 'Server configuration error: SSH key not configured', debug: debugLog },
+        { status: 500 }
+      );
+    }
+    
+    // Generate a unique job ID
+    const jobId = uuidv4();
+    log(`Generated job ID: ${jobId}`);
+    
+    // Create temporary directory for this job
+    const TEMP_DIR = path.join(process.cwd(), 'tmp');
+    const jobDir = path.join(TEMP_DIR, jobId);
+    
+    if (!existsSync(TEMP_DIR)) {
+      await mkdir(TEMP_DIR, { recursive: true });
+    }
+    
+    await mkdir(jobDir, { recursive: true });
+    log(`Created job directory: ${jobDir}`);
+    
+    // Parse the form data from the request
+    const formData = await request.formData();
+    const userId = formData.get('userId');
+    const panoramaName = formData.get('panoramaName') || `panorama_${jobId}`;
+    
+    // Get all files from the form data
+    const files = formData.getAll('files');
+    log(`Received ${files.length} files for processing`);
+    
+    if (files.length === 0) {
+      log('No files received');
+      return NextResponse.json(
+        { error: 'No files were provided for stitching', debug: debugLog },
         { status: 400 }
       );
     }
-
-    // Create a unique job ID and directory for this request
-    const jobId = uuidv4();
-    const jobDir = path.join(TEMP_DIR, jobId);
-    const remoteDir = `/home/${AWS_USER}/panorama-jobs/${jobId}`;
     
-    log(`Created job: id=${jobId}, localDir=${jobDir}, remoteDir=${remoteDir}`);
-    
-    // Create local temp directory
-    log(`Creating local temp directory: ${jobDir}`);
-    await mkdir(jobDir, { recursive: true });
-    
-    // Save uploaded files to temp directory
-    const fileNames = [];
+    // Validate files (make sure they're images)
     for (const file of files) {
-      if (!(file instanceof File)) {
-        log(`Warning: Skipping non-file object: ${typeof file}`);
+      if (!(file instanceof Blob)) {
         continue;
       }
       
-      const fileName = file.name;
-      const filePath = path.join(jobDir, fileName);
-      const buffer = Buffer.from(await file.arrayBuffer());
+      const type = file.type;
+      if (!type.startsWith('image/')) {
+        log(`Rejecting non-image file: ${type}`);
+        return NextResponse.json(
+          { error: 'All files must be images', debug: debugLog },
+          { status: 400 }
+        );
+      }
+    }
+    
+    // Save files to the job directory
+    const savedFiles = [];
+    for (let i = 0; i < files.length; i++) {
+      const file = files[i];
       
-      log(`Writing file: ${fileName} (${Math.round(buffer.length/1024)}KB) to ${filePath}`);
+      if (!(file instanceof Blob)) {
+        log(`Skipping non-file entry at index ${i}`);
+        continue;
+      }
+      
+      const fileName = file.name || `image_${i}.jpg`;
+      const filePath = path.join(jobDir, fileName);
+      
+      // Convert blob to buffer and write to file
+      const arrayBuffer = await file.arrayBuffer();
+      const buffer = Buffer.from(arrayBuffer);
       await writeFile(filePath, buffer);
-      fileNames.push(fileName);
+      
+      savedFiles.push(filePath);
+      log(`Saved file: ${filePath}`);
     }
     
-    if (fileNames.length === 0) {
-      log('Error: No valid image files found');
-      return NextResponse.json(
-        { error: 'No valid image files found', debug: debugLog },
-        { status: 400 }
-      );
-    }
-    
-    log(`Successfully saved ${fileNames.length} files. Checking SSH key path: ${SSH_KEY_PATH}`);
+    log(`Successfully saved ${savedFiles.length} files`);
     
     // Check if SSH key exists
     if (!existsSync(SSH_KEY_PATH)) {
@@ -94,25 +121,28 @@ export async function POST(request) {
     // Test SSH connection
     try {
       log('Testing SSH connection...');
-      const { stdout, stderr } = await execPromise(`ssh -i "${SSH_KEY_PATH}" -o StrictHostKeyChecking=no -o ConnectTimeout=10 ${AWS_USER}@${AWS_HOST} "echo SSH connection successful"`);
+      const { stdout, stderr } = await execPromise(
+        `ssh -i "${SSH_KEY_PATH}" -o StrictHostKeyChecking=no -o ConnectTimeout=10 ${AWS_USER}@${AWS_HOST} "echo SSH connection successful"`
+      );
       log(`SSH test result: ${stdout.trim()} ${stderr ? '(stderr: ' + stderr.trim() + ')' : ''}`);
     } catch (error) {
       log(`SSH connection test failed: ${error.message}`);
       return NextResponse.json(
-        { error: `Failed to connect to SSH server: ${error.message}`, debug: debugLog },
+        { error: `Failed to connect to AWS server: ${error.message}`, debug: debugLog },
         { status: 500 }
       );
     }
     
-    // Create the remote directory on AWS server
-    log(`Creating remote directory: ${remoteDir}`);
+    // Create remote directory on AWS server
+    const remoteDir = `/home/${AWS_USER}/panorama_jobs/${jobId}`;
+    
     try {
-      const { stdout, stderr } = await execPromise(`ssh -i "${SSH_KEY_PATH}" -o StrictHostKeyChecking=no ${AWS_USER}@${AWS_HOST} "mkdir -p ${remoteDir}"`);
-      log(`Remote directory creation: ${stdout || 'Success'} ${stderr ? '(stderr: ' + stderr.trim() + ')' : ''}`);
+      log(`Creating remote directory: ${remoteDir}`);
+      await execPromise(`ssh -i "${SSH_KEY_PATH}" -o StrictHostKeyChecking=no ${AWS_USER}@${AWS_HOST} "mkdir -p ${remoteDir}"`);
     } catch (error) {
       log(`Failed to create remote directory: ${error.message}`);
       return NextResponse.json(
-        { error: `Failed to create remote directory: ${error.message}`, debug: debugLog },
+        { error: `Failed to create directory on server: ${error.message}`, debug: debugLog },
         { status: 500 }
       );
     }
@@ -130,22 +160,10 @@ export async function POST(request) {
       );
     }
     
-    // Check if files were transferred correctly
-    try {
-      log(`Verifying files on remote server`);
-      const { stdout, stderr } = await execPromise(`ssh -i "${SSH_KEY_PATH}" -o StrictHostKeyChecking=no ${AWS_USER}@${AWS_HOST} "ls -la ${remoteDir}/"`);
-      log(`Remote directory contents: \n${stdout.trim()}`);
-    } catch (error) {
-      log(`Failed to verify remote files: ${error.message}`);
-      // Continue anyway, this is just a verification step
-    }
-    
     // Create PTGui project and stitch panorama on AWS
     const projectName = `${panoramaName.replace(/[^a-zA-Z0-9]/g, '_')}_${jobId}`;
-    const expectedOutputPath = `${remoteDir}/${projectName}.jpg`;
     
     log(`Creating and stitching panorama project: ${projectName}`);
-    log(`Expected output path: ${expectedOutputPath}`);
     
     // First create the project
     try {
@@ -173,11 +191,11 @@ export async function POST(request) {
       // Check if stitching failed due to control points
       if (stdout.includes("Could not find control points for all images") || 
           stdout.includes("not stitching the panorama")) {
-        log(`Stitching failed: Could not find control points for all images`);
+        log(`Stitching failed: Not enough control points between images`);
         return NextResponse.json(
           { 
-            error: "Could not create panorama: insufficient overlap between images", 
-            detail: "The images don't have enough overlap to create a 360° panorama. Try using images with more overlap.", 
+            error: "Could not stitch panorama. The images may not have enough overlap or shared features.", 
+            detail: "Try using images with more overlap or that show the same scene from different angles.",
             debug: debugLog 
           },
           { status: 422 }
@@ -191,19 +209,18 @@ export async function POST(request) {
       );
     }
     
-    // List remote directory to find the output file
+    // Get the output file name (PTGui might create a file with a different name)
     let outputFileName;
+    let largestSize = 0;
+    
     try {
-      log(`Checking remote directory for output file`);
-      const { stdout } = await execPromise(`ssh -i "${SSH_KEY_PATH}" -o StrictHostKeyChecking=no ${AWS_USER}@${AWS_HOST} "ls -la ${remoteDir}/"`);
-      log(`Remote directory after stitching: \n${stdout.trim()}`);
+      log(`Listing remote directory to find output file`);
+      const { stdout: lsOutput } = await execPromise(`ssh -i "${SSH_KEY_PATH}" -o StrictHostKeyChecking=no ${AWS_USER}@${AWS_HOST} "ls -la ${remoteDir}/"`);
+      log(`Remote directory listing: \n${lsOutput.trim()}`);
       
-      // Try to identify the panorama output file
-      const lines = stdout.split('\n');
+      // Parse the ls output to find jpg files
+      const lines = lsOutput.split('\n');
       const jpgFiles = lines.filter(line => line.toLowerCase().includes('.jpg'));
-      
-      // Look for the largest JPG file or one containing the job ID
-      let largestSize = 0;
       
       jpgFiles.forEach(file => {
         // Extract size and filename from ls output
@@ -241,20 +258,16 @@ export async function POST(request) {
       outputFileName = `${projectName}.jpg`;
     }
     
-    // Use the identified output file path
-    const remotePanoramaPath = `${remoteDir}/${outputFileName}`;
-    log(`Using remote panorama path: ${remotePanoramaPath}`);
-    
-    // Copy the result back to our server - handle filenames with spaces properly
-    const localResultPath = path.join(jobDir, outputFileName || `${projectName}.jpg`);
-    log(`Copying result back to local server: ${localResultPath}`);
+    // Copy the panorama file back to our server
+    const remoteResultPath = `${remoteDir}/${outputFileName}`;
+    const localResultPath = path.join(jobDir, outputFileName);
     
     try {
-      // Use quotes around the paths to handle spaces in filenames
-      const { stdout, stderr } = await execPromise(`scp -i "${SSH_KEY_PATH}" -o StrictHostKeyChecking=no "${AWS_USER}@${AWS_HOST}:${remotePanoramaPath}" "${localResultPath}"`);
-      log(`SCP result copy: ${stdout || 'Success'} ${stderr ? '(stderr: ' + stderr.trim() + ')' : ''}`);
+      log(`Copying panorama from AWS to local path: ${localResultPath}`);
+      await execPromise(`scp -i "${SSH_KEY_PATH}" -o StrictHostKeyChecking=no ${AWS_USER}@${AWS_HOST}:${remoteResultPath} "${localResultPath}"`);
+      log(`Successfully copied panorama to local path`);
     } catch (error) {
-      log(`Failed to copy result: ${error.message}`);
+      log(`Failed to copy panorama from AWS: ${error.message}`);
       return NextResponse.json(
         { error: `Failed to copy panorama from server: ${error.message}`, debug: debugLog },
         { status: 500 }
@@ -263,12 +276,12 @@ export async function POST(request) {
     
     // Verify the file exists locally
     try {
-      log(`Verifying local panorama file`);
-      const files = await readdir(jobDir);
-      log(`Local directory contents: ${files.join(', ')}`);
+      log(`Verifying local panorama file: ${localResultPath}`);
       
-      const expectedFilename = path.basename(localResultPath);
-      if (!files.includes(expectedFilename)) {
+      const localFiles = await readdir(jobDir);
+      log(`Local directory contents: ${localFiles.join(', ')}`);
+      
+      if (!localFiles.includes(outputFileName)) {
         log(`Error: Panorama file not found in local directory`);
         return NextResponse.json(
           { error: "Panorama file not found after copy", debug: debugLog },
