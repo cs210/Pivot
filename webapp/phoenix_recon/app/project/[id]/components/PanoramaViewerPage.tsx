@@ -17,19 +17,19 @@ const ReactPhotoSphereViewer = dynamic(
 interface Marker {
   id: string;
   position: {
-    yaw?: number; // in radians
-    pitch?: number; // in radians
-    longitude?: number; // in radians
-    latitude?: number; // in radians
+    yaw?: number;
+    pitch?: number;
+    longitude?: number;
+    latitude?: number;
   };
   tooltip?:
     | string
     | {
-        content: string; // annotation text
+        content: string;
         position?: string;
       };
   content?: string;
-  image?: string; // optional image for the marker
+  image?: string;
   size?: {
     width: number;
     height: number;
@@ -44,7 +44,7 @@ interface PanoramaImage {
   name: string;
   url: string;
   markers?: Marker[];
-  annotations?: any[]; // For backward compatibility
+  annotations?: any[]; // This column now stores the marker data (position, tooltip, etc.)
 }
 
 /** The shape of grid_items: index => imageId or null */
@@ -56,36 +56,25 @@ export default function PanoramaViewerPage({
   projectId: string;
 }) {
   const supabase = createClient();
-
-  // Use an HTML marker instead of an image that might not exist
+  // We'll always work with the "annotations" column now.
   const USE_HTML_MARKER = true;
 
-  // State for grid
   const [rows, setRows] = useState<number>(0);
   const [cols, setCols] = useState<number>(0);
   const [gridItems, setGridItems] = useState<GridItemMap>({});
 
-  // State for images
   const [allPanoramas, setAllPanoramas] = useState<PanoramaImage[]>([]);
-
-  // The currently selected panorama image to show in the viewer
   const [currentPanorama, setCurrentPanorama] = useState<PanoramaImage | null>(
     null
   );
-
-  // State for marker interaction
   const [showDebugOverlay, setShowDebugOverlay] = useState<boolean>(false);
-
-  // For marker editing
   const [editingMarker, setEditingMarker] = useState<string | null>(null);
   const [markerInput, setMarkerInput] = useState<string>("");
 
-  // References
   const viewerRef = useRef<HTMLDivElement>(null);
   const photoViewerRef = useRef<any>(null);
   const markersPluginRef = useRef<any>(null);
 
-  // Cleanup viewer on unmount or when changing panoramas
   useEffect(() => {
     return () => {
       if (photoViewerRef.current?.viewer) {
@@ -99,7 +88,6 @@ export default function PanoramaViewerPage({
     };
   }, []);
 
-  // Fetch grid + images on mount
   useEffect(() => {
     const fetchGridAndImages = async () => {
       try {
@@ -132,36 +120,68 @@ export default function PanoramaViewerPage({
         }
 
         if (imagesData) {
-          // Process the images to standardize marker format
           const processedImages = imagesData.map((img) => {
-            // Determine which field to use (markers or annotations)
             let markersData = null;
 
-            if (img.hasOwnProperty("markers") && Array.isArray(img.markers)) {
-              markersData = img.markers;
-            } else if (
+            // Use the annotations column to store marker data
+            if (
               img.hasOwnProperty("annotations") &&
               Array.isArray(img.annotations)
             ) {
-              // Convert annotations format to markers format
               markersData = img.annotations
-                .map((anno) => ({
-                  id: `marker-${Date.now()}-${Math.random()
-                    .toString(36)
-                    .substr(2, 9)}`,
-                  position: {
-                    yaw: anno.longitude || 0,
-                    pitch: anno.latitude || 0,
-                  },
-                  tooltip: { content: anno.note || "No description" },
-                  html: '<div style="width: 20px; height: 20px; border-radius: 50%; background-color: red; border: 2px solid white;"></div>',
-                  anchor: "center center",
-                }))
-                .map(processMarker) // Apply our validation/processing function
-                .filter(Boolean); // Remove any null/invalid markers
+                .map((anno) => {
+                  // Use the existing annotation id if available
+                  const markerId =
+                    anno.id ||
+                    `marker-${Date.now()}-${Math.random()
+                      .toString(36)
+                      .substr(2, 9)}`;
+
+                  // Determine position:
+                  // If anno.position exists, use that; otherwise fall back to legacy fields.
+                  let position;
+                  if (anno.position && typeof anno.position === "object") {
+                    position = {
+                      yaw:
+                        anno.position.yaw !== undefined ? anno.position.yaw : 0,
+                      pitch:
+                        anno.position.pitch !== undefined
+                          ? anno.position.pitch
+                          : 0,
+                    };
+                  } else {
+                    position = {
+                      yaw: anno.longitude !== undefined ? anno.longitude : 0,
+                      pitch: anno.latitude !== undefined ? anno.latitude : 0,
+                    };
+                  }
+
+                  // Determine tooltip: use anno.tooltip (if provided) or fall back to anno.note.
+                  const tooltip = anno.tooltip
+                    ? typeof anno.tooltip === "object"
+                      ? anno.tooltip
+                      : { content: anno.tooltip }
+                    : { content: anno.note || "No description" };
+
+                  return {
+                    id: markerId,
+                    position,
+                    tooltip,
+                    html:
+                      anno.html ||
+                      '<div style="width: 20px; height: 20px; border-radius: 50%; background-color: red; border: 2px solid white;"></div>',
+                    anchor: anno.anchor || "center center",
+                  };
+                })
+                .map(processMarker)
+                .filter(Boolean);
+            } else if (
+              img.hasOwnProperty("markers") &&
+              Array.isArray(img.markers)
+            ) {
+              markersData = img.markers;
             }
 
-            // Default to empty array if no valid markers found
             return {
               ...img,
               markers: markersData || [],
@@ -182,56 +202,54 @@ export default function PanoramaViewerPage({
   // Process and validate marker data to ensure proper position formatting
   const processMarker = (marker) => {
     if (!marker) return null;
-
-    // Create a new object with required properties
     const processedMarker = { ...marker };
 
-    // Make sure ID exists
     if (!processedMarker.id) {
       processedMarker.id = `marker-${Date.now()}-${Math.random()
         .toString(36)
         .substr(2, 9)}`;
     }
 
-    // Make sure position is properly formatted with yaw and pitch
     if (
       !processedMarker.position ||
       (typeof processedMarker.position === "object" &&
-        !processedMarker.position.yaw &&
-        !processedMarker.position.pitch &&
-        !processedMarker.position.longitude &&
-        !processedMarker.position.latitude)
+        processedMarker.position.yaw === undefined &&
+        processedMarker.position.pitch === undefined &&
+        processedMarker.position.longitude === undefined &&
+        processedMarker.position.latitude === undefined)
     ) {
       console.warn("Marker missing position data:", marker);
-      // Default position if none exists
       processedMarker.position = { yaw: 0, pitch: 0 };
     } else if (typeof processedMarker.position === "object") {
-      // Normalize position data - ensure yaw and pitch exist
       const position = { ...processedMarker.position };
       processedMarker.position = {
         yaw:
-          position.yaw !== undefined ? position.yaw : position.longitude || 0,
+          position.yaw !== undefined
+            ? position.yaw
+            : position.longitude !== undefined
+            ? position.longitude
+            : 0,
         pitch:
           position.pitch !== undefined
             ? position.pitch
-            : position.latitude || 0,
+            : position.latitude !== undefined
+            ? position.latitude
+            : 0,
       };
     }
 
-    // Make sure HTML or image exists for visibility
     if (!processedMarker.html && !processedMarker.image) {
       processedMarker.html =
         '<div style="width: 20px; height: 20px; border-radius: 50%; background-color: red; border: 2px solid white;"></div>';
       processedMarker.anchor = processedMarker.anchor || "center center";
     }
 
-    // Normalize tooltip format
     if (
       processedMarker.tooltip &&
       typeof processedMarker.tooltip === "object" &&
       processedMarker.tooltip.content
     ) {
-      // Already in the right format
+      // Tooltip is already correctly formatted.
     } else if (
       processedMarker.tooltip &&
       typeof processedMarker.tooltip === "string"
@@ -243,7 +261,8 @@ export default function PanoramaViewerPage({
 
     return processedMarker;
   };
-  // Direct data verification function - check Supabase for markers
+
+  // Directly verify markers stored in the annotations column
   const verifyMarkersInDatabase = async (imageId) => {
     try {
       console.log("Directly querying Supabase for image:", imageId);
@@ -262,24 +281,6 @@ export default function PanoramaViewerPage({
       console.log("Full image data:", data);
       console.log("Column names:", Object.keys(data));
 
-      if (data.markers) {
-        console.log("Markers data:", data.markers);
-        console.log(
-          `Found ${
-            Array.isArray(data.markers) ? data.markers.length : 0
-          } markers`
-        );
-        if (Array.isArray(data.markers)) {
-          data.markers.forEach((marker, index) => {
-            console.log(`Marker ${index}:`, marker);
-            console.log(`  Has position:`, !!marker.position);
-            console.log(`  Has tooltip:`, !!marker.tooltip);
-            console.log(`  Has html:`, !!marker.html);
-            console.log(`  Has image:`, !!marker.image);
-          });
-        }
-      }
-
       if (data.annotations) {
         console.log("Annotations data:", data.annotations);
         console.log(
@@ -290,13 +291,16 @@ export default function PanoramaViewerPage({
         if (Array.isArray(data.annotations)) {
           data.annotations.forEach((anno, index) => {
             console.log(`Annotation ${index}:`, anno);
-            console.log(`  Has longitude:`, !!anno.longitude);
-            console.log(`  Has latitude:`, !!anno.latitude);
-            console.log(`  Has note:`, !!anno.note);
+            console.log(
+              `  Has position:`,
+              !!anno.position || !!anno.longitude || !!anno.latitude
+            );
+            console.log(`  Has tooltip:`, !!anno.tooltip || !!anno.note);
+            console.log(`  Has html:`, !!anno.html);
+            console.log(`  Has image:`, !!anno.image);
           });
         }
       }
-
       return data;
     } catch (err) {
       console.error("Error verifying markers:", err);
@@ -304,12 +308,9 @@ export default function PanoramaViewerPage({
     }
   };
 
-  /** Handle clicking a cell in the grid. If assigned, show that panorama in the viewer. */
   const handleCellClick = (cellIndex: number) => {
     const imageId = gridItems[String(cellIndex)];
-    if (!imageId) return; // unassigned => do nothing
-
-    // Find the corresponding panorama in allPanoramas
+    if (!imageId) return;
     const pano = allPanoramas.find((p) => p.id === imageId);
     if (pano) {
       console.log("Selected panorama:", pano.id);
@@ -318,14 +319,10 @@ export default function PanoramaViewerPage({
         pano.markers ? `Yes (${pano.markers.length})` : "No"
       );
 
-      // Verify markers directly from database
       verifyMarkersInDatabase(pano.id);
-
-      // Reset state
       setEditingMarker(null);
       setMarkerInput("");
 
-      // Clean up existing viewer if needed
       if (photoViewerRef.current?.viewer) {
         try {
           console.log("Cleaning up existing viewer");
@@ -336,18 +333,15 @@ export default function PanoramaViewerPage({
         }
       }
 
-      // Set the new panorama
       setCurrentPanorama(pano);
     } else {
       console.warn("No panorama found for imageId:", imageId);
     }
   };
 
-  // Handle marker click
   const handleMarkerClick = (marker) => {
     console.log("handleMarkerClick called for", marker);
     setEditingMarker(marker.id);
-    // Get the tooltip content regardless of format
     let content = "";
     if (typeof marker.tooltip === "string") {
       content = marker.tooltip;
@@ -357,12 +351,10 @@ export default function PanoramaViewerPage({
     setMarkerInput(content);
   };
 
-  // Handle saving marker annotation and ensure proper position data
   const handleSaveMarkerAnnotation = async () => {
     if (!currentPanorama || !editingMarker) return;
 
     try {
-      // Use the markersPluginRef instead of trying to get it from photoViewerRef
       if (!markersPluginRef.current) {
         console.error("MarkersPlugin reference not found!");
         return;
@@ -370,58 +362,47 @@ export default function PanoramaViewerPage({
 
       console.log("Updating marker with ID:", editingMarker);
 
-      // Find the marker in our current state
-      const markerToUpdate = currentPanorama.markers.find(
-        (m) => m.id === editingMarker
-      );
-      if (!markerToUpdate) {
-        console.error("Could not find marker to update:", editingMarker);
-        return;
-      }
-
-      // Update the marker tooltip in the viewer
+      // Update the marker in the viewer with the new tooltip text.
       markersPluginRef.current.updateMarker({
         id: editingMarker,
-        tooltip: markerInput,
+        tooltip: { content: markerInput },
       });
 
-      // Update in our state
+      // Update the marker data in our state.
       const updatedMarkers = currentPanorama.markers.map((marker) => {
         if (marker.id === editingMarker) {
-          // Ensure position is properly formatted
           const position = marker.position || {};
           const formattedPosition = {
-            yaw: position.yaw || position.longitude || 0,
-            pitch: position.pitch || position.latitude || 0,
+            yaw:
+              position.yaw !== undefined
+                ? position.yaw
+                : position.longitude !== undefined
+                ? position.longitude
+                : 0,
+            pitch:
+              position.pitch !== undefined
+                ? position.pitch
+                : position.latitude !== undefined
+                ? position.latitude
+                : 0,
           };
 
           return {
             ...marker,
             position: formattedPosition,
-            tooltip: markerInput,
+            tooltip: { content: markerInput },
           };
         }
         return marker;
       });
 
-      // Log the updated marker for debugging
       console.log(
         "Updated marker:",
         updatedMarkers.find((m) => m.id === editingMarker)
       );
 
-      // Detect which column to use in the database
-      const { data } = await supabase
-        .from("panorama_images")
-        .select("*")
-        .eq("id", currentPanorama.id)
-        .single();
-
-      let updateColumn =
-        data && "annotations" in data ? "annotations" : "markers";
-      console.log(`Using database column: ${updateColumn}`);
-
-      // Save to database
+      // Always use the "annotations" column for saving marker data.
+      const updateColumn = "annotations";
       const updateData = {};
       updateData[updateColumn] = updatedMarkers;
 
@@ -435,56 +416,37 @@ export default function PanoramaViewerPage({
         return;
       }
 
-      // Update state
       const updatedPanorama = { ...currentPanorama, markers: updatedMarkers };
       setCurrentPanorama(updatedPanorama);
       setAllPanoramas((prev) =>
         prev.map((p) => (p.id === currentPanorama.id ? updatedPanorama : p))
       );
 
-      // Close dialog
       setEditingMarker(null);
       setMarkerInput("");
-
       console.log("Marker updated successfully");
     } catch (err) {
       console.error("Error saving marker:", err);
     }
   };
 
-  // Handle removing a marker
   const handleRemoveMarker = async () => {
     if (!currentPanorama || !editingMarker) return;
 
     try {
-      // Use the markersPluginRef instead of trying to get it from photoViewerRef
       if (!markersPluginRef.current) {
         console.error("MarkersPlugin reference not found!");
         return;
       }
 
       console.log("Removing marker with ID:", editingMarker);
-
-      // Remove the marker from the viewer
       markersPluginRef.current.removeMarker(editingMarker);
 
-      // Remove from our state
       const updatedMarkers = currentPanorama.markers.filter(
         (marker) => marker.id !== editingMarker
       );
 
-      // Detect which column to use in the database
-      const { data } = await supabase
-        .from("panorama_images")
-        .select("*")
-        .eq("id", currentPanorama.id)
-        .single();
-
-      let updateColumn =
-        data && "annotations" in data ? "annotations" : "markers";
-      console.log(`Using database column: ${updateColumn}`);
-
-      // Save to database
+      const updateColumn = "annotations";
       const updateData = {};
       updateData[updateColumn] = updatedMarkers;
 
@@ -498,31 +460,26 @@ export default function PanoramaViewerPage({
         return;
       }
 
-      // Update state
       const updatedPanorama = { ...currentPanorama, markers: updatedMarkers };
       setCurrentPanorama(updatedPanorama);
       setAllPanoramas((prev) =>
         prev.map((p) => (p.id === currentPanorama.id ? updatedPanorama : p))
       );
 
-      // Close dialog
       setEditingMarker(null);
       setMarkerInput("");
-
       console.log("Marker removed successfully");
     } catch (err) {
       console.error("Error removing marker:", err);
     }
   };
 
-  // Initialize viewer and plugins exactly as in the example
   const initializeViewer = (instance) => {
     if (!instance || !currentPanorama) return;
 
     console.log("Initializing viewer with instance:", instance);
 
     try {
-      // Store references for later use
       markersPluginRef.current = instance.getPlugin(MarkersPlugin);
 
       if (!markersPluginRef.current) {
@@ -534,19 +491,15 @@ export default function PanoramaViewerPage({
         "MarkersPlugin initialized successfully:",
         markersPluginRef.current
       );
-
-      // Ensure the current markers are actually loaded in the plugin
       console.log("Current markers in state:", currentPanorama.markers);
 
       if (currentPanorama.markers && currentPanorama.markers.length > 0) {
-        // Clear existing markers to be safe
         try {
           markersPluginRef.current.clearMarkers();
         } catch (e) {
           console.error("Error clearing markers:", e);
         }
 
-        // Add each marker individually after processing
         const markersToAdd = currentPanorama.markers
           .map(processMarker)
           .filter(Boolean);
@@ -562,15 +515,10 @@ export default function PanoramaViewerPage({
         });
       }
 
-      // Set click event to add markers - just like in the example
       instance.addEventListener("click", (e) => {
         if (!e.data.rightClick) {
           console.log("Click detected at:", e.data);
-
-          // Create marker with a unique ID
           const markerId = `marker-${Date.now()}`;
-
-          // Create a marker - use HTML marker instead of image for reliability
           const newMarker = processMarker(
             USE_HTML_MARKER
               ? {
@@ -597,15 +545,11 @@ export default function PanoramaViewerPage({
           );
 
           console.log("Adding new marker:", newMarker);
-
-          // Add the marker to the viewer
           markersPluginRef.current.addMarker(newMarker);
 
-          // Open edit dialog for this new marker
           setEditingMarker(markerId);
           setMarkerInput("New marker");
 
-          // Update our state
           const updatedMarkers = [
             ...(currentPanorama.markers || []),
             newMarker,
@@ -622,7 +566,6 @@ export default function PanoramaViewerPage({
         }
       });
 
-      // Handle marker clicks
       markersPluginRef.current.addEventListener("select-marker", (event) => {
         console.log("Marker selected:", event.marker);
         handleMarkerClick(event.marker);
@@ -636,7 +579,6 @@ export default function PanoramaViewerPage({
     <div className="flex flex-col h-screen">
       {/* TOP: Panorama Viewer */}
       <div ref={viewerRef} className="flex-1 p-4 relative bg-gray-50">
-        {/* Control buttons */}
         <div className="absolute top-2 right-2 z-10 flex space-x-2">
           <button
             className="bg-gray-500 text-white px-3 py-1 rounded"
@@ -646,7 +588,6 @@ export default function PanoramaViewerPage({
           </button>
         </div>
 
-        {/* Marker editing modal */}
         {editingMarker && (
           <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 bg-black border border-gray-300 p-4 rounded shadow-lg z-50">
             <h3 className="font-bold mb-2">Edit Marker Annotation</h3>
@@ -684,7 +625,6 @@ export default function PanoramaViewerPage({
           </div>
         )}
 
-        {/* Debug overlay */}
         {currentPanorama && showDebugOverlay && (
           <div className="absolute bottom-4 left-4 bg-black text-white p-4 rounded shadow z-30 max-w-md">
             <h3 className="font-bold">Debug Information</h3>
@@ -758,7 +698,6 @@ export default function PanoramaViewerPage({
             {Array.from({ length: rows * cols }).map((_, i) => {
               const imageId = gridItems[String(i)];
               const isAssigned = Boolean(imageId);
-              // If assigned, find the panorama's URL for a small preview
               const assignedPano = isAssigned
                 ? allPanoramas.find((p) => p.id === imageId)
                 : null;
