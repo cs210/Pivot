@@ -144,18 +144,21 @@ export default function PanoramaViewerPage({
               Array.isArray(img.annotations)
             ) {
               // Convert annotations format to markers format
-              markersData = img.annotations.map((anno) => ({
-                id: `marker-${Date.now()}-${Math.random()
-                  .toString(36)
-                  .substr(2, 9)}`,
-                position: {
-                  yaw: anno.longitude,
-                  pitch: anno.latitude,
-                },
-                tooltip: anno.note || "No description",
-                html: '<div style="width: 20px; height: 20px; border-radius: 50%; background-color: red; border: 2px solid white;"></div>',
-                anchor: "center center",
-              }));
+              markersData = img.annotations
+                .map((anno) => ({
+                  id: `marker-${Date.now()}-${Math.random()
+                    .toString(36)
+                    .substr(2, 9)}`,
+                  position: {
+                    yaw: anno.longitude || 0,
+                    pitch: anno.latitude || 0,
+                  },
+                  tooltip: { content: anno.note || "No description" },
+                  html: '<div style="width: 20px; height: 20px; border-radius: 50%; background-color: red; border: 2px solid white;"></div>',
+                  anchor: "center center",
+                }))
+                .map(processMarker) // Apply our validation/processing function
+                .filter(Boolean); // Remove any null/invalid markers
             }
 
             // Default to empty array if no valid markers found
@@ -176,6 +179,70 @@ export default function PanoramaViewerPage({
     fetchGridAndImages();
   }, [projectId, supabase]);
 
+  // Process and validate marker data to ensure proper position formatting
+  const processMarker = (marker) => {
+    if (!marker) return null;
+
+    // Create a new object with required properties
+    const processedMarker = { ...marker };
+
+    // Make sure ID exists
+    if (!processedMarker.id) {
+      processedMarker.id = `marker-${Date.now()}-${Math.random()
+        .toString(36)
+        .substr(2, 9)}`;
+    }
+
+    // Make sure position is properly formatted with yaw and pitch
+    if (
+      !processedMarker.position ||
+      (typeof processedMarker.position === "object" &&
+        !processedMarker.position.yaw &&
+        !processedMarker.position.pitch &&
+        !processedMarker.position.longitude &&
+        !processedMarker.position.latitude)
+    ) {
+      console.warn("Marker missing position data:", marker);
+      // Default position if none exists
+      processedMarker.position = { yaw: 0, pitch: 0 };
+    } else if (typeof processedMarker.position === "object") {
+      // Normalize position data - ensure yaw and pitch exist
+      const position = { ...processedMarker.position };
+      processedMarker.position = {
+        yaw:
+          position.yaw !== undefined ? position.yaw : position.longitude || 0,
+        pitch:
+          position.pitch !== undefined
+            ? position.pitch
+            : position.latitude || 0,
+      };
+    }
+
+    // Make sure HTML or image exists for visibility
+    if (!processedMarker.html && !processedMarker.image) {
+      processedMarker.html =
+        '<div style="width: 20px; height: 20px; border-radius: 50%; background-color: red; border: 2px solid white;"></div>';
+      processedMarker.anchor = processedMarker.anchor || "center center";
+    }
+
+    // Normalize tooltip format
+    if (
+      processedMarker.tooltip &&
+      typeof processedMarker.tooltip === "object" &&
+      processedMarker.tooltip.content
+    ) {
+      // Already in the right format
+    } else if (
+      processedMarker.tooltip &&
+      typeof processedMarker.tooltip === "string"
+    ) {
+      processedMarker.tooltip = { content: processedMarker.tooltip };
+    } else if (!processedMarker.tooltip) {
+      processedMarker.tooltip = { content: "No description" };
+    }
+
+    return processedMarker;
+  };
   // Direct data verification function - check Supabase for markers
   const verifyMarkersInDatabase = async (imageId) => {
     try {
@@ -290,7 +357,7 @@ export default function PanoramaViewerPage({
     setMarkerInput(content);
   };
 
-  // Handle saving marker annotation
+  // Handle saving marker annotation and ensure proper position data
   const handleSaveMarkerAnnotation = async () => {
     if (!currentPanorama || !editingMarker) return;
 
@@ -303,6 +370,15 @@ export default function PanoramaViewerPage({
 
       console.log("Updating marker with ID:", editingMarker);
 
+      // Find the marker in our current state
+      const markerToUpdate = currentPanorama.markers.find(
+        (m) => m.id === editingMarker
+      );
+      if (!markerToUpdate) {
+        console.error("Could not find marker to update:", editingMarker);
+        return;
+      }
+
       // Update the marker tooltip in the viewer
       markersPluginRef.current.updateMarker({
         id: editingMarker,
@@ -312,13 +388,27 @@ export default function PanoramaViewerPage({
       // Update in our state
       const updatedMarkers = currentPanorama.markers.map((marker) => {
         if (marker.id === editingMarker) {
+          // Ensure position is properly formatted
+          const position = marker.position || {};
+          const formattedPosition = {
+            yaw: position.yaw || position.longitude || 0,
+            pitch: position.pitch || position.latitude || 0,
+          };
+
           return {
             ...marker,
+            position: formattedPosition,
             tooltip: markerInput,
           };
         }
         return marker;
       });
+
+      // Log the updated marker for debugging
+      console.log(
+        "Updated marker:",
+        updatedMarkers.find((m) => m.id === editingMarker)
+      );
 
       // Detect which column to use in the database
       const { data } = await supabase
@@ -456,21 +546,16 @@ export default function PanoramaViewerPage({
           console.error("Error clearing markers:", e);
         }
 
-        // Add each marker individually
-        currentPanorama.markers.forEach((marker) => {
-          console.log("Adding pre-existing marker to viewer:", marker);
-          try {
-            // Make sure each marker has HTML if not using image
-            const markerToAdd =
-              !marker.html && !marker.image
-                ? {
-                    ...marker,
-                    html: '<div style="width: 20px; height: 20px; border-radius: 50%; background-color: red; border: 2px solid white;"></div>',
-                    anchor: marker.anchor || "center center",
-                  }
-                : marker;
+        // Add each marker individually after processing
+        const markersToAdd = currentPanorama.markers
+          .map(processMarker)
+          .filter(Boolean);
 
-            markersPluginRef.current.addMarker(markerToAdd);
+        console.log("Adding processed markers to viewer:", markersToAdd);
+
+        markersToAdd.forEach((marker) => {
+          try {
+            markersPluginRef.current.addMarker(marker);
           } catch (e) {
             console.error("Error adding marker:", e, marker);
           }
@@ -486,28 +571,30 @@ export default function PanoramaViewerPage({
           const markerId = `marker-${Date.now()}`;
 
           // Create a marker - use HTML marker instead of image for reliability
-          const newMarker = USE_HTML_MARKER
-            ? {
-                id: markerId,
-                position: {
-                  yaw: e.data.yaw,
-                  pitch: e.data.pitch,
-                },
-                html: '<div style="width: 20px; height: 20px; border-radius: 50%; background-color: red; border: 2px solid white;"></div>',
-                anchor: "center center",
-                tooltip: "New marker",
-              }
-            : {
-                id: markerId,
-                position: {
-                  yaw: e.data.yaw,
-                  pitch: e.data.pitch,
-                },
-                image: "/assets/pin-red.png", // This path might not exist
-                size: { width: 32, height: 32 },
-                anchor: "bottom center",
-                tooltip: "New marker",
-              };
+          const newMarker = processMarker(
+            USE_HTML_MARKER
+              ? {
+                  id: markerId,
+                  position: {
+                    yaw: e.data.yaw,
+                    pitch: e.data.pitch,
+                  },
+                  html: '<div style="width: 20px; height: 20px; border-radius: 50%; background-color: red; border: 2px solid white;"></div>',
+                  anchor: "center center",
+                  tooltip: { content: "New marker" },
+                }
+              : {
+                  id: markerId,
+                  position: {
+                    yaw: e.data.yaw,
+                    pitch: e.data.pitch,
+                  },
+                  image: "/assets/pin-red.png",
+                  size: { width: 32, height: 32 },
+                  anchor: "bottom center",
+                  tooltip: { content: "New marker" },
+                }
+          );
 
           console.log("Adding new marker:", newMarker);
 
@@ -681,11 +768,11 @@ export default function PanoramaViewerPage({
                   key={i}
                   onClick={() => isAssigned && handleCellClick(i)}
                   className={`relative w-24 h-24 rounded-full border-2 flex items-center justify-center transition-all 
-                    ${
-                      isAssigned
-                        ? "border-blue-500 bg-blue-100 hover:bg-blue-200 cursor-pointer"
-                        : "border-dashed border-gray-300 bg-gray-200 cursor-not-allowed opacity-60"
-                    }`}
+                  ${
+                    isAssigned
+                      ? "border-blue-500 bg-blue-100 hover:bg-blue-200 cursor-pointer"
+                      : "border-dashed border-gray-300 bg-gray-200 cursor-not-allowed opacity-60"
+                  }`}
                 >
                   {assignedPano ? (
                     <>
