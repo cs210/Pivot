@@ -75,6 +75,8 @@ export default function PanoramaViewerPage({
   const photoViewerRef = useRef<any>(null);
   const markersPluginRef = useRef<any>(null);
 
+  const [showHelpModal, setShowHelpModal] = useState<boolean>(false);
+
   useEffect(() => {
     return () => {
       if (photoViewerRef.current?.viewer) {
@@ -342,12 +344,35 @@ export default function PanoramaViewerPage({
   const handleMarkerClick = (marker) => {
     console.log("handleMarkerClick called for", marker);
     setEditingMarker(marker.id);
+
     let content = "";
+
+    // Check if tooltip is a string or an object with content property
     if (typeof marker.tooltip === "string") {
       content = marker.tooltip;
-    } else if (marker.tooltip && marker.tooltip.content) {
-      content = marker.tooltip.content;
+    } else if (marker.tooltip && typeof marker.tooltip === "object") {
+      // If it's an object, try to extract content property
+      if (typeof marker.tooltip.content === "string") {
+        content = marker.tooltip.content;
+      } else if (marker.tooltip.content && marker.tooltip.content.textContent) {
+        // If content is an HTML element, get its text content
+        content = marker.tooltip.content.textContent;
+      } else if (marker.tooltip.content) {
+        // If it's something else try to stringify it safely
+        try {
+          content = String(marker.tooltip.content);
+        } catch (e) {
+          console.error("Could not convert tooltip content to string:", e);
+          content = "";
+        }
+      }
     }
+
+    // Clean up the content if it contains "[object HTMLDivElement]"
+    if (content.includes("[object HTMLDivElement]")) {
+      content = "";
+    }
+
     setMarkerInput(content);
   };
 
@@ -518,7 +543,9 @@ export default function PanoramaViewerPage({
       instance.addEventListener("click", (e) => {
         if (!e.data.rightClick) {
           console.log("Click detected at:", e.data);
-          const markerId = `marker-${Date.now()}`;
+          // Use a timestamp prefix that's consistent and can be checked later
+          const timestamp = Date.now();
+          const markerId = `marker-${timestamp}`;
           const newMarker = processMarker(
             USE_HTML_MARKER
               ? {
@@ -529,7 +556,7 @@ export default function PanoramaViewerPage({
                   },
                   html: '<div style="width: 20px; height: 20px; border-radius: 50%; background-color: red; border: 2px solid white;"></div>',
                   anchor: "center center",
-                  tooltip: { content: "New marker" },
+                  tooltip: { content: "" },
                 }
               : {
                   id: markerId,
@@ -540,7 +567,7 @@ export default function PanoramaViewerPage({
                   image: "/assets/pin-red.png",
                   size: { width: 32, height: 32 },
                   anchor: "bottom center",
-                  tooltip: { content: "New marker" },
+                  tooltip: { content: "" },
                 }
           );
 
@@ -548,7 +575,7 @@ export default function PanoramaViewerPage({
           markersPluginRef.current.addMarker(newMarker);
 
           setEditingMarker(markerId);
-          setMarkerInput("New marker");
+          setMarkerInput("");
 
           const updatedMarkers = [
             ...(currentPanorama.markers || []),
@@ -586,8 +613,40 @@ export default function PanoramaViewerPage({
           >
             {showDebugOverlay ? "Hide Debug" : "Show Debug"}
           </button>
+          <button
+            className="bg-blue-500 text-white px-3 py-1 rounded"
+            onClick={() => setShowHelpModal(true)}
+          >
+            How to Annotate
+          </button>
         </div>
-
+        {showHelpModal && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+            <div className="bg-black text-white p-6 rounded-lg shadow-lg max-w-md">
+              <h2 className="text-xl font-bold mb-4">How to Annotate</h2>
+              <p className="mb-4">
+                Click anywhere on the image to drop a pin at that location. A
+                pop-up will let you a text label for each pin, allowing you to
+                annotate specific parts of the image.
+              </p>
+              <p className="mb-4">
+                Hover over any existing pin to see its text label.
+              </p>
+              <p className="mb-4">
+                Click on any existing pin to edit the text label or delete the
+                pin.
+              </p>
+              <div className="flex justify-end">
+                <button
+                  className="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded"
+                  onClick={() => setShowHelpModal(false)}
+                >
+                  Got it
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
         {editingMarker && (
           <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 bg-black border border-gray-300 p-4 rounded shadow-lg z-50">
             <h3 className="font-bold mb-2">Edit Marker Annotation</h3>
@@ -598,18 +657,51 @@ export default function PanoramaViewerPage({
               placeholder="Enter annotation text..."
             />
             <div className="flex justify-between">
-              <button
-                className="px-3 py-1 bg-red-500 text-white rounded"
-                onClick={handleRemoveMarker}
+              {/* Only show Delete button for existing markers (not for new ones) */}
+              {currentPanorama?.markers.some(
+                (marker) =>
+                  marker.id === editingMarker &&
+                  // Check if this marker existed before the current editing session
+                  !editingMarker.startsWith(
+                    `marker-${Date.now().toString().slice(0, 8)}`
+                  )
+              ) && (
+                <button
+                  className="px-3 py-1 bg-red-500 text-white rounded"
+                  onClick={handleRemoveMarker}
+                >
+                  Delete
+                </button>
+              )}
+              <div
+                className={
+                  currentPanorama?.markers.some(
+                    (marker) =>
+                      marker.id === editingMarker &&
+                      !editingMarker.startsWith(
+                        `marker-${Date.now().toString().slice(0, 8)}`
+                      )
+                  )
+                    ? ""
+                    : "ml-auto"
+                }
               >
-                Delete
-              </button>
-              <div>
                 <button
                   className="mr-2 px-3 py-1 bg-gray-300 rounded"
                   onClick={() => {
-                    setEditingMarker(null);
-                    setMarkerInput("");
+                    // For new markers, also remove the marker
+                    if (
+                      currentPanorama &&
+                      editingMarker &&
+                      editingMarker.startsWith(
+                        `marker-${Date.now().toString().slice(0, 8)}`
+                      )
+                    ) {
+                      handleRemoveMarker();
+                    } else {
+                      setEditingMarker(null);
+                      setMarkerInput("");
+                    }
                   }}
                 >
                   Cancel
