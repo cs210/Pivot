@@ -282,92 +282,121 @@ export function usePanoramas(projectId: string) {
     }
   };
 
-  const handleGenerate360Images = async (rawImages: RawImage[]) => {
-    if (imagesToConvert.length === 0) {
-      alert("Please select at least one image to convert to 360");
-      return;
+  // In handleGenerate360Images function
+const handleGenerate360Images = async () => {
+  if (imagesToConvert.length === 0) {
+    alert("Please select at least one image to convert to 360");
+    return;
+  }
+
+  setProcessing(true);
+
+  try {
+    // Create a placeholder panorama record first
+    const panoramaName = `panorama_${Date.now()}`;
+    
+    const { data: panoramaData, error: panoramaError } = await supabase
+      .from("panorama_images")
+      .insert([
+        {
+          name: `${panoramaName}.jpg`,
+          project_id: projectId,
+          url: imagesToConvert[0].url, // Temporary URL until processing is complete
+          folder_id: imagesToConvert[0].folder_id,
+          is_processing: true,
+        },
+      ])
+      .select();
+
+    if (panoramaError) {
+      throw panoramaError;
     }
 
-    setProcessing(true);
+    const panoramaId = panoramaData?.[0]?.id;
+    
+    if (!panoramaId) {
+      throw new Error("Failed to create panorama record");
+    }
 
+    // Update local state to show processing item
+    if (panoramaData) {
+      setPanoramas((prev) => [...prev, ...panoramaData]);
+    }
+    
+    // Process the panorama with the API
     try {
-      // Create processing records for each image
-      const newPanoramas: Panorama[] = [];
-
-      for (const image of imagesToConvert) {
-        // Create a placeholder panorama record
-        const { data, error } = await supabase
-          .from("panorama_images")
-          .insert([
-            {
-              name: `${image.name.split(".")[0]}_360.jpg`,
-              project_id: projectId,
-              url: image.url, // Temporary URL until processing is complete
-              folder_id: image.folder_id,
-              source_image_id: image.id,
-              is_processing: true,
-            },
-          ])
-          .select();
-
-        if (error) {
-          console.error("Error creating panorama record:", error);
-          throw error;
-        }
-
-        if (data && data.length > 0) {
-          newPanoramas.push(data[0]);
-        }
+      // Download the selected images
+      const imageBlobs = await Promise.all(
+        imagesToConvert.map(async (image) => {
+          const response = await fetch(image.url);
+          const blob = await response.blob();
+          return new File([blob], image.name, { type: blob.type });
+        })
+      );
+      
+      // Prepare FormData to send to API
+      const formData = new FormData();
+      imageBlobs.forEach(file => {
+        formData.append('files', file);
+      });
+      
+      formData.append('userId', projectId);
+      formData.append('panoramaName', panoramaName);
+      
+      // Send to API for processing
+      const stitchResponse = await fetch('/api/stitch-panorama', {
+        method: 'POST',
+        body: formData,
+      });
+      
+      const stitchResult = await stitchResponse.json();
+      
+      if (!stitchResponse.ok) {
+        throw new Error(stitchResult.error || 'Failed to generate panorama');
       }
+      
+      // Update database record with the generated panorama URL
+      const { error: updateError } = await supabase
+        .from("panorama_images")
+        .update({
+          is_processing: false,
+          url: `${window.location.origin}${stitchResult.panoramaUrl}`,
+        })
+        .eq("id", panoramaId);
 
-      // Update local state to show processing items
-      setPanoramas((prev) => [...prev, ...newPanoramas]);
-
-      // Call the 360 generation function (this would be an API endpoint in a real app)
-      // For demo purposes, we'll simulate processing with a timeout
-
-      // In a real app, you would make an API call like:
-      // const { data, error } = await supabase.functions.invoke('generate-360-images', {
-      //   body: { panoramaIds: newPanoramas.map(p => p.id) }
-      // });
-
-      // Simulate processing with a timeout
-      setTimeout(async () => {
-        try {
-          // Update each panorama with "completed" status
-          for (const panorama of newPanoramas) {
-            // In a real app, this would be the result URL from your 360 generation service
-            const simulatedUrl = panorama.url.replace(/\.[^/.]+$/, "_360.jpg");
-
-            const { error } = await supabase
-              .from("panorama_images")
-              .update({
-                is_processing: false,
-                url: simulatedUrl,
-              })
-              .eq("id", panorama.id);
-
-            if (error) throw error;
-          }
-
-          // Refresh panoramas
-          fetchPanoramas();
-          alert("360 image generation completed");
-        } catch (error) {
-          console.error("Error updating panorama status:", error);
-          alert("Error during 360 image processing. Please try again.");
-        } finally {
-          setProcessing(false);
-          setGenerate360DialogOpen(false);
-          setImagesToConvert([]);
-        }
-      }, 3000); // Simulate 3 second processing time
-    } catch (error) {
-      console.error("Error generating 360 images:", error);
-      alert("Failed to start 360 image generation");
-      setProcessing(false);
+      if (updateError) {
+        throw updateError;
+      }
+    } catch (processingError) {
+      // Update the record to show failure but don't throw
+      // This allows the system to keep the failed item for reference
+      await supabase
+        .from("panorama_images")
+        .update({
+          is_processing: false,
+          annotations: JSON.stringify({
+            error: processingError.message || "Failed to process panorama",
+            timestamp: new Date().toISOString()
+          })
+        })
+        .eq("id", panoramaId);
+        
+      throw processingError;
     }
-  };
+
+    // Refresh panoramas
+    await fetchPanoramas();
+    alert("360° image generation completed successfully");
+    
+  } catch (error) {
+    console.error("Error generating 360 images:", error);
+    alert(`Failed to generate 360 image: ${error.message}`);
+  } finally {
+    setProcessing(false);
+    setGenerate360DialogOpen(false);
+    setImagesToConvert([]);
+  }
+};
 
   const handleGenerate360ImagesFromFolders = async (rawImages: RawImage[]) => {
     if (foldersToConvert.length === 0) {
