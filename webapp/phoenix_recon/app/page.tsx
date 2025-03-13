@@ -6,6 +6,20 @@ import { Button } from "@/components/ui/button";
 import { ArrowRight, CuboidIcon as Cube, Globe } from "lucide-react";
 import { createClient } from "@/utils/supabase/client";
 import { Header } from "@/components/header";
+import dynamic from "next/dynamic";
+
+// the URL of the default 360° image to display on the homepage
+const HOMEPAGE_360_URL =
+  "https://ymfbqixkknwxtriytkun.supabase.co/storage/v1/object/public/panoramas/8811827b-595d-4072-88c0-35d629d08adb/285F28B4-5B06-49ED-B248-BAA51E989F91.JPG";
+
+// Dynamically import ReactPhotoSphereViewer to avoid SSR issues
+const ReactPhotoSphereViewer = dynamic(
+  () =>
+    import("react-photo-sphere-viewer").then(
+      (mod) => mod.ReactPhotoSphereViewer
+    ),
+  { ssr: false }
+);
 
 export default function Home() {
   const [user, setUser] = useState<any>(null);
@@ -24,7 +38,7 @@ export default function Home() {
 
   // to activate background blobs, find and delete "bg-muted"
   return (
-    <div className="flex flex-col min-h-screen  text-foreground">
+    <div className="flex flex-col min-h-screen text-foreground">
       <Header />
       <main className="flex-1">
         <section className="w-full py-12 md:py-24 lg:py-32 relative overflow-hidden">
@@ -33,12 +47,12 @@ export default function Home() {
               <div className="flex flex-col justify-center space-y-4">
                 <div className="space-y-2">
                   <h1 className="text-3xl font-bold tracking-tighter sm:text-5xl xl:text-6xl/none geometric-text">
-                    Transform 360° Videos Into Interactive VR Experiences
+                    Transform <br /> Still Images Into Interactive VR
+                    Experiences.
                   </h1>
                   <p className="max-w-[600px] text-muted-foreground md:text-xl">
-                    Upload your 360° videos and we'll convert them into
-                    immersive VR environments that users can navigate and
-                    explore.
+                    Upload your images and we'll convert them into immersive VR
+                    environments that you can navigate, explore, and analyze.
                   </p>
                 </div>
                 <div className="flex flex-col gap-2 min-[400px]:flex-row">
@@ -64,17 +78,14 @@ export default function Home() {
               </div>
               <div className="flex items-center justify-center">
                 <div className="relative w-full aspect-video overflow-hidden rounded-xl glass-card p-1">
-                  <div className="absolute inset-0 bg-cyber-gradient opacity-10" />
-                  <div className="relative h-full w-full rounded-lg /50 flex items-center justify-center">
-                    <div className="grid gap-2 place-items-center">
-                      <div className="rounded-full bg-cyber-gradient p-4">
-                        <Globe className="h-6 w-6 text-white" />
-                      </div>
-                      <span className="text-sm font-medium geometric-text">
-                        360° VR Experience
-                      </span>
-                    </div>
-                  </div>
+                  <ReactPhotoSphereViewer
+                    src={HOMEPAGE_360_URL}
+                    width="100%"
+                    height="100%"
+                    defaultZoomLvl={0}
+                    defaultYaw={0.3}
+                    defaultPitch={0.65}
+                  />
                 </div>
               </div>
             </div>
@@ -87,14 +98,14 @@ export default function Home() {
                 <h2 className="text-3xl font-bold tracking-tighter sm:text-4xl md:text-5xl cyber-glow">
                   How Phoenix Recon Works
                 </h2>
-                <p className="max-w-[900px] text-muted-foreground md:text-xl/relaxed lg:text-base/relaxed xl:text-xl/relaxed">
-                  From 360° video to interactive VR in three simple steps
+                <p className="max-w-[1200px] text-muted-foreground md:text-xl/relaxed lg:text-base/relaxed xl:text-xl/relaxed">
+                  From static images to interactive VR in four simple steps
                 </p>
               </div>
             </div>
-            <div className="mx-auto grid max-w-5xl grid-cols-1 gap-6 py-12 md:grid-cols-3 lg:gap-12">
-              <div className="flex flex-col items-center space-y-2 rounded-lg p-4">
-                <div className="rounded-full bg-cyber-gradient p-2">
+            <div className="mx-auto grid max-w-5xl grid-cols-1 gap-6 py-12 md:grid-cols-4 lg:gap-12">
+              <div className="flex flex-col items-center rounded-lg p-4 h-full">
+                <div className="rounded-full bg-cyber-gradient p-2 mb-4">
                   <svg
                     className="h-6 w-6 text-foreground"
                     fill="none"
@@ -112,26 +123,53 @@ export default function Home() {
                     <path d="m16 16-4-4-4 4" />
                   </svg>
                 </div>
-                <h3 className="text-xl font-bold cyber-glow">
-                  Upload 360° Videos
+                <h3 className="text-xl font-bold cyber-glow w-full text-center mb-2 whitespace-nowrap">
+                  Upload Images
                 </h3>
-                <p className="text-center text-muted-foreground">
-                  Upload your 360° video footage through our secure platform
+                <p className="text-center text-muted-foreground w-full max-w-xs mx-auto">
+                  Upload images taken on any device through our secure platform.
                 </p>
               </div>
-              <div className="flex flex-col items-center space-y-2 rounded-lg p-4">
-                <div className="rounded-full bg-cyber-gradient p-2">
+              <div className="flex flex-col items-center rounded-lg p-4 h-full">
+                <div className="rounded-full bg-cyber-gradient p-2 mb-4">
                   <Cube className="h-6 w-6 text-foreground" />
                 </div>
-                <h3 className="text-xl font-bold cyber-glow">
-                  Automatic Processing
+                <h3 className="text-xl font-bold cyber-glow w-full text-center mb-2 whitespace-nowrap">
+                  Auto Processing
                 </h3>
-                <p className="text-center text-muted-foreground">
-                  Our system converts your videos into navigable 3D environments
+                <p className="text-center text-muted-foreground w-full max-w-xs mx-auto">
+                  Our system automatically converts your images into seamless
+                  360° panoramas.
                 </p>
               </div>
-              <div className="flex flex-col items-center space-y-2 rounded-lg p-4">
-                <div className="rounded-full bg-cyber-gradient p-2">
+              <div className="flex flex-col items-center rounded-lg p-4 h-full">
+                <div className="rounded-full bg-cyber-gradient p-2 mb-4">
+                  <svg
+                    className="h-6 w-6 text-foreground"
+                    fill="none"
+                    height="24"
+                    stroke="currentColor"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth="2"
+                    viewBox="0 0 24 24"
+                    width="24"
+                    xmlns="http://www.w3.org/2000/svg"
+                  >
+                    <path d="M9.5 11l4.5-4.5M9.5 15.5l4.5-4.5" />
+                    <rect width="18" height="18" x="3" y="3" rx="2" />
+                  </svg>
+                </div>
+                <h3 className="text-xl font-bold cyber-glow w-full text-center mb-2 whitespace-nowrap">
+                  Annotate & Analyze
+                </h3>
+                <p className="text-center text-muted-foreground w-full max-w-xs mx-auto">
+                  Use our web platform to annotate environments with
+                  observations and analysis.
+                </p>
+              </div>
+              <div className="flex flex-col items-center rounded-lg p-4 h-full">
+                <div className="rounded-full bg-cyber-gradient p-2 mb-4">
                   <svg
                     className="h-6 w-6 text-foreground"
                     fill="none"
@@ -147,16 +185,18 @@ export default function Home() {
                     <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10" />
                   </svg>
                 </div>
-                <h3 className="text-xl font-bold cyber-glow">Explore in VR</h3>
-                <p className="text-center text-muted-foreground">
+                <h3 className="text-xl font-bold cyber-glow w-full text-center mb-2 whitespace-nowrap">
+                  Explore in VR
+                </h3>
+                <p className="text-center text-muted-foreground w-full max-w-xs mx-auto">
                   Access your interactive VR environments on any compatible
-                  device
+                  device.
                 </p>
               </div>
             </div>
           </div>
         </section>
-        <section className="w-full py-12 md:py-24 lg:py-32  relative">
+        <section className="w-full py-12 md:py-24 lg:py-32 relative">
           <div className="absolute inset-0 bg-cyber-gradient opacity-5"></div>
           <div className="container px-4 md:px-6 relative z-10">
             <div className="grid gap-10 px-10 md:gap-16 lg:grid-cols-2">
@@ -168,7 +208,7 @@ export default function Home() {
                   Experience Locations Like You're Actually There
                 </h2>
                 <p className="text-muted-foreground md:text-xl/relaxed">
-                  Our technology transforms ordinary 360° videos into fully
+                  Our technology transforms ordinary still images into fully
                   navigable virtual environments. Move through spaces, explore
                   details, and experience locations from any angle.
                 </p>
@@ -275,7 +315,7 @@ export default function Home() {
                 </ul>
                 <Link
                   href="/use-cases"
-                  className="inline-flex h-9 items-center justify-center rounded-md border border-input  px-4 py-2 text-sm font-medium shadow-sm transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50"
+                  className="inline-flex h-9 items-center justify-center rounded-md border border-input px-4 py-2 text-sm font-medium shadow-sm transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50"
                 >
                   <Button variant="outline" className="cyber-border">
                     View Use Cases
@@ -289,11 +329,11 @@ export default function Home() {
           <div className="container grid items-center justify-center gap-4 px-4 text-center md:px-6 lg:gap-10">
             <div className="space-y-3">
               <h2 className="text-3xl font-bold tracking-tighter md:text-4xl/tight cyber-glow">
-                Ready to Transform Your 360° Videos?
+                Ready to Transform Your Images?
               </h2>
               <p className="mx-auto max-w-[600px] text-muted-foreground md:text-xl/relaxed lg:text-base/relaxed xl:text-xl/relaxed">
-                Create immersive, interactive VR experiences from your 360°
-                footage today.
+                Create immersive, interactive VR experiences from your images
+                today.
               </p>
             </div>
             <div className="mx-auto w-full max-w-sm space-y-2">
@@ -313,7 +353,7 @@ export default function Home() {
           </div>
         </section>
       </main>
-      <footer className="border-t border-border/40 ">
+      <footer className="border-t border-border/40">
         <div className="container flex flex-col gap-2 py-4 md:h-16 md:flex-row md:items-center md:justify-between md:py-0">
           <p className="text-center text-sm text-muted-foreground md:text-left">
             © 2024 Phoenix Recon. All rights reserved.

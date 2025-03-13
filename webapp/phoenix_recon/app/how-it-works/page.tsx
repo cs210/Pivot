@@ -13,29 +13,40 @@ export default function HowItWorks() {
           <div className="space-y-6">
             <section className="p-6 rounded-lg bg-muted/30 cyber-border">
               <h2 className="text-2xl font-semibold mb-3 cyber-glow">
-                1. Upload Your 360° Video
+                1. Upload Your Images
               </h2>
               <p className="text-muted-foreground">
-                Simply upload your 360° video footage through our secure
-                platform.
+                Take images of any environment with any device, and upload them
+                to our secure platform.
               </p>
             </section>
             <section className="p-6 rounded-lg bg-muted/30 cyber-border">
               <h2 className="text-2xl font-semibold mb-3 cyber-glow">
-                2. Automatic Processing
+                2. Automatic AI Processing
               </h2>
               <p className="text-muted-foreground">
-                Our advanced system converts your videos into navigable 3D
+                No need to lift a finger. Our cutting-edge AI technology
+                automatically transforms your images into navigable VR
                 environments.
               </p>
             </section>
             <section className="p-6 rounded-lg bg-muted/30 cyber-border">
               <h2 className="text-2xl font-semibold mb-3 cyber-glow">
-                3. Explore in VR
+                3. Annotate and Analyze
               </h2>
               <p className="text-muted-foreground">
-                Access and interact with your newly created VR environments on
-                any compatible device.
+                Our web3 platform provides an intuitive interface where you can
+                annotate environments. Add observations, insights, and analysis
+                to any part of any environment.
+              </p>
+            </section>
+            <section className="p-6 rounded-lg bg-muted/30 cyber-border">
+              <h2 className="text-2xl font-semibold mb-3 cyber-glow">
+                4. Immerse in VR
+              </h2>
+              <p className="text-muted-foreground">
+                Access and interact with your newly-created VR environments on
+                any compatible device. Live in the moment, in any moment.
               </p>
             </section>
           </div>
