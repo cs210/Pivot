@@ -1,7 +1,7 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
-
+@import "@photo-sphere-viewer/markers-plugin/index.css";
 @layer base {
   :root {
     --background: 240 47% 3%;
