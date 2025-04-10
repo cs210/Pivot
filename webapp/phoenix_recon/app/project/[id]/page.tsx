@@ -127,7 +127,7 @@ export default function ProjectPage() {
       <footer className="border-t border-border/40 bg-background">
         <div className="container flex flex-col gap-2 py-4 md:h-16 md:flex-row md:items-center md:justify-between md:py-0">
           <p className="text-center text-sm text-muted-foreground md:text-left">
-            © 2024 Phoenix Recon. All rights reserved.
+            © 2025 Pivot. All rights reserved.
           </p>
           <nav className="flex items-center justify-center gap-4 md:gap-6">
             <Link
