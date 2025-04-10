@@ -1,34 +1,34 @@
-"use client"
+"use client";
 
-import { useEffect, useState } from "react"
-import Link from "next/link"
-import { usePathname } from "next/navigation"
-import { Button } from "@/components/ui/button"
-import { Compass } from "lucide-react"
-import { createClient } from "@/utils/supabase/client"
+import { useEffect, useState } from "react";
+import Link from "next/link";
+import { usePathname } from "next/navigation";
+import { Button } from "@/components/ui/button";
+import { Compass } from "lucide-react";
+import { createClient } from "@/utils/supabase/client";
 
 export function Header() {
-  const [user, setUser] = useState<any>(null)
-  const supabase = createClient()
-  const pathname = usePathname()
+  const [user, setUser] = useState<any>(null);
+  const supabase = createClient();
+  const pathname = usePathname();
 
   useEffect(() => {
     const checkUser = async () => {
       const {
         data: { user },
-      } = await supabase.auth.getUser()
-      setUser(user)
-    }
+      } = await supabase.auth.getUser();
+      setUser(user);
+    };
 
-    checkUser()
-  }, [supabase])
+    checkUser();
+  }, [supabase]);
 
   return (
     <header className="border-b border-border/40 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
       <div className="container flex h-16 items-center justify-between px-4 md:px-6">
         <Link href="/" className="flex items-center gap-2">
           <Compass className="h-6 w-6 text-primary" />
-          <span className="text-xl geometric-text gradient-text">Phoenix Recon</span>
+          <span className="text-xl geometric-text gradient-text">Pivot</span>
         </Link>
         <nav className="flex gap-4">
           {pathname !== "/" && (
@@ -58,13 +58,14 @@ export function Header() {
                 </Button>
               </Link>
               <Link href="/register">
-                <Button className="bg-cyber-gradient hover:opacity-90 geometric-text">Sign Up</Button>
+                <Button className="bg-cyber-gradient hover:opacity-90 geometric-text">
+                  Sign Up
+                </Button>
               </Link>
             </>
           )}
         </nav>
       </div>
     </header>
-  )
+  );
 }
-
