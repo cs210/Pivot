@@ -180,7 +180,7 @@ export default function EnhancedImageGrid({
               min={1}
               value={rows}
               onChange={handleChangeRows}
-              className="w-16 border border-border/50 rounded px-2 py-1 bg-black text-white"
+              className="w-16 border border-border/50 rounded px-2 bg-cyber-gradient py-1"
             />
           </label>
           <label className="flex items-center space-x-2">
@@ -190,12 +190,12 @@ export default function EnhancedImageGrid({
               min={1}
               value={cols}
               onChange={handleChangeCols}
-              className="w-16 border border-border/50 rounded px-2 py-1 bg-black text-white"
+              className="w-16 border border-border/50 rounded px-2 py-1 bg-cyber-gradient"
             />
           </label>
           <button
             onClick={handleSaveGrid}
-            className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors"
+            className="px-4 py-2 text-white rounded bg-cyber-gradient hover:opacity-90 transition-colors"
           >
             Save Grid
           </button>

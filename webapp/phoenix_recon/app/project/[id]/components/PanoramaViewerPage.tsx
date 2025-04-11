@@ -614,7 +614,7 @@ export default function PanoramaViewerPage({
             {showDebugOverlay ? "Hide Debug" : "Show Debug"}
           </button>
           <button
-            className="bg-blue-500 text-white px-3 py-1 rounded"
+            className="bg-cyber-gradient text-white hover:opacity-90 px-3 py-1 rounded"
             onClick={() => setShowHelpModal(true)}
           >
             How to Annotate

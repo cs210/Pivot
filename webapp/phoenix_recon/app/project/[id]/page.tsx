@@ -64,34 +64,34 @@ export default function ProjectPage() {
             onValueChange={setActiveTab}
             className="w-full"
           >
-            <TabsList className="mb-6 bg-muted/50 border border-border/50">
+            <TabsList className="mb-6 bg-muted/100 border border-border/50">
               <TabsTrigger
                 value="raw-images"
-                className="data-[state=active]:bg-cyber-gradient data-[state=active]:text-foreground"
+                className="data-[state=active]:active-tab"
               >
                 Raw Images
               </TabsTrigger>
               <TabsTrigger
                 value="360-images"
-                className="data-[state=active]:bg-cyber-gradient data-[state=active]:text-foreground"
+                className="data-[state=active]:active-tab"
               >
                 360° Images
               </TabsTrigger>
               <TabsTrigger
                 value="place-locations"
-                className="data-[state=active]:bg-cyber-gradient data-[state=active]:text-foreground"
+                className="data-[state=active]:active-tab"
               >
                 Place on Grid
               </TabsTrigger>
               <TabsTrigger
                 value="walkthrough"
-                className="data-[state=active]:bg-cyber-gradient data-[state=active]:text-foreground"
+                className="data-[state=active]:active-tab"
               >
                 View & Annotate
               </TabsTrigger>
               <TabsTrigger
                 value="settings"
-                className="data-[state=active]:bg-cyber-gradient data-[state=active]:text-foreground"
+                className="data-[state=active]:active-tab"
               >
                 Project Settings
               </TabsTrigger>

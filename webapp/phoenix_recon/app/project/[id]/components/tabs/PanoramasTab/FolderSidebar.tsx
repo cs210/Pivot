@@ -1,17 +1,18 @@
 import { Button } from "@/components/ui/button";
-import {
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { FolderOpen, FolderPlus, MoreVertical, Edit, Trash2 } from "lucide-react";
+import {
+  FolderOpen,
+  FolderPlus,
+  MoreVertical,
+  Edit,
+  Trash2,
+} from "lucide-react";
 import { Folder } from "../../../hooks/useFolders";
 
 interface FolderSidebarProps {
@@ -61,7 +62,9 @@ export default function FolderSidebar({
             {folders.map((folder) => (
               <div key={folder.id} className="flex items-center">
                 <Button
-                  variant={currentFolder?.id === folder.id ? "default" : "ghost"}
+                  variant={
+                    currentFolder?.id === folder.id ? "default" : "ghost"
+                  }
                   className="justify-start flex-1"
                   onClick={() => setCurrentFolder(folder)}
                 >

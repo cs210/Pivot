@@ -41,7 +41,7 @@ export default function Home() {
     <div className="flex flex-col min-h-screen text-foreground">
       <Header />
       <main className="flex-1">
-        <section className="w-full py-12 md:py-24 lg:py-32 relative overflow-hidden">
+        <section className="w-full py-6 md:py-12 lg:py-28 relative overflow-hidden">
           <div className="container px-4 md:px-6 relative z-10">
             <div className="grid gap-6 lg:grid-cols-2 lg:gap-12 xl:grid-cols-2">
               <div className="flex flex-col justify-center space-y-4">
@@ -91,7 +91,7 @@ export default function Home() {
             </div>
           </div>
         </section>
-        <section className="w-full py-12 md:py-24 lg:py-32 bg-muted">
+        <section className="w-full py-6 md:py-12 lg:py-18 bg-muted">
           <div className="container px-4 md:px-6">
             <div className="flex flex-col items-center justify-center space-y-4 text-center">
               <div className="space-y-2">
@@ -196,8 +196,8 @@ export default function Home() {
             </div>
           </div>
         </section>
-        <section className="w-full py-12 md:py-24 lg:py-32 relative">
-          <div className="absolute inset-0 bg-cyber-gradient opacity-5"></div>
+        <section className="w-full py-6 md:py-12 lg:py-18 relative">
+          <div className="absolute inset-0"></div>
           <div className="container px-4 md:px-6 relative z-10">
             <div className="grid gap-10 px-10 md:gap-16 lg:grid-cols-2">
               <div className="space-y-4">
@@ -213,11 +213,18 @@ export default function Home() {
                   details, and experience locations from any angle.
                 </p>
                 <Link
-                  href="/register"
-                  className="inline-flex h-9 items-center justify-center rounded-md px-4 py-2 text-sm font-medium shadow transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50"
+                  href={user ? "/dashboard" : "/register"}
+                  className="inline-flex items-center justify-center
+             transition-colors focus-visible:outline-none
+             focus-visible:ring-1 focus-visible:ring-ring
+             disabled:pointer-events-none disabled:opacity-50"
                 >
-                  <Button className="bg-cyber-gradient hover:opacity-90">
-                    Get Started
+                  <Button
+                    size="lg"
+                    className="bg-cyber-gradient hover:opacity-90 geometric-text"
+                  >
+                    {user ? "Go to Dashboard" : "Start Creating"}
+                    <ArrowRight className="h-4 w-4 ml-2" />
                   </Button>
                 </Link>
               </div>
@@ -315,9 +322,12 @@ export default function Home() {
                 </ul>
                 <Link
                   href="/use-cases"
-                  className="inline-flex h-9 items-center justify-center rounded-md border border-input px-4 py-2 text-sm font-medium shadow-sm transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50"
+                  className="inline-flex items-center justify-center
+             transition-colors focus-visible:outline-none
+             focus-visible:ring-1 focus-visible:ring-ring
+             disabled:pointer-events-none disabled:opacity-50"
                 >
-                  <Button variant="outline" className="cyber-border">
+                  <Button className="bg-cyber-gradient hover:opacity-90 geometric-text">
                     View Use Cases
                   </Button>
                 </Link>
@@ -325,7 +335,7 @@ export default function Home() {
             </div>
           </div>
         </section>
-        <section className="w-full py-12 md:py-24 lg:py-32 bg-muted">
+        <section className="w-full py-6 md:py-12 lg:py-18 bg-muted">
           <div className="container grid items-center justify-center gap-4 px-4 text-center md:px-6 lg:gap-10">
             <div className="space-y-3">
               <h2 className="text-3xl font-bold tracking-tighter md:text-4xl/tight cyber-glow">
