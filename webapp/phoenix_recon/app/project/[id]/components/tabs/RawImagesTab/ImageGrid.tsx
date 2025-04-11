@@ -86,6 +86,7 @@ export default function ImageGrid({
                     ? "Switch to list view"
                     : "Switch to grid view"
                 }
+                className="bg-cyber-gradient hover:opacity-90"
               >
                 {viewMode === "grid" ? (
                   <List className="h-4 w-4" />

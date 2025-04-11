@@ -4,6 +4,7 @@ import React, { useEffect, useState, useRef } from "react";
 import dynamic from "next/dynamic";
 import { createClient } from "@/utils/supabase/client";
 import { MarkersPlugin } from "@photo-sphere-viewer/markers-plugin";
+import { Card } from "@/components/ui/card";
 
 // Dynamically import ReactPhotoSphereViewer to avoid SSR issues
 const ReactPhotoSphereViewer = dynamic(
@@ -603,235 +604,254 @@ export default function PanoramaViewerPage({
   };
 
   return (
-    <div className="flex flex-col h-screen">
-      {/* TOP: Panorama Viewer */}
-      <div ref={viewerRef} className="flex-1 p-4 relative bg-gray-50">
-        <div className="absolute top-2 right-2 z-10 flex space-x-2">
-          <button
-            className="bg-gray-500 text-white px-3 py-1 rounded"
-            onClick={() => setShowDebugOverlay(!showDebugOverlay)}
-          >
-            {showDebugOverlay ? "Hide Debug" : "Show Debug"}
-          </button>
-          <button
-            className="bg-cyber-gradient text-white hover:opacity-90 px-3 py-1 rounded"
-            onClick={() => setShowHelpModal(true)}
-          >
-            How to Annotate
-          </button>
-        </div>
-        {showHelpModal && (
-          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-            <div className="bg-black text-white p-6 rounded-lg shadow-lg max-w-md">
-              <h2 className="text-xl font-bold mb-4">How to Annotate</h2>
-              <p className="mb-4">
-                Click anywhere on the image to drop a pin at that location. A
-                pop-up will let you a text label for each pin, allowing you to
-                annotate specific parts of the image.
-              </p>
-              <p className="mb-4">
-                Hover over any existing pin to see its text label.
-              </p>
-              <p className="mb-4">
-                Click on any existing pin to edit the text label or delete the
-                pin.
-              </p>
-              <div className="flex justify-end">
-                <button
-                  className="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded"
-                  onClick={() => setShowHelpModal(false)}
-                >
-                  Got it
-                </button>
-              </div>
-            </div>
+    <>
+      <style jsx global>{`
+        .psv-tooltip,
+        .psv-tooltip * {
+          color: #fff !important;
+        }
+      `}</style>
+      <div className="flex flex-col h-screen">
+        {/* TOP: Panorama Viewer */}
+        <div ref={viewerRef} className="flex-1 p-4 relative bg-gray-50">
+          <div className="absolute top-2 right-2 z-10 flex space-x-2">
+            <button
+              className="bg-gray-500 text-white px-3 py-1 rounded"
+              onClick={() => setShowDebugOverlay(!showDebugOverlay)}
+            >
+              {showDebugOverlay ? "Hide Debug" : "Show Debug"}
+            </button>
+            <button
+              className="bg-cyber-gradient text-white hover:opacity-90 px-3 py-1 rounded"
+              onClick={() => setShowHelpModal(true)}
+            >
+              How to Annotate
+            </button>
           </div>
-        )}
-        {editingMarker && (
-          <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 bg-black border border-gray-300 p-4 rounded shadow-lg z-50">
-            <h3 className="font-bold mb-2">Edit Marker Annotation</h3>
-            <textarea
-              className="w-64 h-32 bg-gray-800 border border-gray-300 p-2 mb-3"
-              value={markerInput}
-              onChange={(e) => setMarkerInput(e.target.value)}
-              placeholder="Enter annotation text..."
-            />
-            <div className="flex justify-between">
-              {/* Only show Delete button for existing markers (not for new ones) */}
-              {currentPanorama?.markers.some(
-                (marker) =>
-                  marker.id === editingMarker &&
-                  // Check if this marker existed before the current editing session
-                  !editingMarker.startsWith(
-                    `marker-${Date.now().toString().slice(0, 8)}`
-                  )
-              ) && (
-                <button
-                  className="px-3 py-1 bg-red-500 text-white rounded"
-                  onClick={handleRemoveMarker}
-                >
-                  Delete
-                </button>
-              )}
-              <div
-                className={
-                  currentPanorama?.markers.some(
-                    (marker) =>
-                      marker.id === editingMarker &&
-                      !editingMarker.startsWith(
-                        `marker-${Date.now().toString().slice(0, 8)}`
-                      )
-                  )
-                    ? ""
-                    : "ml-auto"
-                }
-              >
-                <button
-                  className="mr-2 px-3 py-1 bg-gray-300 rounded"
-                  onClick={() => {
-                    // For new markers, also remove the marker
-                    if (
-                      currentPanorama &&
-                      editingMarker &&
-                      editingMarker.startsWith(
-                        `marker-${Date.now().toString().slice(0, 8)}`
-                      )
-                    ) {
-                      handleRemoveMarker();
-                    } else {
-                      setEditingMarker(null);
-                      setMarkerInput("");
-                    }
-                  }}
-                >
-                  Cancel
-                </button>
-                <button
-                  className="px-3 py-1 bg-blue-500 text-white rounded"
-                  onClick={handleSaveMarkerAnnotation}
-                >
-                  Save
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {currentPanorama && showDebugOverlay && (
-          <div className="absolute bottom-4 left-4 bg-black text-white p-4 rounded shadow z-30 max-w-md">
-            <h3 className="font-bold">Debug Information</h3>
-            <div className="mt-2 text-xs space-y-1">
-              <p>
-                <strong>Panorama ID:</strong> {currentPanorama.id}
-              </p>
-              <p>
-                <strong>Markers:</strong> {currentPanorama.markers?.length || 0}
-              </p>
-            </div>
-
-            {currentPanorama.markers && currentPanorama.markers.length > 0 && (
-              <div className="mt-2">
-                <p className="font-bold text-sm">Marker Data:</p>
-                <div className="mt-1 bg-gray-800 p-2 rounded overflow-auto max-h-32 text-xs">
-                  <pre>{JSON.stringify(currentPanorama.markers, null, 2)}</pre>
+          {showHelpModal && (
+            <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+              <div className="bg-white p-6 rounded-lg shadow-lg max-w-md">
+                <h2 className="text-xl font-bold mb-4">How to Annotate</h2>
+                <p className="mb-4">
+                  Click anywhere on the image to drop a pin at that location. A
+                  pop-up will let you a text label for each pin, allowing you to
+                  annotate specific parts of the image.
+                </p>
+                <p className="mb-4">
+                  Hover over any existing pin to see its text label.
+                </p>
+                <p className="mb-4">
+                  Click on any existing pin to edit the text label or delete the
+                  pin.
+                </p>
+                <div className="flex justify-end">
+                  <button
+                    className="bg-cyber-gradient hover:bg-blue-600 text-white px-4 py-2 rounded"
+                    onClick={() => setShowHelpModal(false)}
+                  >
+                    Got it
+                  </button>
                 </div>
               </div>
-            )}
-
-            <div className="mt-2 flex space-x-2">
-              <button
-                onClick={async () => {
-                  console.log("Current panorama:", currentPanorama);
-                  await verifyMarkersInDatabase(currentPanorama.id);
-                }}
-                className="bg-gray-200 text-black px-2 py-1 rounded text-xs"
-              >
-                Log Details
-              </button>
             </div>
-          </div>
-        )}
-
-        {currentPanorama ? (
-          <div key={`panorama-${currentPanorama.id}`} className="w-full h-full">
-            <ReactPhotoSphereViewer
-              ref={photoViewerRef}
-              src={currentPanorama.url}
-              height="100%"
-              width="100%"
-              plugins={[[MarkersPlugin, { markers: currentPanorama.markers }]]}
-              navbar={["zoom", "fullscreen"]}
-              minFov={30}
-              maxFov={90}
-              onReady={(instance) => {
-                console.log("Panorama viewer is ready!");
-                initializeViewer(instance);
-              }}
-            />
-          </div>
-        ) : (
-          <div className="flex items-center justify-center w-full h-full text-gray-500">
-            Select a grid location to view its panorama
-          </div>
-        )}
-      </div>
-
-      {/* BOTTOM: Grid */}
-      <div className="p-4 border-t border-gray-300 overflow-y-auto">
-        <h2 className="text-lg font-semibold mb-4">Locations Grid</h2>
-        {rows > 0 && cols > 0 ? (
-          <div
-            className="grid gap-3 place-items-center w-max mx-auto"
-            style={{
-              gridTemplateRows: `repeat(${rows}, 120px)`,
-              gridTemplateColumns: `repeat(${cols}, 120px)`,
-            }}
-          >
-            {Array.from({ length: rows * cols }).map((_, i) => {
-              const imageId = gridItems[String(i)];
-              const isAssigned = Boolean(imageId);
-              const assignedPano = isAssigned
-                ? allPanoramas.find((p) => p.id === imageId)
-                : null;
-
-              return (
+          )}
+          {editingMarker && (
+            <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 bg-black border border-gray-300 p-4 rounded shadow-lg z-50 text-white">
+              <h3 className="!text-white font-bold mb-2">
+                Edit Marker Annotation
+              </h3>
+              <textarea
+                className="w-64 h-32 bg-gray-800 border border-gray-300 p-2 mb-3 !text-white !placeholder-grey"
+                value={markerInput}
+                onChange={(e) => setMarkerInput(e.target.value)}
+                placeholder="Enter annotation text..."
+              />
+              <div className="flex justify-between">
+                {/* Only show Delete button for existing markers (not for new ones) */}
+                {currentPanorama?.markers.some(
+                  (marker) =>
+                    marker.id === editingMarker &&
+                    // Check if this marker existed before the current editing session
+                    !editingMarker.startsWith(
+                      `marker-${Date.now().toString().slice(0, 8)}`
+                    )
+                ) && (
+                  <button
+                    className="px-3 py-1 bg-red-500 text-white rounded"
+                    onClick={handleRemoveMarker}
+                  >
+                    Delete
+                  </button>
+                )}
                 <div
-                  key={i}
-                  onClick={() => isAssigned && handleCellClick(i)}
-                  className={`relative w-24 h-24 rounded-full border-2 flex items-center justify-center transition-all 
+                  className={
+                    currentPanorama?.markers.some(
+                      (marker) =>
+                        marker.id === editingMarker &&
+                        !editingMarker.startsWith(
+                          `marker-${Date.now().toString().slice(0, 8)}`
+                        )
+                    )
+                      ? ""
+                      : "ml-auto"
+                  }
+                >
+                  <button
+                    className="mr-2 px-3 py-1 bg-gray-300 rounded"
+                    onClick={() => {
+                      // For new markers, also remove the marker
+                      if (
+                        currentPanorama &&
+                        editingMarker &&
+                        editingMarker.startsWith(
+                          `marker-${Date.now().toString().slice(0, 8)}`
+                        )
+                      ) {
+                        handleRemoveMarker();
+                      } else {
+                        setEditingMarker(null);
+                        setMarkerInput("");
+                      }
+                    }}
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    className="px-3 py-1 bg-blue-500 text-white rounded"
+                    onClick={handleSaveMarkerAnnotation}
+                  >
+                    Save
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {currentPanorama && showDebugOverlay && (
+            <div className="absolute bottom-4 left-4 bg-black text-white p-4 rounded shadow z-30 max-w-md">
+              <h3 className="font-bold">Debug Information</h3>
+              <div className="mt-2 text-xs space-y-1">
+                <p>
+                  <strong>Panorama ID:</strong> {currentPanorama.id}
+                </p>
+                <p>
+                  <strong>Markers:</strong>{" "}
+                  {currentPanorama.markers?.length || 0}
+                </p>
+              </div>
+
+              {currentPanorama.markers &&
+                currentPanorama.markers.length > 0 && (
+                  <div className="mt-2">
+                    <p className="font-bold text-sm">Marker Data:</p>
+                    <div className="mt-1 bg-gray-800 p-2 rounded overflow-auto max-h-32 text-xs">
+                      <pre>
+                        {JSON.stringify(currentPanorama.markers, null, 2)}
+                      </pre>
+                    </div>
+                  </div>
+                )}
+
+              <div className="mt-2 flex space-x-2">
+                <button
+                  onClick={async () => {
+                    console.log("Current panorama:", currentPanorama);
+                    await verifyMarkersInDatabase(currentPanorama.id);
+                  }}
+                  className="bg-gray-200 text-black px-2 py-1 rounded text-xs"
+                >
+                  Log Details
+                </button>
+              </div>
+            </div>
+          )}
+
+          {currentPanorama ? (
+            <div
+              key={`panorama-${currentPanorama.id}`}
+              className="w-full h-full text-w"
+            >
+              <ReactPhotoSphereViewer
+                ref={photoViewerRef}
+                src={currentPanorama.url}
+                height="100%"
+                width="100%"
+                plugins={[
+                  [MarkersPlugin, { markers: currentPanorama.markers }],
+                ]}
+                navbar={["zoom", "fullscreen"]}
+                minFov={30}
+                maxFov={90}
+                onReady={(instance) => {
+                  console.log("Panorama viewer is ready!");
+                  initializeViewer(instance);
+                }}
+              />
+            </div>
+          ) : (
+            <div className="flex items-center justify-center w-full h-full text-gray-500">
+              Select a grid location to view its panorama
+            </div>
+          )}
+        </div>
+
+        {/* BOTTOM: Grid */}
+        <div className="p-4 border-t border-gray-300 overflow-y-auto">
+          <h2 className="text-lg font-semibold mb-4">Locations Grid</h2>
+          {rows > 0 && cols > 0 ? (
+            <div
+              className="grid gap-3 place-items-center w-max mx-auto"
+              style={{
+                gridTemplateRows: `repeat(${rows}, 120px)`,
+                gridTemplateColumns: `repeat(${cols}, 120px)`,
+              }}
+            >
+              {Array.from({ length: rows * cols }).map((_, i) => {
+                const imageId = gridItems[String(i)];
+                const isAssigned = Boolean(imageId);
+                const assignedPano = isAssigned
+                  ? allPanoramas.find((p) => p.id === imageId)
+                  : null;
+
+                return (
+                  <div
+                    key={i}
+                    onClick={() => isAssigned && handleCellClick(i)}
+                    className={`relative w-24 h-24 rounded-full border-2 flex items-center justify-center transition-all 
                   ${
                     isAssigned
                       ? "border-blue-500 bg-blue-100 hover:bg-blue-200 cursor-pointer"
                       : "border-dashed border-gray-300 bg-gray-200 cursor-not-allowed opacity-60"
                   }`}
-                >
-                  {assignedPano ? (
-                    <>
-                      <img
-                        src={assignedPano.url}
-                        alt={`Panorama ${imageId}`}
-                        className="w-full h-full object-cover rounded-full"
-                      />
-                      {assignedPano.markers?.length > 0 && (
-                        <div className="absolute -top-2 -right-2 bg-red-500 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center">
-                          {assignedPano.markers.length}
-                        </div>
-                      )}
-                    </>
-                  ) : (
-                    <span className="text-sm text-gray-500">Unassigned</span>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-        ) : (
-          <p className="text-gray-500">
-            No grid data found. Check if panorama_grid is set up for this
-            project.
-          </p>
-        )}
+                  >
+                    {assignedPano ? (
+                      <>
+                        <img
+                          src={assignedPano.url}
+                          alt={`Panorama ${imageId}`}
+                          className="w-full h-full object-cover rounded-full"
+                        />
+                        {assignedPano.markers?.length > 0 && (
+                          <div className="absolute -top-2 -right-2 bg-red-500 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center">
+                            {assignedPano.markers.length}
+                          </div>
+                        )}
+                      </>
+                    ) : (
+                      <span className="text-sm text-gray-500">Unassigned</span>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          ) : (
+            <p className="text-gray-500">
+              No grid data found. Check if panorama_grid is set up for this
+              project.
+            </p>
+          )}
+        </div>
       </div>
-    </div>
+    </>
   );
 }
