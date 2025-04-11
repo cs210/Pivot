@@ -103,8 +103,8 @@ export default function Home() {
                 </p>
               </div>
             </div>
-            <div className="mx-auto grid max-w-5xl grid-cols-1 gap-6 py-12 md:grid-cols-4 lg:gap-12">
-              <div className="flex flex-col items-center rounded-lg p-4 h-full">
+            <div className="mx-auto grid max-w-5xl grid-cols-1 gap-6 md:grid-cols-4 lg:gap-12">
+              <div className="flex flex-col items-center justify-center rounded-lg p-4 h-full">
                 <div className="rounded-full bg-cyber-gradient p-2 mb-4">
                   <svg
                     className="h-6 w-6 text-foreground"
@@ -130,7 +130,7 @@ export default function Home() {
                   Upload images taken on any device through our secure platform.
                 </p>
               </div>
-              <div className="flex flex-col items-center rounded-lg p-4 h-full">
+              <div className="flex flex-col items-center justify-center rounded-lg p-4 h-full">
                 <div className="rounded-full bg-cyber-gradient p-2 mb-4">
                   <Cube className="h-6 w-6 text-foreground" />
                 </div>
@@ -142,7 +142,7 @@ export default function Home() {
                   360° panoramas.
                 </p>
               </div>
-              <div className="flex flex-col items-center rounded-lg p-4 h-full">
+              <div className="flex flex-col items-center justify-center rounded-lg p-4 h-full">
                 <div className="rounded-full bg-cyber-gradient p-2 mb-4">
                   <svg
                     className="h-6 w-6 text-foreground"
@@ -168,7 +168,7 @@ export default function Home() {
                   observations and analysis.
                 </p>
               </div>
-              <div className="flex flex-col items-center rounded-lg p-4 h-full">
+              <div className="flex flex-col items-center justify-center rounded-lg p-4 h-full">
                 <div className="rounded-full bg-cyber-gradient p-2 mb-4">
                   <svg
                     className="h-6 w-6 text-foreground"

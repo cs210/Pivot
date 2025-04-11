@@ -3,6 +3,7 @@
 import React, { useEffect, useState } from "react";
 import { createClient } from "@/utils/supabase/client";
 import { TabsContent } from "@/components/ui/tabs";
+import { Card } from "@/components/ui/card";
 // Import an "X" icon from lucide-react
 import { X } from "lucide-react";
 
@@ -161,7 +162,10 @@ export default function EnhancedImageGrid({
   };
 
   return (
-    <TabsContent value="place-locations" className="p-4 space-y-6">
+    <Card
+      value="place-locations"
+      className="p-4 space-y-6 bg-background/80 backdrop-blur-sm border-border/50"
+    >
       {/* Top section with heading and row/col controls */}
       <div className="flex justify-between items-center">
         <div>
@@ -180,7 +184,7 @@ export default function EnhancedImageGrid({
               min={1}
               value={rows}
               onChange={handleChangeRows}
-              className="w-16 border border-border/50 rounded px-2 bg-cyber-gradient py-1"
+              className="w-16 border border-border/100 rounded px-2 bg-[#F7F4F1] py-1"
             />
           </label>
           <label className="flex items-center space-x-2">
@@ -190,7 +194,7 @@ export default function EnhancedImageGrid({
               min={1}
               value={cols}
               onChange={handleChangeCols}
-              className="w-16 border border-border/50 rounded px-2 py-1 bg-cyber-gradient"
+              className="w-16 border border-border/100 rounded px-2 py-1 bg-[#F7F4F1]"
             />
           </label>
           <button
@@ -241,13 +245,13 @@ export default function EnhancedImageGrid({
                           alt={found.name || found.id}
                           className="w-full h-full object-cover rounded-full"
                         />
-                        <div className="absolute bottom-0 left-0 right-0 bg-black/50 text-white text-xs px-1 truncate">
+                        <div className="absolute bottom-0 left-0 right-0 bg-black/50 !text-white text-xs px-1 truncate">
                           {found.name || found.id}
                         </div>
 
                         {/* X button to unassign the image */}
                         <button
-                          className="absolute top-0 right-0 m-1 bg-red-600 text-white rounded-full p-1 hover:bg-red-700 focus:outline-none"
+                          className="absolute top-0 right-0 m-1 bg-cyber-gradient text-white rounded-full p-1 hover:bg-red-700 focus:outline-none"
                           style={{ width: "1.25rem", height: "1.25rem" }}
                           onClick={(e) => {
                             e.stopPropagation(); // prevent cell click
@@ -267,8 +271,8 @@ export default function EnhancedImageGrid({
                   {openDropdownCell === cellIndex && (
                     <div
                       className="absolute top-full left-1/2 -translate-x-1/2 mt-2 
-                                 min-w-[300px] max-h-96 p-4 bg-grey border 
-                                 shadow-md z-50 rounded-lg text-base overflow-auto"
+                                 min-w-[300px] max-h-96 p-4 !bg-white border 
+                                 shadow-md z-50 rounded-lg text-base overflow-auto opacity-100"
                       style={{ width: "300px" }}
                       onClick={(e) => e.stopPropagation()}
                     >
@@ -309,6 +313,6 @@ export default function EnhancedImageGrid({
           </div>
         </div>
       </div>
-    </TabsContent>
+    </Card>
   );
 }

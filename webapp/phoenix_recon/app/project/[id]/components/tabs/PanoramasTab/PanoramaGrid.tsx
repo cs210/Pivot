@@ -64,7 +64,9 @@ export default function PanoramaGrid({
   getRootPanoramas,
 }: PanoramaGridProps) {
   // Determine which panoramas to show based on currentFolder
-  const panoramasToShow = currentFolder ? getCurrentFolderPanoramas() : panoramas;
+  const panoramasToShow = currentFolder
+    ? getCurrentFolderPanoramas()
+    : panoramas;
 
   return (
     <div className="md:col-span-9">
@@ -80,8 +82,15 @@ export default function PanoramaGrid({
               <Button
                 variant="outline"
                 size="icon"
-                onClick={() => setViewMode(viewMode === "grid" ? "list" : "grid")}
-                title={viewMode === "grid" ? "Switch to list view" : "Switch to grid view"}
+                onClick={() =>
+                  setViewMode(viewMode === "grid" ? "list" : "grid")
+                }
+                title={
+                  viewMode === "grid"
+                    ? "Switch to list view"
+                    : "Switch to grid view"
+                }
+                className="bg-cyber-gradient hover:opacity-90"
               >
                 {viewMode === "grid" ? (
                   <List className="h-4 w-4" />
@@ -96,7 +105,9 @@ export default function PanoramaGrid({
                   size="sm"
                   onClick={() => {
                     setPanoramasToMove(
-                      panoramas.filter((pano) => selectedPanoramas.includes(pano.id))
+                      panoramas.filter((pano) =>
+                        selectedPanoramas.includes(pano.id)
+                      )
                     );
                     setMovePanoramaDialogOpen(true);
                   }}
@@ -107,10 +118,11 @@ export default function PanoramaGrid({
               )}
 
               {/* Generate 360 Images button */}
-              <Button 
-                variant="outline" 
+              <Button
+                variant="outline"
                 onClick={() => setGenerate360DialogOpen(true)}
                 disabled={processing}
+                className="bg-cyber-gradient hover:opacity-90"
               >
                 {processing ? (
                   <>
@@ -126,7 +138,10 @@ export default function PanoramaGrid({
               </Button>
 
               {/* Panorama upload button */}
-              <Button className="bg-cyber-gradient hover:opacity-90" disabled={uploading}>
+              <Button
+                className="bg-cyber-gradient hover:opacity-90"
+                disabled={uploading}
+              >
                 <Upload className="mr-2 h-4 w-4" />
                 <label className="cursor-pointer">
                   Upload 360° Images
@@ -179,8 +194,7 @@ export default function PanoramaGrid({
                     )}
                     <div className="absolute bottom-0 left-0 right-0 bg-background/70 p-2 text-xs truncate">
                       {panorama.name}
-                      {panorama.is_processing &&
-                        " (Processing)"}
+                      {panorama.is_processing && " (Processing)"}
                     </div>
                     <div className="absolute top-2 right-2">
                       <DropdownMenu>
@@ -272,11 +286,7 @@ export default function PanoramaGrid({
                         asChild
                         onClick={(e) => e.stopPropagation()}
                       >
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-8 w-8"
-                        >
+                        <Button variant="ghost" size="icon" className="h-8 w-8">
                           <MoreVertical className="h-4 w-4" />
                         </Button>
                       </DropdownMenuTrigger>
@@ -327,12 +337,12 @@ export default function PanoramaGrid({
             <div className="text-center py-12">
               <Box className="h-16 w-16 text-muted-foreground mx-auto mb-4" />
               <p className="text-muted-foreground mb-4">
-                No 360° images found. Upload or generate some
-                images to get started.
+                No 360° images found. Upload or generate some images to get
+                started.
               </p>
               <div className="flex justify-center gap-4">
-                <Button 
-                  variant="outline" 
+                <Button
+                  variant="outline"
                   onClick={() => setGenerate360DialogOpen(true)}
                 >
                   <Box className="mr-2 h-4 w-4" />
