@@ -616,7 +616,7 @@ export default function PanoramaViewerPage({
         <div ref={viewerRef} className="flex-1 p-4 relative bg-gray-50">
           <div className="absolute top-2 right-2 z-10 flex space-x-2">
             <button
-              className="bg-gray-500 text-white px-3 py-1 rounded"
+              className="bg-gray-100 hover:opacity-90 text-white px-3 py-1 rounded"
               onClick={() => setShowDebugOverlay(!showDebugOverlay)}
             >
               {showDebugOverlay ? "Hide Debug" : "Show Debug"}
@@ -634,8 +634,8 @@ export default function PanoramaViewerPage({
                 <h2 className="text-xl font-bold mb-4">How to Annotate</h2>
                 <p className="mb-4">
                   Click anywhere on the image to drop a pin at that location. A
-                  pop-up will let you a text label for each pin, allowing you to
-                  annotate specific parts of the image.
+                  pop-up will let you add a text label for each pin, allowing
+                  you to annotate specific parts of the image.
                 </p>
                 <p className="mb-4">
                   Hover over any existing pin to see its text label.
@@ -656,12 +656,10 @@ export default function PanoramaViewerPage({
             </div>
           )}
           {editingMarker && (
-            <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 bg-black border border-gray-300 p-4 rounded shadow-lg z-50 text-white">
-              <h3 className="!text-white font-bold mb-2">
-                Edit Marker Annotation
-              </h3>
+            <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 bg-white border border-gray-300 p-4 rounded shadow-lg z-50 text-white">
+              <h3 className="font-bold mb-2">Edit Marker Annotation</h3>
               <textarea
-                className="w-64 h-32 bg-gray-800 border border-gray-300 p-2 mb-3 !text-white !placeholder-grey"
+                className="w-64 h-32 bg-gray-100 border border-gray-300 p-2 mb-3 !text-black !placeholder-grey"
                 value={markerInput}
                 onChange={(e) => setMarkerInput(e.target.value)}
                 placeholder="Enter annotation text..."
@@ -677,7 +675,7 @@ export default function PanoramaViewerPage({
                     )
                 ) && (
                   <button
-                    className="px-3 py-1 bg-red-500 text-white rounded"
+                    className="px-3 py-1 bg-[#bd7581] !text-white rounded"
                     onClick={handleRemoveMarker}
                   >
                     Delete
@@ -697,7 +695,7 @@ export default function PanoramaViewerPage({
                   }
                 >
                   <button
-                    className="mr-2 px-3 py-1 bg-gray-300 rounded"
+                    className="mr-2 px-3 py-1 bg-gray-300 hover:opacity-90 rounded"
                     onClick={() => {
                       // For new markers, also remove the marker
                       if (
@@ -717,7 +715,7 @@ export default function PanoramaViewerPage({
                     Cancel
                   </button>
                   <button
-                    className="px-3 py-1 bg-blue-500 text-white rounded"
+                    className="px-3 py-1 bg-cyber-gradient hover:opacity-90 text-white rounded"
                     onClick={handleSaveMarkerAnnotation}
                   >
                     Save
@@ -728,7 +726,7 @@ export default function PanoramaViewerPage({
           )}
 
           {currentPanorama && showDebugOverlay && (
-            <div className="absolute bottom-4 left-4 bg-black text-white p-4 rounded shadow z-30 max-w-md">
+            <div className="absolute bottom-4 left-4 bg-white text-black p-4 rounded shadow z-30 max-w-md">
               <h3 className="font-bold">Debug Information</h3>
               <div className="mt-2 text-xs space-y-1">
                 <p>
@@ -744,7 +742,7 @@ export default function PanoramaViewerPage({
                 currentPanorama.markers.length > 0 && (
                   <div className="mt-2">
                     <p className="font-bold text-sm">Marker Data:</p>
-                    <div className="mt-1 bg-gray-800 p-2 rounded overflow-auto max-h-32 text-xs">
+                    <div className="mt-1 bg-gray-100 p-2 rounded overflow-auto max-h-32 text-xs">
                       <pre>
                         {JSON.stringify(currentPanorama.markers, null, 2)}
                       </pre>
@@ -832,7 +830,7 @@ export default function PanoramaViewerPage({
                           className="w-full h-full object-cover rounded-full"
                         />
                         {assignedPano.markers?.length > 0 && (
-                          <div className="absolute -top-2 -right-2 bg-red-500 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center">
+                          <div className="absolute -top-2 -right-2 bg-[#bd7581] !text-white text-xs rounded-full w-5 h-5 flex items-center justify-center">
                             {assignedPano.markers.length}
                           </div>
                         )}
