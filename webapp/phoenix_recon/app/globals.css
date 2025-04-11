@@ -7,7 +7,7 @@
 @layer base {
   :root {
     /* A softer, neutral, geometric-inspired palette */
-    --background: 40 25% 95%; /* roughly #f4f1ea */
+    --background: 30 26% 95%; /* roughly #F7F4F1 */
     --foreground: 0 0% 20%; /* roughly #333333 */
 
     --card: 0 0% 100%; /* #ffffff */
@@ -43,6 +43,7 @@ body {
   background-color: hsl(var(--background));
   color: hsl(var(--foreground));
   font-family: "Caudex", serif;
+  font-size: 1rem;
 }
 
 /* Simplified card styling for a minimalist, geometric aesthetic */
@@ -66,7 +67,39 @@ body {
   background-color: transparent;
 }
 
-/* Override default font family for all elements */
+/* Override default font family and text color for all elements */
 * {
   font-family: "Caudex", serif !important;
+  color: #000 !important;
+}
+
+/* Updated definitions for legacy classes to match new aesthetic */
+.cyber-border {
+  border: 1px solid hsl(var(--border));
+  box-shadow: 0 0 5px rgba(0, 0, 0, 0.05);
+}
+
+.bg-cyber-gradient {
+  background: linear-gradient(135deg, hsl(39, 65%, 85%), hsl(350 38% 79%));
+}
+
+/* Increase button text size to match regular text */
+button {
+  font-size: 1rem !important;
+}
+
+/* New active tab style that overrides the old gradient */
+.active-tab {
+  background: linear-gradient(
+    135deg,
+    hsl(39, 65%, 85%),
+    hsl(350, 35%, 60%)
+  ) !important;
+  /* color: hsl(var(--foreground)) !important; */
+}
+
+/* Override tooltip text color for annotation markers */
+#photo-sphere-viewer .psv-tooltip,
+#photo-sphere-viewer .psv-tooltip * {
+  color: #fff !important;
 }

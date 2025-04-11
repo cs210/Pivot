@@ -18,7 +18,7 @@ const geistMono = localFont({
 });
 
 export const metadata: Metadata = {
-  title: "Phoenix Recon - 360° Video to VR Platform",
+  title: "Pivot - 360° Video to VR Platform",
   description: "Transform your 360° videos into interactive VR experiences",
 };
 

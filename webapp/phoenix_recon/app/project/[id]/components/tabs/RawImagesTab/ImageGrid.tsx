@@ -72,16 +72,20 @@ export default function ImageGrid({
         <CardHeader>
           <div className="flex justify-between items-center">
             <CardTitle>
-              {currentFolder
-                ? `Images in ${currentFolder.name}`
-                : "All Images"}
+              {currentFolder ? `Images in ${currentFolder.name}` : "All Images"}
             </CardTitle>
             <div className="flex space-x-2">
               <Button
                 variant="outline"
                 size="icon"
-                onClick={() => setViewMode(viewMode === "grid" ? "list" : "grid")}
-                title={viewMode === "grid" ? "Switch to list view" : "Switch to grid view"}
+                onClick={() =>
+                  setViewMode(viewMode === "grid" ? "list" : "grid")
+                }
+                title={
+                  viewMode === "grid"
+                    ? "Switch to list view"
+                    : "Switch to grid view"
+                }
               >
                 {viewMode === "grid" ? (
                   <List className="h-4 w-4" />
@@ -107,7 +111,10 @@ export default function ImageGrid({
               )}
 
               {/* Image upload button */}
-              <Button className="bg-cyber-gradient hover:opacity-90" disabled={uploading}>
+              <Button
+                className="bg-cyber-gradient hover:opacity-90"
+                disabled={uploading}
+              >
                 <Upload className="mr-2 h-4 w-4" />
                 <label className="cursor-pointer">
                   Upload Images
@@ -124,7 +131,10 @@ export default function ImageGrid({
               </Button>
 
               {/* Folder upload button */}
-              <Button className="bg-cyber-gradient hover:opacity-90" disabled={uploading}>
+              <Button
+                className="bg-cyber-gradient hover:opacity-90"
+                disabled={uploading}
+              >
                 <FolderPlus className="mr-2 h-4 w-4" />
                 <label className="cursor-pointer">
                   Upload Folders
@@ -147,9 +157,7 @@ export default function ImageGrid({
         <CardContent>
           {uploading ? (
             <div className="text-center py-12">
-              <p className="text-muted-foreground mb-4">
-                Uploading images...
-              </p>
+              <p className="text-muted-foreground mb-4">Uploading images...</p>
             </div>
           ) : viewMode === "grid" ? (
             <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
@@ -244,20 +252,14 @@ export default function ImageGrid({
                       className="object-cover w-full h-full"
                     />
                   </div>
-                  <div className="flex-1 truncate">
-                    {image.name}
-                  </div>
+                  <div className="flex-1 truncate">{image.name}</div>
                   <div className="flex items-center">
                     <DropdownMenu>
                       <DropdownMenuTrigger
                         asChild
                         onClick={(e) => e.stopPropagation()}
                       >
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-8 w-8"
-                        >
+                        <Button variant="ghost" size="icon" className="h-8 w-8">
                           <MoreVertical className="h-4 w-4" />
                         </Button>
                       </DropdownMenuTrigger>
