@@ -3,8 +3,8 @@ This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-
 ## Getting Started
 
 ### First, add necessary files.
-* AWS certificate `cs210.cer`
-* .env
+* Add AWS certificate to the parent directory (so `./cs210.cer`)
+* Add .env to this directory with the following values:
     * NEXT_PUBLIC_SUPABASE_URL=[]
     * NEXT_PUBLIC_SUPABASE_ANON_KEY=[]
     * AWS_HOST=[IP Address ending in .amazonaws.com]
