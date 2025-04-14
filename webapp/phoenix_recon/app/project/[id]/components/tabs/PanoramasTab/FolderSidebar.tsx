@@ -1,17 +1,18 @@
 import { Button } from "@/components/ui/button";
-import {
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { FolderOpen, FolderPlus, MoreVertical, Edit, Trash2 } from "lucide-react";
+import {
+  FolderOpen,
+  FolderPlus,
+  MoreVertical,
+  Edit,
+  Trash2,
+} from "lucide-react";
 import { Folder } from "../../../hooks/useFolders";
 
 interface FolderSidebarProps {
@@ -52,7 +53,9 @@ export default function FolderSidebar({
           <nav className="flex flex-col space-y-1">
             <Button
               variant={currentFolder === null ? "default" : "ghost"}
-              className="justify-start"
+              className={`justify-start ${
+                currentFolder === null ? "bg-cyber-gradient" : ""
+              }`}
               onClick={() => setCurrentFolder(null)}
             >
               <FolderOpen className="mr-2 h-4 w-4" />
@@ -61,8 +64,12 @@ export default function FolderSidebar({
             {folders.map((folder) => (
               <div key={folder.id} className="flex items-center">
                 <Button
-                  variant={currentFolder?.id === folder.id ? "default" : "ghost"}
-                  className="justify-start flex-1"
+                  variant={
+                    currentFolder?.id === folder.id ? "default" : "ghost"
+                  }
+                  className={`justify-start flex-1 ${
+                    currentFolder?.id === folder.id ? "bg-cyber-gradient" : ""
+                  }`}
                   onClick={() => setCurrentFolder(folder)}
                 >
                   <FolderOpen className="mr-2 h-4 w-4" />
