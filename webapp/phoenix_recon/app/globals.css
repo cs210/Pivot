@@ -1,227 +1,105 @@
+@import url("https://fonts.googleapis.com/css2?family=Caudex:wght@300;400;700&display=swap");
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 @import "@photo-sphere-viewer/markers-plugin/index.css";
+
 @layer base {
   :root {
-    --background: 240 47% 3%;
-    --foreground: 0 0% 98%;
+    /* A softer, neutral, geometric-inspired palette */
+    --background: 30 26% 95%; /* roughly #F7F4F1 */
+    --foreground: 0 0% 20%; /* roughly #333333 */
 
-    --card: 240 47% 3%;
-    --card-foreground: 0 0% 98%;
+    --card: 0 0% 100%; /* #ffffff */
+    --card-foreground: 0 0% 20%;
 
-    --popover: 240 47% 3%;
-    --popover-foreground: 0 0% 98%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 0 0% 20%;
 
-    --primary: 346 100% 58.8%;
-    --primary-foreground: 0 0% 98%;
+    --primary: 0 0% 20%; /* darker gray for text/elements */
+    --primary-foreground: 0 0% 100%;
 
-    --secondary: 280 65% 60%;
-    --secondary-foreground: 0 0% 98%;
+    --secondary: 36 13% 63%; /* a subtle taupe or warm gray (approx. #A2978A) */
+    --secondary-foreground: 0 0% 20%;
 
-    --muted: 240 47% 3%;
-    --muted-foreground: 240 5% 84.9%;
+    --muted: 40 25% 90%; /* a light neutral (approx. #eae7e1) */
+    --muted-foreground: 0 0% 40%; /* medium gray (approx. #666666) */
 
-    --accent: 280 65% 60%;
-    --accent-foreground: 0 0% 98%;
+    --accent: 36 13% 63%;
+    --accent-foreground: 0 0% 20%;
 
-    --destructive: 0 62.8% 30.6%;
+    --destructive: 0 62.8% 30.6%; /* retaining red for destructive actions */
     --destructive-foreground: 0 0% 98%;
 
-    --border: 240 47% 8%;
-    --input: 240 47% 8%;
-    --ring: 240 5% 84.9%;
+    --border: 0 0% 85%; /* soft border color (#dddddd) */
+    --input: 0 0% 93%; /* light input background (#eeeeee) */
+    --ring: 0 0% 73%; /* muted ring (#bbbbbb) */
 
     --radius: 0.5rem;
   }
 }
 
 body {
-  /* Keep the black (or near-black) background behind everything */
-  background-color: #050517;
+  background-color: hsl(var(--background));
+  color: hsl(var(--foreground));
+  font-family: "Caudex", serif;
+  font-size: 1rem;
 }
 
-/* Place blobs behind the main content by giving them a lower z-index
-   but above the body background */
-.blob-container {
-  position: fixed;
-  top: 0;
-  left: 0;
-  width: 100vw;
-  height: 100vh;
-  z-index: 1; /* <--- behind .relative.z-10 in your layout, above body */
-  overflow: hidden;
-  pointer-events: none; /* So clicks pass through to the content */
-}
-
-.blob {
-  position: absolute;
-  border-radius: 50%;
-  background-size: cover;
-  background-repeat: no-repeat;
-  filter: blur(5px);
-  opacity: 1;
-  mix-blend-mode: normal;
-}
-
-/* Example keyframe animations (optional) */
-@keyframes blob-movement-1 {
-  0%,
-  100% {
-    transform: translate(0, 0) scale(1);
-  }
-  33% {
-    transform: translate(5%, -5%) scale(1.1);
-  }
-  66% {
-    transform: translate(-5%, 5%) scale(0.9);
-  }
-}
-@keyframes blob-movement-2 {
-  0%,
-  100% {
-    transform: translate(0, 0) scale(1);
-  }
-  33% {
-    transform: translate(-5%, 5%) scale(1.1);
-  }
-  66% {
-    transform: translate(5%, -5%) scale(0.9);
-  }
-}
-@keyframes blob-movement-3 {
-  0%,
-  100% {
-    transform: translate(0, 0) scale(1);
-  }
-  33% {
-    transform: translate(7%, 3%) scale(1.05);
-  }
-  66% {
-    transform: translate(-3%, -7%) scale(0.95);
-  }
-}
-
-/* Example positions for the nine blobs.
-   Adjust widths/heights & animations to your preference. */
-
-.blob-1 {
-  top: 0;
-  left: 0;
-  width: 200px;
-  height: 200px;
-  animation: blob-movement-1 20s infinite ease-in-out;
-}
-
-.blob-2 {
-  top: 0;
-  right: 0;
-  width: 200px;
-  height: 200px;
-  animation: blob-movement-2 25s infinite ease-in-out;
-}
-
-.blob-3 {
-  bottom: 0;
-  left: 0;
-  width: 200px;
-  height: 200px;
-  animation: blob-movement-3 22s infinite ease-in-out;
-}
-
-.blob-4 {
-  bottom: 0;
-  right: 0;
-  width: 200px;
-  height: 200px;
-}
-
-.blob-5 {
-  top: 50%;
-  left: 0;
-  width: 200px;
-  height: 200px;
-  transform: translateY(-50%);
-}
-
-.blob-6 {
-  top: 50%;
-  right: 0;
-  width: 200px;
-  height: 200px;
-  transform: translateY(-50%);
-}
-
-.blob-7 {
-  top: 0;
-  left: 50%;
-  width: 200px;
-  height: 200px;
-  transform: translateX(-50%);
-}
-
-.blob-8 {
-  bottom: 0;
-  left: 50%;
-  width: 200px;
-  height: 200px;
-  transform: translateX(-50%);
-}
-
-.blob-9 {
-  top: 50%;
-  left: 50%;
-  width: 200px;
-  height: 200px;
-  transform: translate(-50%, -50%);
-}
-
-/* Other styles remain the same */
-.geometric-text {
-  letter-spacing: 0.05em;
-  text-transform: uppercase;
-  font-weight: 700;
-}
-
-.gradient-text {
-  background: linear-gradient(135deg, #ff006e, #8a2be2);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
-}
-
+/* Simplified card styling for a minimalist, geometric aesthetic */
 .glass-card {
-  background: rgba(13, 13, 18, 0.8);
-  backdrop-filter: blur(12px);
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  background-color: hsl(var(--card));
+  color: hsl(var(--card-foreground));
+  border: 1px solid hsl(var(--border));
+  border-radius: var(--radius);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.07);
 }
 
-.noise {
-  position: fixed;
-  inset: 0;
-  z-index: 2;
-  pointer-events: none;
-  opacity: 0.05;
-  background: url("data:image/svg+xml,%3Csvg viewBox='0 0 2000 2000' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E");
-}
-
-.cyber-border {
-  border: 1px solid rgba(255, 0, 110, 0.3);
-  box-shadow: 0 0 10px rgba(255, 0, 110, 0.1);
-}
-
-.bg-cyber-gradient {
-  background: linear-gradient(135deg, #ff006e, #8a2be2);
-}
-
-/* Scrollbar styling for the thumbnails */
+/* Scrollbar styling remains subtle and clean */
 .scrollbar-thin::-webkit-scrollbar {
   height: 6px;
 }
 .scrollbar-thumb-muted::-webkit-scrollbar-thumb {
-  background-color: rgba(255, 255, 255, 0.2);
+  background-color: rgba(0, 0, 0, 0.1);
   border-radius: 3px;
 }
 .scrollbar-track-transparent::-webkit-scrollbar-track {
   background-color: transparent;
+}
+
+/* Override default font family and text color for all elements */
+* {
+  font-family: "Caudex", serif !important;
+  color: #000 !important;
+}
+
+/* Updated definitions for legacy classes to match new aesthetic */
+.cyber-border {
+  border: 1px solid hsl(var(--border));
+  box-shadow: 0 0 5px rgba(0, 0, 0, 0.05);
+}
+
+.bg-cyber-gradient {
+  background: linear-gradient(135deg, hsl(39, 65%, 85%), hsl(350 38% 79%));
+}
+
+/* Increase button text size to match regular text */
+button {
+  font-size: 1rem !important;
+}
+
+/* New active tab style that overrides the old gradient */
+.active-tab {
+  background: linear-gradient(
+    135deg,
+    hsl(39, 65%, 85%),
+    hsl(350, 35%, 60%)
+  ) !important;
+  /* color: hsl(var(--foreground)) !important; */
+}
+
+/* Override tooltip text color for annotation markers */
+#photo-sphere-viewer .psv-tooltip,
+#photo-sphere-viewer .psv-tooltip * {
+  color: #fff !important;
 }

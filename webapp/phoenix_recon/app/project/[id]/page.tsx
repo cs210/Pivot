@@ -64,34 +64,34 @@ export default function ProjectPage() {
             onValueChange={setActiveTab}
             className="w-full"
           >
-            <TabsList className="mb-6 bg-muted/50 border border-border/50">
+            <TabsList className="mb-6 bg-muted/100 border border-border/50">
               <TabsTrigger
                 value="raw-images"
-                className="data-[state=active]:bg-cyber-gradient data-[state=active]:text-foreground"
+                className="data-[state=active]:active-tab"
               >
                 Raw Images
               </TabsTrigger>
               <TabsTrigger
                 value="360-images"
-                className="data-[state=active]:bg-cyber-gradient data-[state=active]:text-foreground"
+                className="data-[state=active]:active-tab"
               >
                 360° Images
               </TabsTrigger>
               <TabsTrigger
                 value="place-locations"
-                className="data-[state=active]:bg-cyber-gradient data-[state=active]:text-foreground"
+                className="data-[state=active]:active-tab"
               >
                 Place on Grid
               </TabsTrigger>
               <TabsTrigger
                 value="walkthrough"
-                className="data-[state=active]:bg-cyber-gradient data-[state=active]:text-foreground"
+                className="data-[state=active]:active-tab"
               >
                 View & Annotate
               </TabsTrigger>
               <TabsTrigger
                 value="settings"
-                className="data-[state=active]:bg-cyber-gradient data-[state=active]:text-foreground"
+                className="data-[state=active]:active-tab"
               >
                 Project Settings
               </TabsTrigger>
@@ -127,7 +127,7 @@ export default function ProjectPage() {
       <footer className="border-t border-border/40 bg-background">
         <div className="container flex flex-col gap-2 py-4 md:h-16 md:flex-row md:items-center md:justify-between md:py-0">
           <p className="text-center text-sm text-muted-foreground md:text-left">
-            © 2024 Phoenix Recon. All rights reserved.
+            © 2025 Pivot. All rights reserved.
           </p>
           <nav className="flex items-center justify-center gap-4 md:gap-6">
             <Link

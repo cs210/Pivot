@@ -5,8 +5,22 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/utils/supabase/client";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import {
+  Card,
+  CardContent,
+  CardFooter,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -84,17 +98,17 @@ export default function Dashboard() {
         .select();
 
       if (error) throw error;
-      
+
       // Close dialog and reset form
       setNewProjectName("");
       setCreateDialogOpen(false);
-      
+
       // Redirect to the new project's page
       if (data && data.length > 0) {
         router.push(`/project/${data[0].id}`);
       } else {
         // Fallback if no data returned
-        setProjects(prev => [...prev]);
+        setProjects((prev) => [...prev]);
         alert("Project created successfully");
       }
     } catch (error) {
@@ -124,10 +138,10 @@ export default function Dashboard() {
             : p
         )
       );
-      
+
       setEditDialogOpen(false);
       setCurrentProject(null);
-      
+
       alert("Project updated successfully");
     } catch (error) {
       console.error("Error updating project:", error);
@@ -137,15 +151,12 @@ export default function Dashboard() {
 
   const handleDeleteProject = async (id: string) => {
     try {
-      const { error } = await supabase
-        .from("projects")
-        .delete()
-        .eq("id", id);
+      const { error } = await supabase.from("projects").delete().eq("id", id);
 
       if (error) throw error;
 
       setProjects(projects.filter((p) => p.id !== id));
-      
+
       alert("Project deleted successfully");
     } catch (error) {
       console.error("Error deleting project:", error);
@@ -178,7 +189,10 @@ export default function Dashboard() {
           <div className="flex justify-between items-center mb-8">
             <h1 className="text-3xl font-bold cyber-glow">Your Projects</h1>
             <div className="flex gap-4">
-              <Dialog open={createDialogOpen} onOpenChange={setCreateDialogOpen}>
+              <Dialog
+                open={createDialogOpen}
+                onOpenChange={setCreateDialogOpen}
+              >
                 <DialogTrigger asChild>
                   <Button className="bg-cyber-gradient hover:opacity-90">
                     <PlusCircle className="mr-2 h-4 w-4" />
@@ -187,14 +201,19 @@ export default function Dashboard() {
                 </DialogTrigger>
                 <DialogContent className="sm:max-w-[425px] bg-background text-white">
                   <DialogHeader>
-                    <DialogTitle className="text-white">Create New Project</DialogTitle>
+                    <DialogTitle className="text-white">
+                      Create New Project
+                    </DialogTitle>
                     <DialogDescription className="text-white/70">
                       Give your project a descriptive name.
                     </DialogDescription>
                   </DialogHeader>
                   <div className="grid gap-4 py-4">
                     <div className="grid grid-cols-4 items-center gap-4">
-                      <Label htmlFor="project-name" className="text-right text-white">
+                      <Label
+                        htmlFor="project-name"
+                        className="text-right text-white"
+                      >
                         Name
                       </Label>
                       <Input
@@ -207,7 +226,11 @@ export default function Dashboard() {
                     </div>
                   </div>
                   <DialogFooter>
-                    <Button type="submit" onClick={handleCreateProject} className="text-white bg-cyber-gradient hover:opacity-90">
+                    <Button
+                      type="submit"
+                      onClick={handleCreateProject}
+                      className="text-white bg-cyber-gradient hover:opacity-90"
+                    >
                       Create
                     </Button>
                   </DialogFooter>
@@ -304,7 +327,10 @@ export default function Dashboard() {
               </DialogHeader>
               <div className="grid gap-4 py-4">
                 <div className="grid grid-cols-4 items-center gap-4">
-                  <Label htmlFor="edit-project-name" className="text-right text-white">
+                  <Label
+                    htmlFor="edit-project-name"
+                    className="text-right text-white"
+                  >
                     Name
                   </Label>
                   <Input
@@ -316,7 +342,11 @@ export default function Dashboard() {
                 </div>
               </div>
               <DialogFooter>
-                <Button type="submit" onClick={handleUpdateProject} className="text-white bg-cyber-gradient hover:opacity-90">
+                <Button
+                  type="submit"
+                  onClick={handleUpdateProject}
+                  className="text-white bg-cyber-gradient hover:opacity-90"
+                >
                   Save Changes
                 </Button>
               </DialogFooter>
@@ -327,7 +357,7 @@ export default function Dashboard() {
       <footer className="border-t border-border/40 bg-background">
         <div className="container flex flex-col gap-2 py-4 md:h-16 md:flex-row md:items-center md:justify-between md:py-0">
           <p className="text-center text-sm text-muted-foreground md:text-left">
-            © 2024 Phoenix Recon. All rights reserved.
+            © 2025 Pivot. All rights reserved.
           </p>
           <nav className="flex items-center justify-center gap-4 md:gap-6">
             <Link

@@ -66,7 +66,8 @@ module.exports = {
       },
       backgroundImage: {
         "gradient-radial": "radial-gradient(var(--tw-gradient-stops))",
-        "cyber-gradient": "linear-gradient(135deg, #ff006e 0%, #8a2be2 100%)",
+        "cyber-gradient":
+          "linear-gradient(135deg, hsl(39, 65%, 85%), hsl(350 38% 79%))",
         "warm-gradient": "linear-gradient(135deg, #ff6600 0%, #ff006e 100%)",
       },
       borderRadius: {
@@ -91,5 +92,4 @@ module.exports = {
     },
   },
   plugins: [require("tailwindcss-animate")],
-}
-
+};
