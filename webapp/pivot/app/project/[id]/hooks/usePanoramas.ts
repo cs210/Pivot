@@ -182,6 +182,15 @@ export function usePanoramas(projectId: string) {
     const files = event.target.files;
     if (!files || files.length === 0) return;
 
+    // Get user ID first
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) {
+      alert("User not authenticated. Please log in.");
+      setUploading(false);
+      return;
+    }
+    const userId = user.id;
+
     setUploading(true);
 
     try {
@@ -201,14 +210,11 @@ export function usePanoramas(projectId: string) {
           });
 
         if (uploadError) {
-          console.error("Storage upload error:", {
-            message: uploadError.message,
-            name: uploadError.name,
-            code: uploadError.code,
-            details: uploadError.details,
-            hint: uploadError.hint,
-            fullError: JSON.stringify(uploadError, null, 2),
-          });
+          console.error(
+            "Storage upload error:", 
+            uploadError.message, // Log the primary message
+            { fullError: uploadError } // Log the full error object for details
+          );
           throw uploadError;
         }
 
@@ -238,41 +244,44 @@ export function usePanoramas(projectId: string) {
               project_id: projectId,
               url: urlData.publicUrl,
               folder_id: currentFolder?.id || null,
+              user_id: userId,
             },
           ])
           .select();
 
         if (error) {
-          console.error("Database insert error:", {
-            message: error.message,
-            code: error.code,
-            details: error.details,
-            hint: error.hint,
-            fullError: JSON.stringify(error, null, 2),
-          });
+          // Explicitly check if error is a PostgrestError or similar if needed
+          // For now, log safely
+          console.error(
+            "Database insert error:",
+            error instanceof Error ? error.message : "Unknown database error",
+            { fullError: error }
+          );
           throw error;
         }
 
-        console.log("Panorama record created in database:", data);
+        console.log("Panorama saved to database:", data);
 
-        // Add to local state
+        // Update local state immediately if insert was successful
         if (data && data.length > 0) {
-          setPanoramas((prev) => [...prev, ...data]);
+          const newPanorama = {
+            ...data[0],
+            folder_id: data[0].folder_id || null,
+            source_image_id: data[0].source_image_id || null,
+            is_processing: data[0].is_processing || false,
+          };
+          setPanoramas((prev) => [...prev, newPanorama]);
         }
       }
 
       alert("360 images uploaded successfully");
     } catch (error) {
-      console.error("Error uploading 360 images:", {
-        message: error.message,
-        code: error.code,
-        details: error.details,
-        hint: error.hint,
-        name: error.name,
-        stack: error.stack,
-        fullError: JSON.stringify(error, null, 2),
-      });
-      alert(`Failed to upload 360 images: ${error.message || "Unknown error"}`);
+      console.error(
+        "Failed to upload 360 images:",
+        error instanceof Error ? error.message : "Unknown error",
+        { fullError: error }
+        );
+      alert("Failed to upload 360 images");
     } finally {
       setUploading(false);
       // Reset the file input
@@ -289,6 +298,14 @@ const handleGenerate360Images = async () => {
     return;
   }
 
+  // Get user ID
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) {
+    alert("User not authenticated. Please log in.");
+    return;
+  }
+  const userId = user.id;
+
   setProcessing(true);
 
   try {
@@ -304,6 +321,7 @@ const handleGenerate360Images = async () => {
           url: imagesToConvert[0].url, // Temporary URL until processing is complete
           folder_id: imagesToConvert[0].folder_id,
           is_processing: true,
+          user_id: userId,
         },
       ])
       .select();
@@ -374,14 +392,16 @@ const handleGenerate360Images = async () => {
         .from("panorama_images")
         .update({
           is_processing: false,
+          // Use safe access for error message
           annotations: JSON.stringify({
-            error: processingError.message || "Failed to process panorama",
+            error: processingError instanceof Error ? processingError.message : "Failed to process panorama",
             timestamp: new Date().toISOString()
           })
         })
         .eq("id", panoramaId);
         
-      throw processingError;
+      // Still throw after logging failure state
+      throw processingError; 
     }
 
     // Refresh panoramas
@@ -389,8 +409,13 @@ const handleGenerate360Images = async () => {
     alert("360° image generation completed successfully");
     
   } catch (error) {
-    console.error("Error generating 360 images:", error);
-    alert(`Failed to generate 360 image: ${error.message}`);
+    // Apply safe error handling
+    console.error(
+      "Error generating 360 images:", 
+      error instanceof Error ? error.message : "Unknown error during generation",
+      { fullError: error }
+    );
+    alert(`Failed to generate 360 image: ${error instanceof Error ? error.message : 'Unknown error'}`);
   } finally {
     setProcessing(false);
     setGenerate360DialogOpen(false);
@@ -403,6 +428,14 @@ const handleGenerate360Images = async () => {
       alert("Please select at least one folder of images to convert to 360");
       return;
     }
+
+    // Get user ID
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) {
+      alert("User not authenticated. Please log in.");
+      return;
+    }
+    const userId = user.id;
 
     setProcessing(true);
 
@@ -436,6 +469,7 @@ const handleGenerate360Images = async () => {
               folder_id: image.folder_id,
               source_image_id: image.id,
               is_processing: true,
+              user_id: userId,
             },
           ])
           .select();
@@ -487,8 +521,12 @@ const handleGenerate360Images = async () => {
         }
       }, 3000); // Simulate 3 second processing time
     } catch (error) {
-      console.error("Error generating 360 images:", error);
-      alert("Failed to start 360 image generation");
+      console.error(
+        "Error generating 360 images from folders:",
+        error instanceof Error ? error.message : "Unknown error",
+        { fullError: error }
+      );
+      alert("Failed to generate 360 images from folders.");
       setProcessing(false);
     }
   };
