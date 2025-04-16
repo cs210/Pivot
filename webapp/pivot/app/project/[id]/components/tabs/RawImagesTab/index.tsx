@@ -69,10 +69,18 @@ export default function RawImagesTab({ projectId }: RawImagesTabProps) {
         .from("raw_images")
         .select("*")
         .eq("project_id", projectId)
-        .order("name", { ascending: true });
+        .order("filename", { ascending: true }); // Change from 'name' to 'filename'
 
       if (error) throw error;
-      setRawImages(data || []);
+      
+      // Map the data to match your component's expected structure
+      const formattedData = data?.map(img => ({
+        ...img,
+        name: img.filename, // Add a name property matching filename
+        url: img.storage_path // Assuming you need a url property that maps to storage_path
+      })) || [];
+      
+      setRawImages(formattedData);
     } catch (error) {
       console.error("Error fetching raw images:", error);
       setRawImages([]);
@@ -204,7 +212,7 @@ export default function RawImagesTab({ projectId }: RawImagesTabProps) {
 
         // Upload to storage
         const { data: uploadData, error: uploadError } = await supabase.storage
-          .from("raw_images")
+          .from("raw-images") // Note: Bucket name should be "raw-images" with a hyphen
           .upload(filePath, file, {
             cacheControl: "3600",
             upsert: true,
@@ -224,27 +232,24 @@ export default function RawImagesTab({ projectId }: RawImagesTabProps) {
 
         console.log("File uploaded successfully:", uploadData?.path);
 
-        // Get public URL
+        // Get URL (note: raw-images bucket is private according to policies)
         const { data: urlData } = supabase.storage
-          .from("raw_images")
+          .from("raw-images")
           .getPublicUrl(uploadData.path);
 
-        if (!urlData || !urlData.publicUrl) {
-          console.error("Failed to get public URL for:", uploadData?.path);
-          throw new Error("Failed to get public URL");
-        }
-
-        console.log("Public URL generated:", urlData.publicUrl);
-
-        // Save to database
+        // Save to database with the correct column names
         const { data, error } = await supabase
           .from("raw_images")
           .insert([
             {
-              name: fileName,
+              filename: fileName, // Changed from "name" to "filename" to match schema
+              storage_path: uploadData.path, // Changed from "url" to "storage_path"
               project_id: projectId,
-              url: urlData.publicUrl,
               folder_id: currentFolder?.id || null,
+              user_id: (await supabase.auth.getUser()).data.user?.id, // Required field
+              content_type: file.type, // Required field
+              size_bytes: file.size, // Required field
+              metadata: {} // Required field but can be empty
             },
           ])
           .select();
@@ -262,9 +267,15 @@ export default function RawImagesTab({ projectId }: RawImagesTabProps) {
 
         console.log("Image record created in database:", data);
 
-        // Add to local state
+        // Add to local state with proper mapping
         if (data && data.length > 0) {
-          setRawImages((prev) => [...prev, ...data]);
+          const formattedData = data.map(img => ({
+            ...img,
+            name: img.filename, // Add name for component compatibility
+            url: img.storage_path // Add url for component compatibility
+          }));
+          
+          setRawImages((prev) => [...prev, ...formattedData]);
         }
       }
 
