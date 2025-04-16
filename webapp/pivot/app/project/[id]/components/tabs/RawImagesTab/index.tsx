@@ -10,11 +10,17 @@ import MoveImageDialog from "./dialogs/MoveImageDialog";
 
 export interface RawImage {
   id: string;
+  filename: string;
+  storage_path: string;
+  content_type: string;
+  size_bytes: number;
+  metadata: Record<string, any>;
   project_id: string;
-  name: string;
-  url: string;
-  created_at: string;
   folder_id: string | null;
+  panorama_id: string | null;
+  user_id: string;
+  uploaded_at: string;
+  updated_at: string;
 }
 
 interface RawImagesTabProps {
@@ -69,18 +75,10 @@ export default function RawImagesTab({ projectId }: RawImagesTabProps) {
         .from("raw_images")
         .select("*")
         .eq("project_id", projectId)
-        .order("filename", { ascending: true }); // Change from 'name' to 'filename'
+        .order("filename", { ascending: true });
 
       if (error) throw error;
-      
-      // Map the data to match your component's expected structure
-      const formattedData = data?.map(img => ({
-        ...img,
-        name: img.filename, // Add a name property matching filename
-        url: img.storage_path // Assuming you need a url property that maps to storage_path
-      })) || [];
-      
-      setRawImages(formattedData);
+      setRawImages(data || []);
     } catch (error) {
       console.error("Error fetching raw images:", error);
       setRawImages([]);
@@ -96,7 +94,7 @@ export default function RawImagesTab({ projectId }: RawImagesTabProps) {
     try {
       const { error } = await supabase
         .from("raw_images")
-        .update({ name: newImageName.trim() })
+        .update({ filename: newImageName.trim() })
         .eq("id", imageToRename.id);
 
       if (error) throw error;
@@ -104,7 +102,7 @@ export default function RawImagesTab({ projectId }: RawImagesTabProps) {
       setRawImages(
         rawImages.map((img) =>
           img.id === imageToRename.id
-            ? { ...img, name: newImageName.trim() }
+            ? { ...img, filename: newImageName.trim() }
             : img
         )
       );
@@ -127,13 +125,10 @@ export default function RawImagesTab({ projectId }: RawImagesTabProps) {
       if (!imageToDelete) return;
 
       // Delete from storage (assuming the URL contains the path)
-      const url = new URL(imageToDelete.url);
-      const storagePath = url.pathname.split("/").slice(2).join("/");
-
-      if (storagePath) {
+      if (imageToDelete.storage_path) {
         const { error: storageError } = await supabase.storage
           .from("raw_images")
-          .remove([storagePath]);
+          .remove([imageToDelete.storage_path]);
 
         if (storageError) throw storageError;
       }
