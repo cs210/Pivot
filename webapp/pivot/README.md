@@ -85,6 +85,25 @@ Two Supabase Storage buckets are required:
 
 *Note: Buckets must be created manually via the Supabase Dashboard or Management API.*
 
+#### Storage Bucket Policies
+
+The following RLS policies dictate how users can access objects within the storage buckets:
+
+**Policies for panoramas bucket:**
+- Authenticated users can upload panoramas (INSERT)
+- Users can update their own panoramas (UPDATE)
+- Users can delete their own panoramas (DELETE)
+- Users can view their own panoramas (SELECT)
+- Anyone (authenticated and anonymous) can view panoramas marked as public in the `panoramas` table
+
+**Policies for raw-images bucket:**
+- Authenticated users can upload raw images (INSERT)
+- Users can update their own raw images (UPDATE)
+- Users can delete their own raw images (DELETE)
+- Users can view ONLY their own raw images (SELECT)
+
+These policies ensure that raw images remain private to the uploading user, while panoramas can be either private to the user or made publicly accessible based on the `is_public` flag in the `panoramas` table.
+
 ### Row Level Security (RLS)
 
 RLS is enabled on all primary data tables (`projects`, `folders`, `raw_images`, `panoramas`, `grid_nodes`) to enforce data privacy and security. The general policy is:

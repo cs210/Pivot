@@ -278,3 +278,69 @@ CREATE INDEX idx_panoramas_is_public ON panoramas(is_public);
 CREATE INDEX idx_grid_nodes_project_id ON grid_nodes(project_id);
 CREATE INDEX idx_grid_nodes_panorama_id ON grid_nodes(panorama_id);
 CREATE INDEX idx_grid_nodes_coordinates ON grid_nodes(grid_x, grid_y);
+
+-- Policies for panoramas bucket
+-- Allow authenticated users to upload panoramas
+CREATE POLICY "Authenticated users can upload panoramas"
+ON storage.objects FOR INSERT
+TO authenticated
+WITH CHECK (bucket_id = 'panoramas' AND auth.uid() = owner);
+
+-- Allow users to update their own panoramas
+CREATE POLICY "Users can update their own panoramas"
+ON storage.objects FOR UPDATE
+TO authenticated
+USING (bucket_id = 'panoramas' AND auth.uid() = owner);
+
+-- Allow users to delete their own panoramas
+CREATE POLICY "Users can delete their own panoramas"
+ON storage.objects FOR DELETE
+TO authenticated
+USING (bucket_id = 'panoramas' AND auth.uid() = owner);
+
+-- Allow users to view their own panoramas
+CREATE POLICY "Users can view their own panoramas"
+ON storage.objects FOR SELECT
+TO authenticated
+USING (
+  bucket_id = 'panoramas' 
+  AND auth.uid() = owner
+);
+
+-- Allow anyone to view public panoramas
+CREATE POLICY "Anyone can view public panoramas"
+ON storage.objects FOR SELECT
+TO authenticated, anon
+USING (
+  bucket_id = 'panoramas'
+  AND EXISTS (
+    SELECT 1 FROM panoramas
+    WHERE panoramas.storage_path = storage.objects.name
+    AND panoramas.is_public = TRUE
+  )
+);
+
+-- Policies for raw-images bucket
+-- Allow authenticated users to upload raw images
+CREATE POLICY "Authenticated users can upload raw images"
+ON storage.objects FOR INSERT
+TO authenticated
+WITH CHECK (bucket_id = 'raw-images' AND auth.uid() = owner);
+
+-- Allow users to update their own raw images
+CREATE POLICY "Users can update their own raw images"
+ON storage.objects FOR UPDATE
+TO authenticated
+USING (bucket_id = 'raw-images' AND auth.uid() = owner);
+
+-- Allow users to delete their own raw images
+CREATE POLICY "Users can delete their own raw images"
+ON storage.objects FOR DELETE
+TO authenticated
+USING (bucket_id = 'raw-images' AND auth.uid() = owner);
+
+-- Allow users to view ONLY their own raw images
+CREATE POLICY "Users can view only their own raw images"
+ON storage.objects FOR SELECT
+TO authenticated
+USING (bucket_id = 'raw-images' AND auth.uid() = owner);
