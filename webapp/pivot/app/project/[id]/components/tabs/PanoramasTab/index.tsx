@@ -420,9 +420,9 @@ export default function PanoramasTab({ projectId }: PanoramasTabProps) {
       alert("Please select at least one folder of images to convert to 360");
       return;
     }
-  
+
     setProcessing(true);
-  
+
     try {
       // Process each folder separately to create individual panoramas
       for (const folderId of foldersToConvert) {
@@ -454,7 +454,7 @@ export default function PanoramasTab({ projectId }: PanoramasTabProps) {
             },
           ])
           .select();
-  
+
         if (panoramaError) {
           console.error("Error creating panorama record:", panoramaError);
           throw panoramaError;
@@ -473,10 +473,7 @@ export default function PanoramasTab({ projectId }: PanoramasTabProps) {
         }
         
         try {
-          // First, fetch the source images for the folder
-          const folderImages = getImagesInFolder(folderId);
-
-          // Then call the API with the correct source image IDs
+          // Call the API with the correct source image IDs
           const response = await fetch('/api/stitch-panorama', {
             method: 'POST',
             headers: {
@@ -496,78 +493,34 @@ export default function PanoramasTab({ projectId }: PanoramasTabProps) {
             console.error('Panorama stitching failed:', result);
             throw new Error(result.error || 'Failed to stitch panorama');
           }
-
-          // Download the generated panorama from AWS
-          const panoramaResponse = await fetch(`/api/download-panorama?jobId=${result.jobId}&filename=${result.panoramaFilename}`);
           
-          if (!panoramaResponse.ok) {
-            throw new Error('Failed to download the panorama from AWS');
-          }
+          // The API has already updated the database record,
+          // so there's no need to download and re-upload the panorama
           
-          const panoramaBlob = await panoramaResponse.blob();
-          
-          // Create a File object from the blob
-          const panoramaFile = new File(
-            [panoramaBlob], 
-            `${panoramaName}.jpg`, 
-            { type: 'image/jpeg' }
-          );
-          
-          // Upload the panorama to Supabase storage
-          const storagePath = `${projectId}/${panoramaName}_${Date.now()}.jpg`;
-          
-          const { data: uploadData, error: uploadError } = await supabase.storage
-            .from("panoramas")
-            .upload(storagePath, panoramaFile, {
-              cacheControl: "3600",
-              upsert: true,
-            });
-            
-          if (uploadError) {
-            console.error("Error uploading panorama to Supabase:", uploadError);
-            throw uploadError;
-          }
-
-          // Now update the database record with the correct Supabase storage path
-          const { error: updateError } = await supabase
-            .from("panoramas")
-            .update({
-              storage_path: uploadData.path, // Use the path from the Supabase upload
-              size_bytes: panoramaFile.size, // Update the size with the actual file size
-              metadata: {
-                status: 'completed',
-                source_images: folderImages.map(img => img.id),
-                source_folder: folderId,
-                jobId: result.jobId,
-              },
-            })
-            .eq("id", panoramaId);
-
-          if (updateError) {
-            console.error("Error updating panorama record:", updateError);
-            throw updateError;
-          }
         } catch (processingError) {
           console.error("Processing error:", processingError);
           
-          // Update the database to mark the panorama as failed
-          await supabase
-            .from("panoramas")
-            .update({
-              metadata: {
-                status: 'failed',
-                error: processingError.message || "Failed to process panorama",
-                source_images: folderImages.map(img => img.id),
-                source_folder: folderId,
-              }
-            })
-            .eq("id", panoramaId);
+          // API has already updated the database to mark the panorama as failed,
+          // but we'll still check here just in case
+          if (processingError.message !== "Failed to upload panorama") {
+            await supabase
+              .from("panoramas")
+              .update({
+                metadata: {
+                  status: 'failed',
+                  error: processingError.message || "Failed to process panorama",
+                  source_images: folderImages.map(img => img.id),
+                  source_folder: folderId,
+                }
+              })
+              .eq("id", panoramaId);
+          }
             
           // Continue with the next folder
           continue;
         }
       }
-  
+
       // Refresh panoramas
       await fetchPanoramas();
       alert(`Successfully generated panoramas from ${foldersToConvert.length} folders`);
