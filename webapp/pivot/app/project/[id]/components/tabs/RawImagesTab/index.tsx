@@ -140,7 +140,7 @@ export default function RawImagesTab({ projectId }: RawImagesTabProps) {
 
       if (!imageToDelete) return;
 
-      // Delete from storage (assuming the URL contains the path)
+      // Delete from storage
       if (imageToDelete.storage_path) {
         const { error: storageError } = await supabase.storage
           .from("raw-images")
@@ -244,9 +244,9 @@ export default function RawImagesTab({ projectId }: RawImagesTabProps) {
         console.log("File uploaded successfully:", uploadData?.path);
 
         // Get URL (note: raw-images bucket is private according to policies)
-        const { data: urlData } = supabase.storage
+        const { data: urlData } = await supabase.storage
           .from("raw-images")
-          .getPublicUrl(uploadData.path);
+          .createSignedUrl(uploadData.path, 3600); // 1 hour expiration
 
         // Save to database with the correct column names
         const { data, error } = await supabase
@@ -423,10 +423,10 @@ export default function RawImagesTab({ projectId }: RawImagesTabProps) {
 
           console.log("File uploaded successfully:", uploadData?.path);
 
-          // Get public URL
-          const { data: urlData } = supabase.storage
-            .from("raw_images")
-            .getPublicUrl(uploadData.path);
+          // Get URL (note: raw-images bucket is private according to policies)
+          const { data: urlData } = await supabase.storage
+            .from("raw-images")
+            .createSignedUrl(uploadData.path, 3600); // 1 hour expiration
 
           // Save to database
           const { data, error } = await supabase
@@ -435,7 +435,7 @@ export default function RawImagesTab({ projectId }: RawImagesTabProps) {
               {
                 name: fileName,
                 project_id: projectId,
-                url: urlData.publicUrl,
+                url: urlData.signedUrl,
                 folder_id: folderId,
               },
             ])

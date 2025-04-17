@@ -27,10 +27,10 @@ CREATE TABLE folders (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     name TEXT NOT NULL,
     project_id UUID NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
-    parent_folder_id UUID REFERENCES folders(id) ON DELETE CASCADE,
+    parent_id UUID REFERENCES folders(id) ON DELETE CASCADE,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
-    CONSTRAINT unique_folder_name_per_project_and_parent UNIQUE (name, project_id, parent_folder_id)
+    CONSTRAINT unique_folder_name_per_project_and_parent UNIQUE (name, project_id, parent_id)
 );
 
 -- Panoramas Table
@@ -267,7 +267,7 @@ EXECUTE FUNCTION update_updated_at_column();
 -- Create indexes for performance
 CREATE INDEX idx_projects_user_id ON projects(user_id);
 CREATE INDEX idx_folders_project_id ON folders(project_id);
-CREATE INDEX idx_folders_parent_folder_id ON folders(parent_folder_id);
+CREATE INDEX idx_folders_parent_id ON folders(parent_id);
 CREATE INDEX idx_raw_images_project_id ON raw_images(project_id);
 CREATE INDEX idx_raw_images_folder_id ON raw_images(folder_id);
 CREATE INDEX idx_raw_images_panorama_id ON raw_images(panorama_id);
