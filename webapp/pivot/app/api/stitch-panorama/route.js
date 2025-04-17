@@ -232,7 +232,7 @@ export async function POST(request) {
     // Get the output file name (PTGui might create a file with a different name)
     let outputFileName;
     let largestSize = 0;
-    
+
     try {
       log(`Listing remote directory to find output file`);
       const { stdout: lsOutput } = await execPromise(`ssh -i "${SSH_KEY_PATH}" -o StrictHostKeyChecking=no ${AWS_USER}@${AWS_HOST} "ls -la ${remoteDir}/"`);
@@ -249,9 +249,16 @@ export async function POST(request) {
           const size = parseInt(matches[1]);
           const name = matches[2].trim();
           
+          // Skip input files (with image_ prefix)
+          if (name.startsWith('image_')) {
+            log(`Skipping input file: ${name}`);
+            return;
+          }
+          
           // Check if this file contains the job ID or project name (most likely our panorama)
           if (name.includes(jobId) || name.includes(projectName)) {
             outputFileName = name;
+            largestSize = size;
             log(`Found panorama by ID/name match: ${outputFileName} (${size} bytes)`);
             return; // Break the loop once we find a match
           }
@@ -272,6 +279,8 @@ export async function POST(request) {
           { status: 500 }
         );
       }
+      
+      log(`Selected panorama output file: ${outputFileName} (${largestSize} bytes)`);
     } catch (error) {
       log(`Failed to list remote directory: ${error.message}`);
       // Continue anyway, we'll try to copy using the expected path
