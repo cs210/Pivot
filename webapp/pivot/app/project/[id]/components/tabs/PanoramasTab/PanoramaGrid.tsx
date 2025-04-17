@@ -11,14 +11,12 @@ import {
   MoreVertical,
   Edit,
   Trash2,
-  MoveRight,
   Grid,
   List,
   Box,
   Loader2,
 } from "lucide-react";
 import { Panorama } from "./index";
-import { Folder } from "../../../hooks/useFolders";
 
 interface PanoramaGridProps {
   panoramas: Panorama[];
@@ -35,11 +33,8 @@ interface PanoramaGridProps {
   setPanoramaToRename: (panorama: Panorama | null) => void;
   setNewPanoramaName: (name: string) => void;
   setRenamePanoramaDialogOpen: (open: boolean) => void;
-  setPanoramasToMove: (panoramas: Panorama[]) => void;
-  setMovePanoramaDialogOpen: (open: boolean) => void;
   setGenerate360DialogOpen: (open: boolean) => void;
-  getCurrentFolderPanoramas: () => Panorama[];
-  getRootPanoramas: () => Panorama[];
+  getProjectPanoramas: () => Panorama[];
 }
 
 export default function PanoramaGrid({
@@ -57,8 +52,6 @@ export default function PanoramaGrid({
   setPanoramaToRename,
   setNewPanoramaName,
   setRenamePanoramaDialogOpen,
-  setPanoramasToMove,
-  setMovePanoramaDialogOpen,
   setGenerate360DialogOpen,
   getCurrentFolderPanoramas,
   getRootPanoramas,
@@ -98,24 +91,6 @@ export default function PanoramaGrid({
                   <Grid className="h-4 w-4" />
                 )}
               </Button>
-
-              {selectedPanoramas.length > 0 && (
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => {
-                    setPanoramasToMove(
-                      panoramas.filter((pano) =>
-                        selectedPanoramas.includes(pano.id)
-                      )
-                    );
-                    setMovePanoramaDialogOpen(true);
-                  }}
-                >
-                  <MoveRight className="mr-2 h-4 w-4" />
-                  Move {selectedPanoramas.length} Selected
-                </Button>
-              )}
 
               {/* Generate 360 Images button */}
               <Button
@@ -224,17 +199,6 @@ export default function PanoramaGrid({
                             Rename
                           </DropdownMenuItem>
                           <DropdownMenuItem
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setPanoramasToMove([panorama]);
-                              setMovePanoramaDialogOpen(true);
-                            }}
-                            disabled={panorama.is_processing}
-                          >
-                            <MoveRight className="mr-2 h-4 w-4" />
-                            Move
-                          </DropdownMenuItem>
-                          <DropdownMenuItem
                             className="text-destructive"
                             onClick={(e) => {
                               e.stopPropagation();
@@ -302,17 +266,6 @@ export default function PanoramaGrid({
                         >
                           <Edit className="mr-2 h-4 w-4" />
                           Rename
-                        </DropdownMenuItem>
-                        <DropdownMenuItem
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setPanoramasToMove([panorama]);
-                            setMovePanoramaDialogOpen(true);
-                          }}
-                          disabled={panorama.is_processing}
-                        >
-                          <MoveRight className="mr-2 h-4 w-4" />
-                          Move
                         </DropdownMenuItem>
                         <DropdownMenuItem
                           className="text-destructive"
