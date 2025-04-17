@@ -325,6 +325,14 @@ export default function RawImagesTab({ projectId }: RawImagesTabProps) {
 
       for (let i = 0; i < files.length; i++) {
         const file = files[i];
+        
+        // Skip .DS_Store and non-image files
+        const isJpegImage = /\.(jpg|jpeg|jpe|jfif)$/i.test(file.name);
+        if (file.name === '.DS_Store' || !isJpegImage) {
+          console.log(`Skipping file ${file.name} - not a JPEG image`);
+          continue;
+        }
+        
         // Get the path relative to the selected folder
         const relativePath = file.webkitRelativePath;
         const pathParts = relativePath.split("/");
