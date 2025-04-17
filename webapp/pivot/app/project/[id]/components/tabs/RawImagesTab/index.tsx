@@ -21,6 +21,7 @@ export interface RawImage {
   user_id: string;
   uploaded_at: string;
   updated_at: string;
+  displayUrl?: string; // URL for displaying the image in the UI
 }
 
 interface RawImagesTabProps {
@@ -78,13 +79,28 @@ export default function RawImagesTab({ projectId }: RawImagesTabProps) {
         .order("filename", { ascending: true });
 
       if (error) throw error;
-      setRawImages(data || []);
+      
+      // Generate display URLs for each image
+      const imagesWithUrls = (data || []).map(img => {
+        // Get a URL for the image from storage. Signed URL for private bucket.
+        const { data: urlData } = await supabase.storage
+          .from("raw-images")
+          .createSignedUrl(img.storage_path, 3600); // 1 hour expiration
+
+        return {
+          ...img,
+          displayUrl: urlData.signedUrl
+        };
+      });
+      
+      setRawImages(imagesWithUrls);
     } catch (error) {
       console.error("Error fetching raw images:", error);
       setRawImages([]);
     }
   };
 
+  // Rename in database; not in storage
   const handleRenameImage = async () => {
     if (!newImageName.trim() || !imageToRename) {
       alert("Please enter an image name");
@@ -127,7 +143,7 @@ export default function RawImagesTab({ projectId }: RawImagesTabProps) {
       // Delete from storage (assuming the URL contains the path)
       if (imageToDelete.storage_path) {
         const { error: storageError } = await supabase.storage
-          .from("raw_images")
+          .from("raw-images")
           .remove([imageToDelete.storage_path]);
 
         if (storageError) throw storageError;
