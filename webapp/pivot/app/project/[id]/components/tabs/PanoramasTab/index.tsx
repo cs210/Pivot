@@ -1,33 +1,41 @@
 import { useState, useRef, useEffect } from "react";
 import { createClient } from "@/utils/supabase/client";
-import { useFolders, Folder } from "../../../hooks/useFolders";
-import FolderSidebar from "./FolderSidebar";
 import PanoramaGrid from "./PanoramaGrid";
-import CreateFolderDialog from "../RawImagesTab/dialogs/CreateFolderDialog";
-import RenameFolderDialog from "../RawImagesTab/dialogs/RenameFolderDialog";
 import RenamePanoramaDialog from "./dialogs/RenamePanoramaDialog";
-import MovePanoramaDialog from "./dialogs/MovePanoramaDialog";
 import Generate360Dialog from "./dialogs/Generate360Dialog";
 
+// Updated to match panoramas table schema
 export interface Panorama {
   id: string;
-  project_id: string;
   name: string;
-  url: string;
+  storage_path: string;
+  content_type: string;
+  size_bytes: number;
+  metadata: Record<string, any>;
+  project_id: string;
+  is_public: boolean;
+  user_id: string;
   created_at: string;
-  source_image_id?: string | null;
-  folder_id?: string | null;
-  is_processing?: boolean;
-  annotations?: string | null;
+  updated_at: string;
+  url?: string; // Client-side property for display
+  is_processing?: boolean; // Client-side property for UI state
 }
 
+// Updated to match raw_images table schema
 export interface RawImage {
   id: string;
+  filename: string;
+  storage_path: string;
+  content_type: string;
+  size_bytes: number;
+  metadata: Record<string, any>;
   project_id: string;
-  name: string;
-  url: string;
-  created_at: string;
   folder_id: string | null;
+  panorama_id: string | null;
+  user_id: string;
+  uploaded_at: string;
+  updated_at: string;
+  url?: string; // Client-side property for display
 }
 
 interface PanoramasTabProps {
@@ -46,35 +54,14 @@ export default function PanoramasTab({ projectId }: PanoramasTabProps) {
 
   // Dialog states
   const [renamePanoramaDialogOpen, setRenamePanoramaDialogOpen] = useState(false);
-  const [movePanoramaDialogOpen, setMovePanoramaDialogOpen] = useState(false);
   const [generate360DialogOpen, setGenerate360DialogOpen] = useState(false);
   const [panoramaToRename, setPanoramaToRename] = useState<Panorama | null>(null);
   const [newPanoramaName, setNewPanoramaName] = useState("");
-  const [panoramasToMove, setPanoramasToMove] = useState<Panorama[]>([]);
-  const [targetFolderId, setTargetFolderId] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
   const [processing, setProcessing] = useState(false);
   const [imagesToConvert, setImagesToConvert] = useState<RawImage[]>([]);
   const [foldersToConvert, setFoldersToConvert] = useState<string[]>([]);
   const [folderSelectionMode, setFolderSelectionMode] = useState(false);
-
-  // Use the folders hook
-  const {
-    folders,
-    currentFolder,
-    setCurrentFolder,
-    newFolderName,
-    setNewFolderName,
-    createFolderDialogOpen,
-    setCreateFolderDialogOpen,
-    renameFolderDialogOpen,
-    setRenameFolderDialogOpen,
-    folderToRename,
-    setFolderToRename,
-    handleCreateFolder,
-    handleRenameFolder,
-    handleDeleteFolder
-  } = useFolders(projectId);
 
   useEffect(() => {
     Promise.all([fetchRawImages(), fetchPanoramas()]);
@@ -86,10 +73,23 @@ export default function PanoramasTab({ projectId }: PanoramasTabProps) {
         .from("raw_images")
         .select("*")
         .eq("project_id", projectId)
-        .order("name", { ascending: true });
+        .order("filename", { ascending: true }); // Changed from name to filename
 
       if (error) throw error;
-      setRawImages(data || []);
+      
+      // Add URLs for display
+      const imagesWithUrls = await Promise.all((data || []).map(async (img) => {
+        const { data: urlData } = await supabase.storage
+          .from("raw-images")
+          .createSignedUrl(img.storage_path, 3600); // 1 hour expiration
+
+        return {
+          ...img,
+          url: urlData?.signedUrl
+        };
+      }));
+      
+      setRawImages(imagesWithUrls);
     } catch (error) {
       console.error("Error fetching raw images:", error);
       setRawImages([]);
@@ -99,20 +99,36 @@ export default function PanoramasTab({ projectId }: PanoramasTabProps) {
   const fetchPanoramas = async () => {
     try {
       const { data, error } = await supabase
-        .from("panorama_images")
+        .from("panoramas")
         .select("*")
         .eq("project_id", projectId)
         .order("name", { ascending: true });
 
       if (error) throw error;
 
-      // Transform the data to match our Panorama interface
-      const transformedData = (data || []).map((item) => ({
-        ...item,
-        folder_id: item.folder_id || null,
-        source_image_id: item.source_image_id || null,
-        is_processing: item.is_processing || false,
-        annotations: item.annotations || null,
+      // Transform data to add client-side properties with proper URLs
+      const transformedData = await Promise.all((data || []).map(async (item) => {
+        let url;
+        
+        if (item.is_public) {
+          // For public panoramas, use the public URL
+          url = supabase.storage
+            .from("panoramas")
+            .getPublicUrl(item.storage_path).data.publicUrl;
+        } else {
+          // For private panoramas, generate a signed URL
+          const { data: urlData } = await supabase.storage
+            .from("panoramas")
+            .createSignedUrl(item.storage_path, 3600); // 1 hour expiration
+            
+          url = urlData?.signedUrl || null;
+        }
+        
+        return {
+          ...item,
+          url,
+          is_processing: item.metadata?.status === 'processing'
+        };
       }));
 
       setPanoramas(transformedData);
@@ -130,7 +146,7 @@ export default function PanoramasTab({ projectId }: PanoramasTabProps) {
 
     try {
       const { error } = await supabase
-        .from("panorama_images")
+        .from("panoramas")
         .update({ name: newPanoramaName.trim() })
         .eq("id", panoramaToRename.id);
 
@@ -161,27 +177,21 @@ export default function PanoramasTab({ projectId }: PanoramasTabProps) {
 
       if (!panoramaToDelete) return;
 
-      // Delete from storage (assuming the URL contains the path)
-      // Skip storage deletion if it's an API-generated panorama
-      if (!panoramaToDelete.url.includes('/api/panoramas/')) {
-        try {
-          const url = new URL(panoramaToDelete.url);
-          const storagePath = url.pathname.split("/").slice(2).join("/");
-          
-          if (storagePath) {
-            await supabase.storage
-              .from("panoramas")
-              .remove([storagePath]);
-          }
-        } catch (storageError) {
-          console.warn("Could not delete from storage:", storageError);
-          // Continue anyway, as the file might not exist in storage
+      // Delete from storage
+      try {
+        if (panoramaToDelete.storage_path) {
+          await supabase.storage
+            .from("panoramas")
+            .remove([panoramaToDelete.storage_path]);
         }
+      } catch (storageError) {
+        console.warn("Could not delete from storage:", storageError);
+        // Continue anyway, as the file might not exist in storage
       }
 
       // Delete from database
       const { error: dbError } = await supabase
-        .from("panorama_images")
+        .from("panoramas")
         .delete()
         .eq("id", panoramaId);
 
@@ -199,39 +209,6 @@ export default function PanoramasTab({ projectId }: PanoramasTabProps) {
       if (showAlert) {
         alert("Failed to delete 360 image");
       }
-    }
-  };
-
-  const handleMovePanoramas = async () => {
-    if (panoramasToMove.length === 0) return;
-
-    try {
-      // Update each panorama's folder_id
-      for (const panorama of panoramasToMove) {
-        const { error } = await supabase
-          .from("panorama_images")
-          .update({ folder_id: targetFolderId })
-          .eq("id", panorama.id);
-
-        if (error) throw error;
-      }
-
-      // Update local state
-      setPanoramas(
-        panoramas.map((pano) =>
-          panoramasToMove.some((movePano) => movePano.id === pano.id)
-            ? { ...pano, folder_id: targetFolderId }
-            : pano
-        )
-      );
-
-      setMovePanoramaDialogOpen(false);
-      setPanoramasToMove([]);
-      setTargetFolderId(null);
-      alert(`${panoramasToMove.length} 360 image(s) moved successfully`);
-    } catch (error) {
-      console.error("Error moving 360 images:", error);
-      alert("Failed to move 360 images");
     }
   };
 
@@ -260,14 +237,7 @@ export default function PanoramasTab({ projectId }: PanoramasTabProps) {
           });
 
         if (uploadError) {
-          console.error("Storage upload error:", {
-            message: uploadError.message,
-            name: uploadError.name,
-            code: uploadError.code,
-            details: uploadError.details,
-            hint: uploadError.hint,
-            fullError: JSON.stringify(uploadError, null, 2),
-          });
+          console.error("Storage upload error:", uploadError);
           throw uploadError;
         }
 
@@ -290,25 +260,23 @@ export default function PanoramasTab({ projectId }: PanoramasTabProps) {
 
         // Save to database
         const { data, error } = await supabase
-          .from("panorama_images")
+          .from("panoramas")
           .insert([
             {
               name: fileName,
               project_id: projectId,
-              url: urlData.publicUrl,
-              folder_id: currentFolder?.id || null,
+              storage_path: uploadData.path,
+              content_type: file.type,
+              size_bytes: file.size,
+              metadata: {},
+              is_public: true,
+              user_id: "user_id_placeholder", // Replace with actual user ID
             },
           ])
           .select();
 
         if (error) {
-          console.error("Database insert error:", {
-            message: error.message,
-            code: error.code,
-            details: error.details,
-            hint: error.hint,
-            fullError: JSON.stringify(error, null, 2),
-          });
+          console.error("Database insert error:", error);
           throw error;
         }
 
@@ -322,15 +290,7 @@ export default function PanoramasTab({ projectId }: PanoramasTabProps) {
 
       alert("360 images uploaded successfully");
     } catch (error) {
-      console.error("Error uploading 360 images:", {
-        message: error.message,
-        code: error.code,
-        details: error.details,
-        hint: error.hint,
-        name: error.name,
-        stack: error.stack,
-        fullError: JSON.stringify(error, null, 2),
-      });
+      console.error("Error uploading 360 images:", error);
       alert(`Failed to upload 360 images: ${error.message || "Unknown error"}`);
     } finally {
       setUploading(false);
@@ -355,18 +315,20 @@ export default function PanoramasTab({ projectId }: PanoramasTabProps) {
       
       // Create placeholder panorama record
       const { data: panoramaData, error: panoramaError } = await supabase
-        .from("panorama_images")
+        .from("panoramas")
         .insert([
           {
             name: `${panoramaName}.jpg`,
             project_id: projectId,
-            url: imagesToConvert[0].url, // Temporary URL until processing is complete
-            folder_id: imagesToConvert[0].folder_id,
-            annotations: JSON.stringify({
+            storage_path: "",
+            content_type: "image/jpeg",
+            size_bytes: 0,
+            metadata: {
               status: 'processing',
               source_images: imagesToConvert.map(img => img.id),
-            }),
-            is_processing: true,
+            },
+            is_public: true,
+            user_id: "user_id_placeholder", // Replace with actual user ID
           },
         ])
         .select();
@@ -392,9 +354,9 @@ export default function PanoramasTab({ projectId }: PanoramasTabProps) {
         // Download the selected images for processing
         const imageBlobs = await Promise.all(
           imagesToConvert.map(async (image) => {
-            const response = await fetch(image.url);
+            const response = await fetch(image.url || "");
             const blob = await response.blob();
-            return new File([blob], image.name, { type: blob.type });
+            return new File([blob], image.filename, { type: blob.type });
           })
         );
         
@@ -421,15 +383,14 @@ export default function PanoramasTab({ projectId }: PanoramasTabProps) {
         if (!stitchResponse.ok) {
           // Update the record to show failure
           await supabase
-            .from("panorama_images")
+            .from("panoramas")
             .update({
-              is_processing: false,
-              annotations: JSON.stringify({
+              metadata: {
                 status: 'failed',
                 error: stitchResult.error || 'Failed to generate panorama',
                 detail: stitchResult.detail || '',
                 source_images: imagesToConvert.map(img => img.id),
-              }),
+              },
             })
             .eq("id", panoramaId);
               
@@ -438,15 +399,14 @@ export default function PanoramasTab({ projectId }: PanoramasTabProps) {
         
         // Update database record with the generated panorama URL
         const { error: updateError } = await supabase
-          .from("panorama_images")
+          .from("panoramas")
           .update({
-            url: `${window.location.origin}${stitchResult.panoramaUrl}`,
-            is_processing: false,
-            annotations: JSON.stringify({
+            storage_path: stitchResult.panoramaPath,
+            metadata: {
               status: 'completed',
               source_images: imagesToConvert.map(img => img.id),
               jobId: stitchResult.jobId,
-            }),
+            },
           })
           .eq("id", panoramaId);
       
@@ -459,14 +419,13 @@ export default function PanoramasTab({ projectId }: PanoramasTabProps) {
         
         // Update the database to mark the panorama as failed
         await supabase
-          .from("panorama_images")
+          .from("panoramas")
           .update({
-            is_processing: false,
-            annotations: JSON.stringify({
+            metadata: {
               status: 'failed',
               error: processingError.message || "Failed to process panorama",
               source_images: imagesToConvert.map(img => img.id),
-            })
+            }
           })
           .eq("id", panoramaId);
           
@@ -487,167 +446,6 @@ export default function PanoramasTab({ projectId }: PanoramasTabProps) {
     }
   };
 
-  const handleGenerate360ImagesFromFolders = async () => {
-    if (foldersToConvert.length === 0) {
-      alert("Please select at least one folder of images to convert to 360");
-      return;
-    }
-  
-    setProcessing(true);
-  
-    try {
-      // Process each folder separately to create individual panoramas
-      for (const folderId of foldersToConvert) {
-        const folderImages = getImagesInFolder(folderId);
-        
-        if (folderImages.length === 0) continue;
-        
-        // Get folder name for the panorama name
-        const folder = folders.find(f => f.id === folderId);
-        const panoramaName = folder ? `${folder.name}_360` : `folder_${folderId.substring(0, 8)}_360`;
-        
-        // Create a placeholder panorama record
-        const { data: panoramaData, error: panoramaError } = await supabase
-          .from("panorama_images")
-          .insert([
-            {
-              name: `${panoramaName}.jpg`,
-              project_id: projectId,
-              url: folderImages[0].url, // Temporary URL until processing is complete
-              folder_id: folderId,
-              is_processing: true,
-              annotations: JSON.stringify({
-                status: 'processing',
-                source_images: folderImages.map(img => img.id),
-                source_folder: folderId,
-              }),
-            },
-          ])
-          .select();
-  
-        if (panoramaError) {
-          console.error("Error creating panorama record:", panoramaError);
-          throw panoramaError;
-        }
-        
-        // Get the ID of the created panorama
-        const panoramaId = panoramaData?.[0]?.id;
-        
-        if (!panoramaId) {
-          throw new Error("Failed to create panorama record");
-        }
-        
-        // Update local state to show processing item
-        if (panoramaData && panoramaData.length > 0) {
-          setPanoramas((prev) => [...prev, ...panoramaData]);
-        }
-        
-        try {
-          // Download the folder images for processing
-          const imageBlobs = await Promise.all(
-            folderImages.map(async (image) => {
-              const response = await fetch(image.url);
-              const blob = await response.blob();
-              return new File([blob], image.name, { type: blob.type });
-            })
-          );
-          
-          // Prepare FormData to send to API
-          const formData = new FormData();
-          
-          // Add each image file to FormData
-          imageBlobs.forEach(file => {
-            formData.append('files', file);
-          });
-          
-          // Add metadata
-          formData.append('userId', projectId);
-          formData.append('panoramaName', panoramaName);
-          
-          // Send to API for processing
-          const stitchResponse = await fetch('/api/stitch-panorama', {
-            method: 'POST',
-            body: formData,
-          });
-          
-          const stitchResult = await stitchResponse.json();
-          
-          if (!stitchResponse.ok) {
-            // Update the record to show failure
-            await supabase
-              .from("panorama_images")
-              .update({
-                is_processing: false,
-                annotations: JSON.stringify({
-                  status: 'failed',
-                  error: stitchResult.error || 'Failed to generate panorama',
-                  detail: stitchResult.detail || '',
-                  source_images: folderImages.map(img => img.id),
-                  source_folder: folderId,
-                }),
-              })
-              .eq("id", panoramaId);
-              
-            console.error(`Failed to process folder ${panoramaName}: ${stitchResult.error}`);
-            continue; // Continue with next folder instead of aborting the whole process
-          }
-          
-          // Update database record with the generated panorama URL
-          const { error: updateError } = await supabase
-            .from("panorama_images")
-            .update({
-              url: `${window.location.origin}${stitchResult.panoramaUrl}`,
-              is_processing: false,
-              annotations: JSON.stringify({
-                status: 'completed',
-                source_images: folderImages.map(img => img.id),
-                source_folder: folderId,
-                jobId: stitchResult.jobId,
-              }),
-            })
-            .eq("id", panoramaId);
-      
-          if (updateError) {
-            console.error("Error updating panorama record:", updateError);
-            // Continue with next folder instead of aborting
-          }
-        } catch (processingError) {
-          console.error("Processing error:", processingError);
-          
-          // Update the database to mark the panorama as failed
-          await supabase
-            .from("panorama_images")
-            .update({
-              is_processing: false,
-              annotations: JSON.stringify({
-                status: 'failed',
-                error: processingError.message || "Failed to process panorama",
-                source_images: folderImages.map(img => img.id),
-                source_folder: folderId,
-              })
-            })
-            .eq("id", panoramaId);
-            
-          // Continue with the next folder
-          continue;
-        }
-      }
-  
-      // Refresh panoramas
-      await fetchPanoramas();
-      alert(`Successfully generated panoramas from ${foldersToConvert.length} folders`);
-      
-    } catch (error) {
-      console.error("Error generating 360 images from folders:", error);
-      alert(`Failed to generate 360 images: ${error.message}`);
-    } finally {
-      setProcessing(false);
-      setGenerate360DialogOpen(false);
-      setFoldersToConvert([]);
-      setFolderSelectionMode(false);
-    }
-  };
-
   // Helper function to toggle panorama selection
   const togglePanoramaSelection = (panoramaId: string) => {
     setSelectedPanoramas((prev) =>
@@ -657,71 +455,11 @@ export default function PanoramasTab({ projectId }: PanoramasTabProps) {
     );
   };
 
-  // Toggle folder selection for 360 conversion
-  const toggleFolderSelection = (folderId: string) => {
-    setFoldersToConvert((prev) =>
-      prev.includes(folderId)
-        ? prev.filter((id) => id !== folderId)
-        : [...prev, folderId]
-    );
-  };
-
-  // Get current folder images
-  const getImagesInFolder = (folderId: string) => {
-    return rawImages.filter((img) => img.folder_id === folderId);
-  };
-
-  // Get current folder panoramas
-  const getCurrentFolderPanoramas = () => {
-    return panoramas.filter((pano) => pano.folder_id === currentFolder?.id);
-  };
-
-  // Get root level panoramas (no folder)
-  const getRootPanoramas = () => {
-    return panoramas.filter((pano) => pano.folder_id === null);
-  };
-
-  // Count panoramas in a folder for the delete confirmation
-  const getPanoramasInFolder = (folderId: string) => {
-    return panoramas.filter((pano) => pano.folder_id === folderId);
-  };
-
-  // Custom delete handler for folders that counts and deletes panoramas inside
-  const handleDeleteFolderWithPanoramas = async (folderId: string) => {
-    const folderPanoramas = getPanoramasInFolder(folderId);
-    
-    await handleDeleteFolder(
-      folderId, 
-      0, // No raw images in this context
-      folderPanoramas.length,
-      () => {}, // Empty function for raw images
-      handleDeletePanorama
-    );
-    
-    // Delete the panoramas if folder deletion was successful
-    for (const panorama of folderPanoramas) {
-      await handleDeletePanorama(panorama.id, false);
-    }
-  };
-
   return (
     <div className="grid grid-cols-1 gap-6 md:grid-cols-12">
-      {/* Folders sidebar */}
-      <FolderSidebar
-        folders={folders}
-        currentFolder={currentFolder}
-        setCurrentFolder={setCurrentFolder}
-        setFolderToRename={setFolderToRename}
-        setNewFolderName={setNewFolderName}
-        setRenameFolderDialogOpen={setRenameFolderDialogOpen}
-        setCreateFolderDialogOpen={setCreateFolderDialogOpen}
-        handleDeleteFolder={handleDeleteFolderWithPanoramas}
-      />
-
       {/* Panoramas content area */}
       <PanoramaGrid
         panoramas={panoramas}
-        currentFolder={currentFolder}
         selectedPanoramas={selectedPanoramas}
         viewMode={viewMode}
         setViewMode={setViewMode}
@@ -734,30 +472,10 @@ export default function PanoramasTab({ projectId }: PanoramasTabProps) {
         setPanoramaToRename={setPanoramaToRename}
         setNewPanoramaName={setNewPanoramaName}
         setRenamePanoramaDialogOpen={setRenamePanoramaDialogOpen}
-        setPanoramasToMove={setPanoramasToMove}
-        setMovePanoramaDialogOpen={setMovePanoramaDialogOpen}
         setGenerate360DialogOpen={setGenerate360DialogOpen}
-        getCurrentFolderPanoramas={getCurrentFolderPanoramas}
-        getRootPanoramas={getRootPanoramas}
       />
 
       {/* Dialogs */}
-      <CreateFolderDialog
-        open={createFolderDialogOpen}
-        setOpen={setCreateFolderDialogOpen}
-        newFolderName={newFolderName}
-        setNewFolderName={setNewFolderName}
-        handleCreateFolder={handleCreateFolder}
-      />
-
-      <RenameFolderDialog
-        open={renameFolderDialogOpen}
-        setOpen={setRenameFolderDialogOpen}
-        newFolderName={newFolderName}
-        setNewFolderName={setNewFolderName}
-        handleRenameFolder={handleRenameFolder}
-      />
-
       <RenamePanoramaDialog
         open={renamePanoramaDialogOpen}
         setOpen={setRenamePanoramaDialogOpen}
@@ -766,31 +484,13 @@ export default function PanoramasTab({ projectId }: PanoramasTabProps) {
         handleRenamePanorama={handleRenamePanorama}
       />
 
-      <MovePanoramaDialog
-        open={movePanoramaDialogOpen}
-        setOpen={setMovePanoramaDialogOpen}
-        folders={folders}
-        targetFolderId={targetFolderId}
-        setTargetFolderId={setTargetFolderId}
-        panoramasToMove={panoramasToMove}
-        handleMovePanoramas={handleMovePanoramas}
-      />
-
       <Generate360Dialog
         open={generate360DialogOpen}
         setOpen={setGenerate360DialogOpen}
-        folderSelectionMode={folderSelectionMode}
-        setFolderSelectionMode={setFolderSelectionMode}
-        folders={folders}
-        rawImages={rawImages}
-        getImagesInFolder={getImagesInFolder}
-        foldersToConvert={foldersToConvert}
-        toggleFolderSelection={toggleFolderSelection}
         imagesToConvert={imagesToConvert}
         setImagesToConvert={setImagesToConvert}
         processing={processing}
         handleGenerate360Images={handleGenerate360Images}
-        handleGenerate360ImagesFromFolders={handleGenerate360ImagesFromFolders}
       />
     </div>
   );
