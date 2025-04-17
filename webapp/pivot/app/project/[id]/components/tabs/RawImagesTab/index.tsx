@@ -21,7 +21,7 @@ export interface RawImage {
   user_id: string;
   uploaded_at: string;
   updated_at: string;
-  displayUrl?: string; // URL for displaying the image in the UI
+  url?: string; // URL for displaying the image in the UI
 }
 
 interface RawImagesTabProps {
@@ -89,7 +89,7 @@ export default function RawImagesTab({ projectId }: RawImagesTabProps) {
 
         return {
           ...img,
-          displayUrl: urlData?.signedUrl
+          url: urlData?.signedUrl
         };
       }));
       
@@ -221,9 +221,9 @@ export default function RawImagesTab({ projectId }: RawImagesTabProps) {
 
         console.log(`Uploading file: ${fileName} to path: ${filePath}`);
 
-        // Upload to storage
+        // Make sure you're using the correct bucket name
         const { data: uploadData, error: uploadError } = await supabase.storage
-          .from("raw-images") // Note: Bucket name should be "raw-images" with a hyphen
+          .from("raw-images") // Must match exactly the bucket name in your Supabase dashboard
           .upload(filePath, file, {
             cacheControl: "3600",
             upsert: true,
@@ -248,13 +248,13 @@ export default function RawImagesTab({ projectId }: RawImagesTabProps) {
           .from("raw-images")
           .createSignedUrl(uploadData.path, 3600); // 1 hour expiration
 
-        // Save to database with the correct column names
+        // Save to database
         const { data, error } = await supabase
           .from("raw_images")
           .insert([
             {
-              filename: fileName, // Changed from "name" to "filename" to match schema
-              storage_path: uploadData.path, // Changed from "url" to "storage_path"
+              filename: fileName,
+              storage_path: uploadData.path,
               project_id: projectId,
               folder_id: currentFolder?.id || null,
               user_id: (await supabase.auth.getUser()).data.user?.id, // Required field
@@ -355,56 +355,71 @@ export default function RawImagesTab({ projectId }: RawImagesTabProps) {
       // Process each directory
       for (const [dirPath, dirFiles] of Object.entries(filesByDirectory)) {
         const pathParts = dirPath.split("/");
-        const folderName = pathParts[pathParts.length - 1];
-
-        console.log(
-          `Processing folder: ${folderName} with ${dirFiles.length} files`
-        );
-
-        // Create folder if it doesn't exist
-        const { data: folderData, error: folderError } = await supabase
-          .from("folders")
-          .insert([
-            {
-              name: folderName,
-              project_id: projectId,
-              parent_id: null, // Root level folder
-            },
-          ])
-          .select();
-
-        if (folderError) {
-          console.error("Folder creation error:", {
-            message: folderError.message,
-            code: folderError.code,
-            details: folderError.details,
-            hint: folderError.hint,
-            fullError: JSON.stringify(folderError, null, 2),
-          });
-          throw folderError;
+        let parentFolderId = currentFolder?.id || null;
+        
+        // Process each level of the path
+        for (let i = 0; i < pathParts.length; i++) {
+          const folderName = pathParts[i];
+          
+          // Check if this folder already exists under the parent
+          const { data: existingFolders } = await supabase
+            .from("folders")
+            .select("id")
+            .eq("name", folderName)
+            .eq("project_id", projectId)
+            .eq("parent_id", parentFolderId);
+          
+          let folderId;
+          
+          if (existingFolders && existingFolders.length > 0) {
+            // Folder exists, use its ID
+            folderId = existingFolders[0].id;
+          } else {
+            // Create the folder
+            const { data: newFolder, error: folderError } = await supabase
+              .from("folders")
+              .insert([
+                {
+                  name: folderName,
+                  project_id: projectId,
+                  parent_id: parentFolderId,
+                },
+              ])
+              .select();
+            
+            if (folderError) {
+              console.error("Folder creation error:", folderError);
+              throw folderError;
+            }
+            
+            if (!newFolder || newFolder.length === 0) {
+              console.error("No folder data returned after insert");
+              continue;
+            }
+            
+            folderId = newFolder[0].id;
+            
+            // Add folder to state
+            setFolders((prev) => [...prev, ...newFolder]);
+          }
+          
+          // Update parent for next level
+          parentFolderId = folderId;
         }
-
-        if (!folderData || folderData.length === 0) {
-          console.error("No folder data returned after insert");
-          continue;
-        }
-
-        const folderId = folderData[0].id;
-        console.log(`Created folder with ID: ${folderId}`);
-
-        // Add folder to state
-        setFolders((prev) => [...prev, ...folderData]);
-
+        
+        // Use the final folderId for uploading files
+        const folderId = parentFolderId;
+        
         // Upload files for this folder
         for (const file of dirFiles) {
           const fileName = file.name;
-          const filePath = `${projectId}/${folderId}/${fileName}`;
+          const filePath = `${projectId}/folders/${folderId}/${fileName}`;
 
           console.log(`Uploading file: ${fileName} to path: ${filePath}`);
 
           // Upload to storage
           const { data: uploadData, error: uploadError } =
-            await supabase.storage.from("raw_images").upload(filePath, file, {
+            await supabase.storage.from("raw-images").upload(filePath, file, {
               cacheControl: "3600",
               upsert: true,
             });
@@ -433,10 +448,14 @@ export default function RawImagesTab({ projectId }: RawImagesTabProps) {
             .from("raw_images")
             .insert([
               {
-                name: fileName,
+                filename: fileName,
+                storage_path: uploadData.path,
                 project_id: projectId,
-                url: urlData.signedUrl,
                 folder_id: folderId,
+                user_id: (await supabase.auth.getUser()).data.user?.id,
+                content_type: file.type,
+                size_bytes: file.size,
+                metadata: {}
               },
             ])
             .select();
