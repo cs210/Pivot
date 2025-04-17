@@ -11,6 +11,11 @@ This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-
     * AWS_USER="ubuntu"
     * SSH_KEY_PATH="./cs210.cer"
 
+Make sure to run the following command on cs210.cer:
+```
+chmod 600 cs210.cer
+```
+
 ### Then, run the development server.
 
 ```bash
