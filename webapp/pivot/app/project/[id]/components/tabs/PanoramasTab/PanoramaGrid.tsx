@@ -53,12 +53,11 @@ export default function PanoramaGrid({
   setNewPanoramaName,
   setRenamePanoramaDialogOpen,
   setGenerate360DialogOpen,
-  getCurrentFolderPanoramas,
-  getRootPanoramas,
+  getProjectPanoramas,
 }: PanoramaGridProps) {
   // Determine which panoramas to show based on currentFolder
   const panoramasToShow = currentFolder
-    ? getCurrentFolderPanoramas()
+    ? getProjectPanoramas()
     : panoramas;
 
   return (
