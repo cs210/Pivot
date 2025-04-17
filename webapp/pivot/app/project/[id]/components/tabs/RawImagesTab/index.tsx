@@ -80,8 +80,8 @@ export default function RawImagesTab({ projectId }: RawImagesTabProps) {
 
       if (error) throw error;
       
-      // Generate display URLs for each image
-      const imagesWithUrls = (data || []).map(img => {
+      // Use Promise.all to handle multiple async operations in parallel
+      const imagesWithUrls = await Promise.all((data || []).map(async (img) => {
         // Get a URL for the image from storage. Signed URL for private bucket.
         const { data: urlData } = await supabase.storage
           .from("raw-images")
@@ -89,9 +89,9 @@ export default function RawImagesTab({ projectId }: RawImagesTabProps) {
 
         return {
           ...img,
-          displayUrl: urlData.signedUrl
+          displayUrl: urlData?.signedUrl
         };
-      });
+      }));
       
       setRawImages(imagesWithUrls);
     } catch (error) {
