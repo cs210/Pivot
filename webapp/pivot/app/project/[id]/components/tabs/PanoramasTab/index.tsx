@@ -524,64 +524,40 @@ export default function PanoramasTab({ projectId }: PanoramasTabProps) {
         }
         
         try {
-          // Download the folder images for processing
-          const imageBlobs = await Promise.all(
-            folderImages.map(async (image) => {
-              const response = await fetch(image.url);
-              const blob = await response.blob();
-              return new File([blob], image.name, { type: blob.type });
-            })
-          );
-          
-          // Prepare FormData to send to API
-          const formData = new FormData();
-          
-          // Add each image file to FormData
-          imageBlobs.forEach(file => {
-            formData.append('files', file);
-          });
-          
-          // Add metadata
-          formData.append('userId', projectId);
-          formData.append('panoramaName', panoramaName);
-          
-          // Send to API for processing
-          const stitchResponse = await fetch('/api/stitch-panorama', {
+          // First, fetch the source images for the folder
+          const folderImages = getImagesInFolder(folderId);
+
+          // Then call the API with the correct source image IDs
+          const response = await fetch('/api/stitch-panorama', {
             method: 'POST',
-            body: formData,
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              panoramaId: panoramaData[0].id,
+              sourceImages: folderImages.map(img => img.id),
+              sourceFolder: folderId,
+              projectId: projectId
+            }),
           });
-          
-          const stitchResult = await stitchResponse.json();
-          
-          if (!stitchResponse.ok) {
-            // Update the record to show failure
-            await supabase
-              .from("panoramas")
-              .update({
-                metadata: {
-                  status: 'failed',
-                  error: stitchResult.error || 'Failed to generate panorama',
-                  detail: stitchResult.detail || '',
-                  source_images: folderImages.map(img => img.id),
-                  source_folder: folderId,
-                },
-              })
-              .eq("id", panoramaId);
-              
-            console.error(`Failed to process folder ${panoramaName}: ${stitchResult.error}`);
-            continue; // Continue with next folder instead of aborting the whole process
+
+          const result = await response.json();
+
+          if (!response.ok) {
+            console.error('Panorama stitching failed:', result);
+            throw new Error(result.error || 'Failed to stitch panorama');
           }
-          
+
           // Update database record with the generated panorama URL
           const { error: updateError } = await supabase
             .from("panoramas")
             .update({
-              storage_path: stitchResult.panoramaPath,
+              storage_path: result.panoramaPath,
               metadata: {
                 status: 'completed',
                 source_images: folderImages.map(img => img.id),
                 source_folder: folderId,
-                jobId: stitchResult.jobId,
+                jobId: result.jobId,
               },
             })
             .eq("id", panoramaId);
