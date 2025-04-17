@@ -46,7 +46,7 @@ import {
               onClick={() => setTargetFolderId(null)}
             >
               <FolderOpen className="mr-2 h-4 w-4" />
-              Root (No Folder)
+              All Images
             </Button>
             {folders.map((folder) => (
               <Button

@@ -7,6 +7,7 @@ import CreateFolderDialog from "./dialogs/CreateFolderDialog";
 import RenameFolderDialog from "./dialogs/RenameFolderDialog";
 import RenameImageDialog from "./dialogs/RenameImageDialog";
 import MoveImageDialog from "./dialogs/MoveImageDialog";
+import DeleteFolderDialog from "./dialogs/DeleteFolderDialog";
 
 export interface RawImage {
   id: string;
@@ -46,6 +47,10 @@ export default function RawImagesTab({ projectId }: RawImagesTabProps) {
   const [imagesToMove, setImagesToMove] = useState<RawImage[]>([]);
   const [targetFolderId, setTargetFolderId] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
+
+  // Add these state variables
+  const [deleteFolderDialogOpen, setDeleteFolderDialogOpen] = useState(false);
+  const [folderToDelete, setFolderToDelete] = useState<{ id: string; name: string } | null>(null);
 
   // Use the folders hook
   const {
@@ -521,21 +526,78 @@ export default function RawImagesTab({ projectId }: RawImagesTabProps) {
     return rawImages.filter((img) => img.folder_id === folderId);
   };
 
-  // Custom delete handler for folders that counts and deletes images inside
-  const handleDeleteFolderWithImages = async (folderId: string) => {
+  // Modified handler to show dialog instead of immediate deletion
+  const handleDeleteFolderWithImages = (folderId: string) => {
+    const folderToDelete = folders.find(f => f.id === folderId);
+    if (!folderToDelete) return;
+    
     const folderImages = getImagesInFolder(folderId);
     
-    await handleDeleteFolder(
-      folderId, 
-      folderImages.length, 
-      0, // No panoramas in this context 
-      handleDeleteImage,
-      () => {} // Empty function for panoramas
-    );
+    // Set the folder to delete and open the dialog
+    setFolderToDelete({
+      id: folderId,
+      name: folderToDelete.name
+    });
+    setDeleteFolderDialogOpen(true);
+  };
+
+  // New function to actually perform the deletion based on user choice
+  const performFolderDeletion = async (deleteImages: boolean, targetFolderId: string | null) => {
+    if (!folderToDelete) return;
     
-    // Delete the images if folder deletion was successful
-    for (const image of folderImages) {
-      await handleDeleteImage(image.id, false);
+    try {
+      const folderImages = getImagesInFolder(folderToDelete.id);
+      
+      if (deleteImages) {
+        // Delete the folder and all its images
+        await handleDeleteFolder(
+          folderToDelete.id, 
+          folderImages.length, 
+          0, // No panoramas in this context 
+          handleDeleteImage,
+          () => {} // Empty function for panoramas
+        );
+        
+        // Delete all the images
+        for (const image of folderImages) {
+          await handleDeleteImage(image.id, false);
+        }
+      } else {
+        // Move images to target folder first
+        for (const image of folderImages) {
+          const { error } = await supabase
+            .from("raw_images")
+            .update({ folder_id: targetFolderId })
+            .eq("id", image.id);
+            
+          if (error) throw error;
+        }
+        
+        // Update local state
+        setRawImages(prevImages => 
+          prevImages.map(img => 
+            folderImages.some(fi => fi.id === img.id)
+              ? { ...img, folder_id: targetFolderId }
+              : img
+          )
+        );
+        
+        // Then delete the empty folder
+        await handleDeleteFolder(
+          folderToDelete.id, 
+          0, // No images since we moved them
+          0, // No panoramas
+          handleDeleteImage,
+          () => {} // Empty function for panoramas
+        );
+      }
+      
+      alert(`Folder "${folderToDelete.name}" deleted successfully`);
+    } catch (error) {
+      console.error("Error deleting folder:", error);
+      alert(`Failed to delete folder: ${error.message || "Unknown error"}`);
+    } finally {
+      setFolderToDelete(null);
     }
   };
 
@@ -609,6 +671,15 @@ export default function RawImagesTab({ projectId }: RawImagesTabProps) {
         setTargetFolderId={setTargetFolderId}
         imagesToMove={imagesToMove}
         handleMoveImages={handleMoveImages}
+      />
+
+      <DeleteFolderDialog
+        open={deleteFolderDialogOpen}
+        setOpen={setDeleteFolderDialogOpen}
+        folderName={folderToDelete?.name || ""}
+        imageCount={folderToDelete ? getImagesInFolder(folderToDelete.id).length : 0}
+        folders={folders.filter(f => f.id !== folderToDelete?.id)} // Don't show the folder being deleted
+        onDelete={performFolderDeletion}
       />
     </div>
   );
