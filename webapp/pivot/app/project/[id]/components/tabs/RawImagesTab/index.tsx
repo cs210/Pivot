@@ -323,6 +323,20 @@ export default function RawImagesTab({ projectId }: RawImagesTabProps) {
       // Group files by directory
       const filesByDirectory: Record<string, File[]> = {};
 
+      // First pass: analyze the structure to determine if it's a flat folder or has subfolders
+      let hasSubfolders = false;
+      for (let i = 0; i < files.length; i++) {
+        const file = files[i];
+        const relativePath = file.webkitRelativePath;
+        const pathParts = relativePath.split("/");
+        
+        if (pathParts.length > 2) {
+          hasSubfolders = true;
+          break;
+        }
+      }
+
+      // Second pass: organize files based on the structure
       for (let i = 0; i < files.length; i++) {
         const file = files[i];
         
@@ -336,90 +350,84 @@ export default function RawImagesTab({ projectId }: RawImagesTabProps) {
         // Get the path relative to the selected folder
         const relativePath = file.webkitRelativePath;
         const pathParts = relativePath.split("/");
-
-        // Skip files deeper than 2 levels (main folder > subfolder > file)
+        
+        // Skip files deeper than 3 levels (main folder > subfolder > file)
         if (pathParts.length > 3) {
-          console.warn(`Skipping file ${relativePath} - too deep in hierarchy`);
+          console.log(`Skipping file ${file.name} - too deep in hierarchy`);
           continue;
         }
 
-        const topLevelDir = pathParts[0];
-        const secondLevelDir = pathParts.length > 2 ? pathParts[1] : null;
-
-        // Determine which directory this file belongs to
-        const dirKey = secondLevelDir
-          ? `${topLevelDir}/${secondLevelDir}`
-          : topLevelDir;
-
-        if (!filesByDirectory[dirKey]) {
-          filesByDirectory[dirKey] = [];
+        let folderKey;
+        
+        if (hasSubfolders) {
+          // If we have subfolders, use the subfolder name as the key
+          // and skip the parent folder
+          if (pathParts.length <= 2) {
+            // This is a file directly in the parent folder, skip it
+            console.log(`Skipping file ${file.name} - in parent folder when uploading subfolders`);
+            continue;
+          }
+          folderKey = pathParts[1]; // Use the subfolder name
+        } else {
+          // If it's just a flat folder with images, use the top folder name
+          folderKey = pathParts[0];
+        }
+        
+        if (!filesByDirectory[folderKey]) {
+          filesByDirectory[folderKey] = [];
         }
 
-        filesByDirectory[dirKey].push(file);
+        filesByDirectory[folderKey].push(file);
       }
 
-      console.log("Files grouped by directory:", Object.keys(filesByDirectory));
+      console.log("Folders to create:", Object.keys(filesByDirectory));
 
-      // Process each directory
-      for (const [dirPath, dirFiles] of Object.entries(filesByDirectory)) {
-        const pathParts = dirPath.split("/");
-        let parentFolderId = currentFolder?.id || null;
+      // Process each folder
+      for (const [folderName, folderFiles] of Object.entries(filesByDirectory)) {
+        // Check if this folder already exists under the current folder
+        const { data: existingFolders } = await supabase
+          .from("folders")
+          .select("id")
+          .eq("name", folderName)
+          .eq("project_id", projectId)
+          .eq("parent_id", currentFolder?.id || null);
         
-        // Process each level of the path
-        for (let i = 0; i < pathParts.length; i++) {
-          const folderName = pathParts[i];
-          
-          // Check if this folder already exists under the parent
-          const { data: existingFolders } = await supabase
+        let folderId;
+        
+        if (existingFolders && existingFolders.length > 0) {
+          // Folder exists, use its ID
+          folderId = existingFolders[0].id;
+        } else {
+          // Create the folder directly under current folder
+          const { data: newFolder, error: folderError } = await supabase
             .from("folders")
-            .select("id")
-            .eq("name", folderName)
-            .eq("project_id", projectId)
-            .eq("parent_id", parentFolderId);
+            .insert([
+              {
+                name: folderName,
+                project_id: projectId,
+                parent_id: currentFolder?.id || null, // Directly under current folder
+              },
+            ])
+            .select();
           
-          let folderId;
-          
-          if (existingFolders && existingFolders.length > 0) {
-            // Folder exists, use its ID
-            folderId = existingFolders[0].id;
-          } else {
-            // Create the folder
-            const { data: newFolder, error: folderError } = await supabase
-              .from("folders")
-              .insert([
-                {
-                  name: folderName,
-                  project_id: projectId,
-                  parent_id: parentFolderId,
-                },
-              ])
-              .select();
-            
-            if (folderError) {
-              console.error("Folder creation error:", folderError);
-              throw folderError;
-            }
-            
-            if (!newFolder || newFolder.length === 0) {
-              console.error("No folder data returned after insert");
-              continue;
-            }
-            
-            folderId = newFolder[0].id;
-            
-            // Add folder to state
-            setFolders((prev) => [...prev, ...newFolder]);
+          if (folderError) {
+            console.error("Folder creation error:", folderError);
+            throw folderError;
           }
           
-          // Update parent for next level
-          parentFolderId = folderId;
+          if (!newFolder || newFolder.length === 0) {
+            console.error("No folder data returned after insert");
+            continue;
+          }
+          
+          folderId = newFolder[0].id;
+          
+          // Add folder to state
+          setFolders((prev) => [...prev, ...newFolder]);
         }
         
-        // Use the final folderId for uploading files
-        const folderId = parentFolderId;
-        
         // Upload files for this folder
-        for (const file of dirFiles) {
+        for (const file of folderFiles) {
           const fileName = file.name;
           const filePath = `${projectId}/folders/${folderId}/${fileName}`;
 
@@ -433,20 +441,13 @@ export default function RawImagesTab({ projectId }: RawImagesTabProps) {
             });
 
           if (uploadError) {
-            console.error("Storage upload error:", {
-              message: uploadError.message,
-              name: uploadError.name,
-              code: uploadError.code,
-              details: uploadError.details,
-              hint: uploadError.hint,
-              fullError: JSON.stringify(uploadError, null, 2),
-            });
+            console.error("Storage upload error:", uploadError);
             throw uploadError;
           }
 
           console.log("File uploaded successfully:", uploadData?.path);
 
-          // Get URL (note: raw-images bucket is private according to policies)
+          // Get URL
           const { data: urlData } = await supabase.storage
             .from("raw-images")
             .createSignedUrl(uploadData.path, 3600); // 1 hour expiration
@@ -469,38 +470,27 @@ export default function RawImagesTab({ projectId }: RawImagesTabProps) {
             .select();
 
           if (error) {
-            console.error("Database insert error:", {
-              message: error.message,
-              code: error.code,
-              details: error.details,
-              hint: error.hint,
-              fullError: JSON.stringify(error, null, 2),
-            });
+            console.error("Database insert error:", error);
             throw error;
           }
 
           // Add to local state
           if (data && data.length > 0) {
-            setRawImages((prev) => [...prev, ...data]);
+            const imagesWithUrls = data.map(img => ({
+              ...img,
+              url: urlData?.signedUrl // Add the signed URL for display
+            }));
+            setRawImages((prev) => [...prev, ...imagesWithUrls]);
           }
         }
       }
 
       alert("Folders and images uploaded successfully");
     } catch (error) {
-      console.error("Error uploading folders:", {
-        message: error.message,
-        code: error.code,
-        details: error.details,
-        hint: error.hint,
-        name: error.name,
-        stack: error.stack,
-        fullError: JSON.stringify(error, null, 2),
-      });
+      console.error("Error uploading folders:", error);
       alert(`Failed to upload folders: ${error.message || "Unknown error"}`);
     } finally {
       setUploading(false);
-      // Reset the folder input
       if (folderInputRef.current) {
         folderInputRef.current.value = "";
       }
