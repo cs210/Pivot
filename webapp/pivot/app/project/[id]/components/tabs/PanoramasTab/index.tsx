@@ -51,6 +51,7 @@ export default function PanoramasTab({ projectId }: PanoramasTabProps) {
   const [rawImages, setRawImages] = useState<RawImage[]>([]);
   const [selectedPanoramas, setSelectedPanoramas] = useState<string[]>([]);
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
+  const [currentFolder, setCurrentFolder] = useState<string | null>(null);
 
   // Dialog states
   const [renamePanoramaDialogOpen, setRenamePanoramaDialogOpen] = useState(false);
@@ -60,8 +61,6 @@ export default function PanoramasTab({ projectId }: PanoramasTabProps) {
   const [uploading, setUploading] = useState(false);
   const [processing, setProcessing] = useState(false);
   const [imagesToConvert, setImagesToConvert] = useState<RawImage[]>([]);
-  const [foldersToConvert, setFoldersToConvert] = useState<string[]>([]);
-  const [folderSelectionMode, setFolderSelectionMode] = useState(false);
 
   useEffect(() => {
     Promise.all([fetchRawImages(), fetchPanoramas()]);
@@ -73,12 +72,13 @@ export default function PanoramasTab({ projectId }: PanoramasTabProps) {
         .from("raw_images")
         .select("*")
         .eq("project_id", projectId)
-        .order("filename", { ascending: true }); // Changed from name to filename
+        .order("filename", { ascending: true });
 
       if (error) throw error;
       
-      // Add URLs for display
+      // Use Promise.all to handle multiple async operations in parallel
       const imagesWithUrls = await Promise.all((data || []).map(async (img) => {
+        // Get a URL for the image from storage. Signed URL for private bucket.
         const { data: urlData } = await supabase.storage
           .from("raw-images")
           .createSignedUrl(img.storage_path, 3600); // 1 hour expiration
@@ -243,20 +243,20 @@ export default function PanoramasTab({ projectId }: PanoramasTabProps) {
 
         console.log("Panorama uploaded successfully:", uploadData?.path);
 
-        // Get public URL
-        const { data: urlData } = supabase.storage
+        // Get signed URL for private access
+        const { data: urlData } = await supabase.storage
           .from("panoramas")
-          .getPublicUrl(uploadData.path);
+          .createSignedUrl(uploadData.path, 3600); // 1 hour expiration
 
-        if (!urlData || !urlData.publicUrl) {
+        if (!urlData || !urlData.signedUrl) {
           console.error(
-            "Failed to get public URL for panorama:",
+            "Failed to get signed URL for panorama:",
             uploadData?.path
           );
-          throw new Error("Failed to get public URL");
+          throw new Error("Failed to get signed URL");
         }
 
-        console.log("Public URL generated for panorama:", urlData.publicUrl);
+        console.log("Signed URL generated for panorama:", urlData.signedUrl);
 
         // Save to database
         const { data, error } = await supabase
@@ -269,8 +269,8 @@ export default function PanoramasTab({ projectId }: PanoramasTabProps) {
               content_type: file.type,
               size_bytes: file.size,
               metadata: {},
-              is_public: true,
-              user_id: "user_id_placeholder", // Replace with actual user ID
+              is_public: false, // Change to false to make it private
+              user_id: (await supabase.auth.getUser()).data.user?.id, 
             },
           ])
           .select();
@@ -327,8 +327,8 @@ export default function PanoramasTab({ projectId }: PanoramasTabProps) {
               status: 'processing',
               source_images: imagesToConvert.map(img => img.id),
             },
-            is_public: true,
-            user_id: "user_id_placeholder", // Replace with actual user ID
+            is_public: false,
+            user_id: (await supabase.auth.getUser()).data.user?.id,
           },
         ])
         .select();
@@ -446,6 +446,10 @@ export default function PanoramasTab({ projectId }: PanoramasTabProps) {
     }
   };
 
+  const getProjectPanoramas = () => {
+    return panoramas;
+  };
+
   // Helper function to toggle panorama selection
   const togglePanoramaSelection = (panoramaId: string) => {
     setSelectedPanoramas((prev) =>
@@ -460,6 +464,7 @@ export default function PanoramasTab({ projectId }: PanoramasTabProps) {
       {/* Panoramas content area */}
       <PanoramaGrid
         panoramas={panoramas}
+        currentFolder={currentFolder}
         selectedPanoramas={selectedPanoramas}
         viewMode={viewMode}
         setViewMode={setViewMode}
@@ -473,6 +478,7 @@ export default function PanoramasTab({ projectId }: PanoramasTabProps) {
         setNewPanoramaName={setNewPanoramaName}
         setRenamePanoramaDialogOpen={setRenamePanoramaDialogOpen}
         setGenerate360DialogOpen={setGenerate360DialogOpen}
+        getProjectPanoramas={getProjectPanoramas}
       />
 
       {/* Dialogs */}
@@ -491,6 +497,7 @@ export default function PanoramasTab({ projectId }: PanoramasTabProps) {
         setImagesToConvert={setImagesToConvert}
         processing={processing}
         handleGenerate360Images={handleGenerate360Images}
+        rawImages={rawImages} // Add this prop
       />
     </div>
   );
