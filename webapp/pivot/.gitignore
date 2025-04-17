@@ -38,3 +38,5 @@ cs210.cer
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+.env
