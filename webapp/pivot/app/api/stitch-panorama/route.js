@@ -1,6 +1,6 @@
 // app/api/stitch-panorama/route.js
 import { NextResponse } from 'next/server';
-import { writeFile, mkdir, readdir } from 'fs/promises';
+import { writeFile, mkdir, readdir, readFile } from 'fs/promises';
 import { existsSync } from 'fs';
 import path from 'path';
 import { v4 as uuidv4 } from 'uuid';
@@ -313,17 +313,90 @@ export async function POST(request) {
       // Continue anyway
     }
     
-    // Return a temporary URL to the panorama
-    const panoramaUrl = `/api/panoramas/${jobId}/${encodeURIComponent(path.basename(localResultPath))}`;
-    log(`Successfully created panorama. URL: ${panoramaUrl}`);
-    
-    return NextResponse.json({ 
-      panoramaUrl,
-      jobId,
-      message: "Panorama created successfully",
-      debug: debugLog
-    });
-    
+    // Upload the panorama to Supabase
+    try {
+      log(`Uploading panorama to Supabase storage`);
+      
+      // Read the local file
+      const fileBuffer = await readFile(localResultPath);
+      
+      // Generate a storage path
+      const storagePath = `${projectId}/${panoramaId}_${Date.now()}.jpg`;
+      
+      // Upload to Supabase storage
+      const { data: uploadData, error: uploadError } = await supabase.storage
+        .from("panoramas")
+        .upload(storagePath, fileBuffer, {
+          contentType: "image/jpeg",
+          cacheControl: "3600",
+          upsert: true,
+        });
+        
+      if (uploadError) {
+        log(`Error uploading panorama to Supabase: ${uploadError.message}`);
+        throw uploadError;
+      }
+      
+      log(`Successfully uploaded panorama to Supabase: ${uploadData.path}`);
+      
+      // Update the panorama record in the database
+      const { error: updateError } = await supabase
+        .from("panoramas")
+        .update({
+          storage_path: uploadData.path,
+          size_bytes: fileBuffer.length,
+          metadata: {
+            status: 'completed',
+            source_images: sourceImages,
+            source_folder: sourceFolder,
+            jobId: jobId
+          }
+        })
+        .eq("id", panoramaId);
+        
+      if (updateError) {
+        log(`Error updating panorama record: ${updateError.message}`);
+        throw updateError;
+      }
+      
+      log(`Successfully updated panorama database record`);
+      
+      // Return success with updated info
+      return NextResponse.json({ 
+        success: true,
+        panoramaId,
+        storagePath: uploadData.path,
+        jobId,
+        message: "Panorama created and uploaded successfully",
+        debug: debugLog
+      });
+    } catch (uploadError) {
+      log(`Failed to upload panorama to Supabase: ${uploadError.message}`);
+      
+      // Update the database to mark the panorama as failed
+      try {
+        await supabase
+          .from("panoramas")
+          .update({
+            metadata: {
+              status: 'failed',
+              error: uploadError.message || "Failed to upload panorama",
+              source_images: sourceImages,
+              source_folder: sourceFolder,
+            }
+          })
+          .eq("id", panoramaId);
+          
+        log(`Updated panorama record with failed status`);
+      } catch (dbError) {
+        log(`Failed to update panorama status: ${dbError.message}`);
+      }
+      
+      return NextResponse.json(
+        { error: `Failed to upload panorama: ${uploadError.message}`, debug: debugLog },
+        { status: 500 }
+      );
+    }
   } catch (error) {
     log(`Unhandled error in API route: ${error.message}`);
     console.error('Error processing panorama:', error);
