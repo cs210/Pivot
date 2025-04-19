@@ -17,7 +17,7 @@ import {
   List,
   FolderPlus,
 } from "lucide-react";
-import { RawImage } from "./index";
+import { RawImage } from "../../../hooks/useRawImages";
 import { Folder } from "../../../hooks/useFolders";
 
 interface ImageGridProps {
@@ -143,8 +143,8 @@ export default function ImageGrid({
                     ref={folderInputRef}
                     type="file"
                     className="hidden"
-                    webkitdirectory="true"
-                    directory="true"
+                    data-webkitdirectory="true"
+                    data-directory="true"
                     multiple
                     accept="image/*"
                     onChange={handleFolderUpload}
@@ -175,11 +175,11 @@ export default function ImageGrid({
                   <div className="aspect-square relative">
                     <img
                       src={image.url}
-                      alt={image.name}
+                      alt={image.filename}
                       className="object-cover w-full h-full"
                     />
                     <div className="absolute bottom-0 left-0 right-0 bg-background/70 p-2 text-xs truncate">
-                      {image.name}
+                      {image.filename}
                     </div>
                     <div className="absolute top-2 right-2">
                       <DropdownMenu>
@@ -200,7 +200,7 @@ export default function ImageGrid({
                             onClick={(e) => {
                               e.stopPropagation();
                               setImageToRename(image);
-                              setNewImageName(image.name);
+                              setNewImageName(image.filename);
                               setRenameImageDialogOpen(true);
                             }}
                           >
@@ -249,11 +249,11 @@ export default function ImageGrid({
                   <div className="h-10 w-10 mr-4 overflow-hidden rounded">
                     <img
                       src={image.url}
-                      alt={image.name}
+                      alt={image.filename}
                       className="object-cover w-full h-full"
                     />
                   </div>
-                  <div className="flex-1 truncate">{image.name}</div>
+                  <div className="flex-1 truncate">{image.filename}</div>
                   <div className="flex items-center">
                     <DropdownMenu>
                       <DropdownMenuTrigger
@@ -269,7 +269,7 @@ export default function ImageGrid({
                           onClick={(e) => {
                             e.stopPropagation();
                             setImageToRename(image);
-                            setNewImageName(image.name);
+                            setNewImageName(image.filename);
                             setRenameImageDialogOpen(true);
                           }}
                         >

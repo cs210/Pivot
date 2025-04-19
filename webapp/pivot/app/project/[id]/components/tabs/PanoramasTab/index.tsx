@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect } from "react";
 import { createClient } from "@/utils/supabase/client";
 import { useFolders, Folder } from "../../../hooks/useFolders";
+import { useRawImages } from "../../../hooks/useRawImages";
 import PanoramaGrid from "./PanoramaGrid";
 import RenamePanoramaDialog from "./dialogs/RenamePanoramaDialog";
 import Generate360Dialog from "./dialogs/Generate360Dialog";
@@ -46,10 +47,17 @@ interface PanoramasTabProps {
 export default function PanoramasTab({ projectId }: PanoramasTabProps) {
   const supabase = createClient();
   const panoramaFileInputRef = useRef<HTMLInputElement>(null);
-  
+
+  // Use the raw images hook
+  const {
+    rawImages,
+    setRawImages,
+    fetchRawImages,
+    getImagesInFolder
+  } = useRawImages(projectId);
+
   // Panorama management
   const [panoramas, setPanoramas] = useState<Panorama[]>([]);
-  const [rawImages, setRawImages] = useState<RawImage[]>([]);
   const [selectedPanoramas, setSelectedPanoramas] = useState<string[]>([]);
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
 
@@ -86,36 +94,6 @@ export default function PanoramasTab({ projectId }: PanoramasTabProps) {
     Promise.all([fetchRawImages(), fetchPanoramas()]);
   }, [projectId]);
 
-  const fetchRawImages = async () => {
-    try {
-      const { data, error } = await supabase
-        .from("raw_images")
-        .select("*")
-        .eq("project_id", projectId)
-        .order("filename", { ascending: true });
-
-      if (error) throw error;
-      
-      // Use Promise.all to handle multiple async operations in parallel
-      const imagesWithUrls = await Promise.all((data || []).map(async (img) => {
-        // Get a URL for the image from storage. Signed URL for private bucket.
-        const { data: urlData } = await supabase.storage
-          .from("raw-images")
-          .createSignedUrl(img.storage_path, 3600); // 1 hour expiration
-
-        return {
-          ...img,
-          url: urlData?.signedUrl
-        };
-      }));
-      
-      setRawImages(imagesWithUrls);
-    } catch (error) {
-      console.error("Error fetching raw images:", error);
-      setRawImages([]);
-    }
-  };
-
   const fetchPanoramas = async () => {
     try {
       const { data, error } = await supabase
@@ -129,7 +107,7 @@ export default function PanoramasTab({ projectId }: PanoramasTabProps) {
       // Transform data to add client-side properties with proper URLs
       const transformedData = await Promise.all((data || []).map(async (item) => {
         let url;
-        
+
         if (item.is_public) {
           // For public panoramas, use the public URL
           url = supabase.storage
@@ -140,10 +118,10 @@ export default function PanoramasTab({ projectId }: PanoramasTabProps) {
           const { data: urlData } = await supabase.storage
             .from("panoramas")
             .createSignedUrl(item.storage_path, 3600); // 1 hour expiration
-            
+
           url = urlData?.signedUrl || null;
         }
-        
+
         return {
           ...item,
           url,
@@ -547,10 +525,6 @@ export default function PanoramasTab({ projectId }: PanoramasTabProps) {
         ? prev.filter((id) => id !== folderId)
         : [...prev, folderId]
     );
-  };
-
-  const getImagesInFolder = (folderId: string) => {
-    return rawImages.filter((img) => img.folder_id === folderId);
   };
 
   // Helper function to toggle panorama selection
