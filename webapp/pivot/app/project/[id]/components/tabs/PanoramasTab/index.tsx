@@ -1,44 +1,11 @@
 import { useState, useRef, useEffect } from "react";
 import { createClient } from "@/utils/supabase/client";
-import { useFolders, Folder } from "../../../hooks/useFolders";
+import { useFolders } from "../../../hooks/useFolders";
 import { useRawImages } from "../../../hooks/useRawImages";
+import { usePanoramas } from "../../../hooks/usePanoramas";
 import PanoramaGrid from "./PanoramaGrid";
 import RenamePanoramaDialog from "./dialogs/RenamePanoramaDialog";
 import Generate360Dialog from "./dialogs/Generate360Dialog";
-
-// Updated to match panoramas table schema
-export interface Panorama {
-  id: string;
-  name: string;
-  storage_path: string;
-  content_type: string;
-  size_bytes: number;
-  metadata: Record<string, any>;
-  project_id: string;
-  is_public: boolean;
-  user_id: string;
-  created_at: string;
-  updated_at: string;
-  url?: string; // Client-side property for display
-  is_processing?: boolean; // Client-side property for UI state
-}
-
-// Updated to match raw_images table schema
-export interface RawImage {
-  id: string;
-  filename: string;
-  storage_path: string;
-  content_type: string;
-  size_bytes: number;
-  metadata: Record<string, any>;
-  project_id: string;
-  folder_id: string | null;
-  panorama_id: string | null;
-  user_id: string;
-  uploaded_at: string;
-  updated_at: string;
-  url?: string; // Client-side property for display
-}
 
 interface PanoramasTabProps {
   projectId: string;
@@ -46,258 +13,55 @@ interface PanoramasTabProps {
 
 export default function PanoramasTab({ projectId }: PanoramasTabProps) {
   const supabase = createClient();
-  const panoramaFileInputRef = useRef<HTMLInputElement>(null);
 
   // Use the raw images hook
   const {
     rawImages,
-    setRawImages,
     fetchRawImages,
     getImagesInFolder
   } = useRawImages(projectId);
 
-  // Panorama management
-  const [panoramas, setPanoramas] = useState<Panorama[]>([]);
-  const [selectedPanoramas, setSelectedPanoramas] = useState<string[]>([]);
-  const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
-
-  // Dialog states
-  const [renamePanoramaDialogOpen, setRenamePanoramaDialogOpen] = useState(false);
-  const [generate360DialogOpen, setGenerate360DialogOpen] = useState(false);
-  const [panoramaToRename, setPanoramaToRename] = useState<Panorama | null>(null);
-  const [newPanoramaName, setNewPanoramaName] = useState("");
-  const [uploading, setUploading] = useState(false);
-  const [processing, setProcessing] = useState(false);
-  const [imagesToConvert, setImagesToConvert] = useState<RawImage[]>([]);
-  const [foldersToConvert, setFoldersToConvert] = useState<string[]>([]);
-  const [folderSelectionMode, setFolderSelectionMode] = useState(false);
+  // Use the panoramas hook
+  const {
+    panoramas,
+    setPanoramas,
+    selectedPanoramas,
+    setSelectedPanoramas,
+    viewMode,
+    setViewMode,
+    uploading,
+    processing,
+    setProcessing,
+    renamePanoramaDialogOpen,
+    setRenamePanoramaDialogOpen,
+    generate360DialogOpen,
+    setGenerate360DialogOpen,
+    setPanoramaToRename,
+    newPanoramaName,
+    setNewPanoramaName,
+    imagesToConvert,
+    setImagesToConvert,
+    foldersToConvert,
+    setFoldersToConvert,
+    folderSelectionMode,
+    setFolderSelectionMode,
+    panoramaFileInputRef,
+    fetchPanoramas,
+    handleRenamePanorama,
+    handleDeletePanorama,
+    handlePanoramaUpload,
+    getProjectPanoramas
+  } = usePanoramas(projectId);
 
   // Use the folders hook
   const {
-    folders,
-    currentFolder,
-    setCurrentFolder,
-    newFolderName,
-    setNewFolderName,
-    createFolderDialogOpen,
-    setCreateFolderDialogOpen,
-    renameFolderDialogOpen,
-    setRenameFolderDialogOpen,
-    folderToRename,
-    setFolderToRename,
-    handleCreateFolder,
-    handleRenameFolder,
-    handleDeleteFolder
+    folders
   } = useFolders(projectId);
 
   useEffect(() => {
     Promise.all([fetchRawImages(), fetchPanoramas()]);
   }, [projectId]);
 
-  const fetchPanoramas = async () => {
-    try {
-      const { data, error } = await supabase
-        .from("panoramas")
-        .select("*")
-        .eq("project_id", projectId)
-        .order("name", { ascending: true });
-
-      if (error) throw error;
-
-      // Transform data to add client-side properties with proper URLs
-      const transformedData = await Promise.all((data || []).map(async (item) => {
-        let url;
-
-        if (item.is_public) {
-          // For public panoramas, use the public URL
-          url = supabase.storage
-            .from("panoramas")
-            .getPublicUrl(item.storage_path).data.publicUrl;
-        } else {
-          // For private panoramas, generate a signed URL
-          const { data: urlData } = await supabase.storage
-            .from("panoramas")
-            .createSignedUrl(item.storage_path, 3600); // 1 hour expiration
-
-          url = urlData?.signedUrl || null;
-        }
-
-        return {
-          ...item,
-          url,
-          is_processing: item.metadata?.status === 'processing'
-        };
-      }));
-
-      setPanoramas(transformedData);
-    } catch (error) {
-      console.error("Error fetching panoramas:", error);
-      setPanoramas([]);
-    }
-  };
-
-  const handleRenamePanorama = async () => {
-    if (!newPanoramaName.trim() || !panoramaToRename) {
-      alert("Please enter a panorama name");
-      return;
-    }
-
-    try {
-      const { error } = await supabase
-        .from("panoramas")
-        .update({ name: newPanoramaName.trim() })
-        .eq("id", panoramaToRename.id);
-
-      if (error) throw error;
-
-      setPanoramas(
-        panoramas.map((pano) =>
-          pano.id === panoramaToRename.id
-            ? { ...pano, name: newPanoramaName.trim() }
-            : pano
-        )
-      );
-
-      setRenamePanoramaDialogOpen(false);
-      setPanoramaToRename(null);
-      setNewPanoramaName("");
-      alert("360 image renamed successfully");
-    } catch (error) {
-      console.error("Error renaming panorama:", error);
-      alert("Failed to rename 360 image");
-    }
-  };
-
-  const handleDeletePanorama = async (panoramaId: string, showAlert = true) => {
-    try {
-      // First get the panorama to get the file path
-      const panoramaToDelete = panoramas.find((pano) => pano.id === panoramaId);
-
-      if (!panoramaToDelete) return;
-
-      // Delete from storage
-      try {
-        if (panoramaToDelete.storage_path) {
-          await supabase.storage
-            .from("panoramas")
-            .remove([panoramaToDelete.storage_path]);
-        }
-      } catch (storageError) {
-        console.warn("Could not delete from storage:", storageError);
-        // Continue anyway, as the file might not exist in storage
-      }
-
-      // Delete from database
-      const { error: dbError } = await supabase
-        .from("panoramas")
-        .delete()
-        .eq("id", panoramaId);
-
-      if (dbError) throw dbError;
-
-      // Update local state
-      setPanoramas(panoramas.filter((pano) => pano.id !== panoramaId));
-      setSelectedPanoramas(selectedPanoramas.filter((id) => id !== panoramaId));
-
-      if (showAlert) {
-        alert("360 image deleted successfully");
-      }
-    } catch (error) {
-      console.error("Error deleting panorama:", error);
-      if (showAlert) {
-        alert("Failed to delete 360 image");
-      }
-    }
-  };
-
-  const handlePanoramaUpload = async (
-    event: React.ChangeEvent<HTMLInputElement>
-  ) => {
-    const files = event.target.files;
-    if (!files || files.length === 0) return;
-
-    setUploading(true);
-
-    try {
-      for (let i = 0; i < files.length; i++) {
-        const file = files[i];
-        const fileName = file.name;
-        const filePath = `${projectId}/${fileName}`;
-
-        console.log(`Uploading panorama: ${fileName} to path: ${filePath}`);
-
-        // Upload to storage
-        const { data: uploadData, error: uploadError } = await supabase.storage
-          .from("panoramas")
-          .upload(filePath, file, {
-            cacheControl: "3600",
-            upsert: true,
-          });
-
-        if (uploadError) {
-          console.error("Storage upload error:", uploadError);
-          throw uploadError;
-        }
-
-        console.log("Panorama uploaded successfully:", uploadData?.path);
-
-        // Get signed URL for private access
-        const { data: urlData } = await supabase.storage
-          .from("panoramas")
-          .createSignedUrl(uploadData.path, 3600); // 1 hour expiration
-
-        if (!urlData || !urlData.signedUrl) {
-          console.error(
-            "Failed to get signed URL for panorama:",
-            uploadData?.path
-          );
-          throw new Error("Failed to get signed URL");
-        }
-
-        console.log("Signed URL generated for panorama:", urlData.signedUrl);
-
-        // Save to database
-        const { data, error } = await supabase
-          .from("panoramas")
-          .insert([
-            {
-              name: fileName,
-              project_id: projectId,
-              storage_path: uploadData.path,
-              content_type: file.type,
-              size_bytes: file.size,
-              metadata: {},
-              is_public: false, // Change to false to make it private
-              user_id: (await supabase.auth.getUser()).data.user?.id, 
-            },
-          ])
-          .select();
-
-        if (error) {
-          console.error("Database insert error:", error);
-          throw error;
-        }
-
-        console.log("Panorama record created in database:", data);
-
-        // Add to local state
-        if (data && data.length > 0) {
-          setPanoramas((prev) => [...prev, ...data]);
-        }
-      }
-
-      alert("360 images uploaded successfully");
-    } catch (error) {
-      console.error("Error uploading 360 images:", error);
-      alert(`Failed to upload 360 images: ${error.message || "Unknown error"}`);
-    } finally {
-      setUploading(false);
-      // Reset the file input
-      if (panoramaFileInputRef.current) {
-        panoramaFileInputRef.current.value = "";
-      }
-    }
-  };
 
   const handleGenerate360Images = async () => {
     if (imagesToConvert.length === 0) {
@@ -385,7 +149,8 @@ export default function PanoramasTab({ projectId }: PanoramasTabProps) {
       
     } catch (error) {
       console.error("Error generating 360 images:", error);
-      alert(`Failed to generate 360 image: ${error.message}`);
+      const errorMessage = error instanceof Error ? error.message : "Unknown error";
+      alert(`Failed to generate 360 image: ${errorMessage}`);
     } finally {
       setProcessing(false);
       setGenerate360DialogOpen(false);
@@ -480,7 +245,7 @@ export default function PanoramasTab({ projectId }: PanoramasTabProps) {
           
           // API has already updated the database to mark the panorama as failed,
           // but we'll still check here just in case
-          if (processingError.message !== "Failed to upload panorama") {
+          if (processingError instanceof Error && processingError.message !== "Failed to upload panorama") {
             await supabase
               .from("panoramas")
               .update({
@@ -505,17 +270,14 @@ export default function PanoramasTab({ projectId }: PanoramasTabProps) {
       
     } catch (error) {
       console.error("Error generating 360 images from folders:", error);
-      alert(`Failed to generate 360 images: ${error.message}`);
+      const errorMessage = error instanceof Error ? error.message : "Unknown error";
+      alert(`Failed to generate 360 images: ${errorMessage}`);
     } finally {
       setProcessing(false);
       setGenerate360DialogOpen(false);
       setFoldersToConvert([]);
       setFolderSelectionMode(false);
     }
-  };
-
-  const getProjectPanoramas = () => {
-    return panoramas;
   };
 
   // Toggle folder selection for 360 conversion
@@ -541,7 +303,6 @@ export default function PanoramasTab({ projectId }: PanoramasTabProps) {
       {/* Panoramas content area */}
       <PanoramaGrid
         panoramas={panoramas}
-        currentFolder={currentFolder}
         selectedPanoramas={selectedPanoramas}
         viewMode={viewMode}
         setViewMode={setViewMode}
