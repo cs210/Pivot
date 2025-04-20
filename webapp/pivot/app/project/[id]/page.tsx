@@ -5,13 +5,13 @@ import { useRouter, useParams } from "next/navigation";
 import Link from "next/link";
 import { Header } from "@/components/header";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import PlaceLocationsTabContent from "./components/EnhancedEnhancedImageGrid";
 import PanoramaViewerPage from "./components/PanoramaViewerPage";
 import ProjectHeader from "./components/ProjectHeader";
 import ProjectSettings from "./components/ProjectSettings";
 import RawImagesTab from "./components/tabs/RawImagesTab";
 import PanoramasTab from "./components/tabs/PanoramasTab";
 import { useProject } from "./hooks/useProject";
+import PlaceLocationsTabContent from "./components/EnhancedImageGrid";
 
 export default function ProjectPage() {
   const router = useRouter();
