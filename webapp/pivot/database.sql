@@ -64,9 +64,25 @@ CREATE TABLE raw_images (
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 
--- Grid Nodes Table (with direct reference to panorama)
+-- Grid Configuration Table with public visibility support
+CREATE TABLE grids (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    project_id UUID NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+    name TEXT NOT NULL,
+    rows INTEGER NOT NULL DEFAULT 2,
+    cols INTEGER NOT NULL DEFAULT 2,
+    is_default BOOLEAN DEFAULT TRUE,
+    is_public BOOLEAN DEFAULT FALSE,
+    user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT unique_grid_name_per_project UNIQUE (name, project_id)
+);
+
+-- Grid Nodes Table (with reference to grids)
 CREATE TABLE grid_nodes (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    grid_id UUID NOT NULL REFERENCES grids(id) ON DELETE CASCADE,
     project_id UUID NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
     panorama_id UUID REFERENCES panoramas(id) ON DELETE SET NULL,
     grid_x INTEGER NOT NULL,
@@ -77,7 +93,7 @@ CREATE TABLE grid_nodes (
     scale_factor DECIMAL(10,2) DEFAULT 1.00,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
-    CONSTRAINT unique_grid_position UNIQUE (project_id, grid_x, grid_y)
+    CONSTRAINT unique_grid_position UNIQUE (grid_id, grid_x, grid_y)
 );
 
 -- Create RLS (Row Level Security) Policies
@@ -181,16 +197,43 @@ CREATE POLICY "Users can delete their own panoramas"
 ON panoramas FOR DELETE
 USING (auth.uid() = user_id);
 
+-- Grids table policies
+ALTER TABLE grids ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Users can view their own grids or public grids"
+ON grids FOR SELECT
+USING (
+    (auth.uid() = user_id) OR
+    (is_public = TRUE)
+);
+
+CREATE POLICY "Users can insert their own grids"
+ON grids FOR INSERT
+WITH CHECK (auth.uid() = user_id);
+
+CREATE POLICY "Users can update their own grids"
+ON grids FOR UPDATE
+USING (auth.uid() = user_id);
+
+CREATE POLICY "Users can delete their own grids"
+ON grids FOR DELETE
+USING (auth.uid() = user_id);
+
 -- Grid Nodes table policies
 ALTER TABLE grid_nodes ENABLE ROW LEVEL SECURITY;
 
-CREATE POLICY "Users can view grid nodes for their projects"
+CREATE POLICY "Users can view grid nodes for their projects or public grids"
 ON grid_nodes FOR SELECT
 USING (
     EXISTS (
         SELECT 1 FROM projects
         WHERE projects.id = grid_nodes.project_id
         AND projects.user_id = auth.uid()
+    ) OR
+    EXISTS (
+        SELECT 1 FROM grids
+        WHERE grids.id = grid_nodes.grid_id
+        AND grids.is_public = TRUE
     ) OR
     EXISTS (
         SELECT 1 FROM panoramas
@@ -203,9 +246,9 @@ CREATE POLICY "Users can insert grid nodes for their projects"
 ON grid_nodes FOR INSERT
 WITH CHECK (
     EXISTS (
-        SELECT 1 FROM projects
-        WHERE projects.id = grid_nodes.project_id
-        AND projects.user_id = auth.uid()
+        SELECT 1 FROM grids
+        WHERE grids.id = grid_nodes.grid_id
+        AND grids.user_id = auth.uid()
     )
 );
 
@@ -213,9 +256,9 @@ CREATE POLICY "Users can update grid nodes for their projects"
 ON grid_nodes FOR UPDATE
 USING (
     EXISTS (
-        SELECT 1 FROM projects
-        WHERE projects.id = grid_nodes.project_id
-        AND projects.user_id = auth.uid()
+        SELECT 1 FROM grids
+        WHERE grids.id = grid_nodes.grid_id
+        AND grids.user_id = auth.uid()
     )
 );
 
@@ -223,9 +266,9 @@ CREATE POLICY "Users can delete grid nodes for their projects"
 ON grid_nodes FOR DELETE
 USING (
     EXISTS (
-        SELECT 1 FROM projects
-        WHERE projects.id = grid_nodes.project_id
-        AND projects.user_id = auth.uid()
+        SELECT 1 FROM grids
+        WHERE grids.id = grid_nodes.grid_id
+        AND grids.user_id = auth.uid()
     )
 );
 
@@ -264,6 +307,11 @@ BEFORE UPDATE ON grid_nodes
 FOR EACH ROW
 EXECUTE FUNCTION update_updated_at_column();
 
+CREATE TRIGGER update_grids_updated_at
+BEFORE UPDATE ON grids
+FOR EACH ROW
+EXECUTE FUNCTION update_updated_at_column();
+
 -- Create indexes for performance
 CREATE INDEX idx_projects_user_id ON projects(user_id);
 CREATE INDEX idx_folders_project_id ON folders(project_id);
@@ -275,9 +323,14 @@ CREATE INDEX idx_raw_images_user_id ON raw_images(user_id);
 CREATE INDEX idx_panoramas_project_id ON panoramas(project_id);
 CREATE INDEX idx_panoramas_user_id ON panoramas(user_id);
 CREATE INDEX idx_panoramas_is_public ON panoramas(is_public);
+CREATE INDEX idx_grids_project_id ON grids(project_id);
+CREATE INDEX idx_grids_user_id ON grids(user_id);
+CREATE INDEX idx_grids_is_public ON grids(is_public);
+CREATE INDEX idx_grids_is_default ON grids(is_default);
 CREATE INDEX idx_grid_nodes_project_id ON grid_nodes(project_id);
 CREATE INDEX idx_grid_nodes_panorama_id ON grid_nodes(panorama_id);
 CREATE INDEX idx_grid_nodes_coordinates ON grid_nodes(grid_x, grid_y);
+CREATE INDEX idx_grid_nodes_grid_id ON grid_nodes(grid_id);
 
 -- Policies for panoramas bucket
 -- Allow authenticated users to upload panoramas
