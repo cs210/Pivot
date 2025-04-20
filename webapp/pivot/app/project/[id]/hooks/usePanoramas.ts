@@ -1,6 +1,5 @@
 import { useState, useEffect, useRef } from "react";
 import { createClient } from "@/utils/supabase/client";
-import { Folder } from "./useFolders";
 import { RawImage } from "./useRawImages";
 
 export interface Panorama {
