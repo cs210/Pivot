@@ -16,11 +16,10 @@ import {
   Box,
   Loader2,
 } from "lucide-react";
-import { Panorama } from "./index";
+import { Panorama } from "../../../hooks/usePanoramas";
 
 interface PanoramaGridProps {
   panoramas: Panorama[];
-  currentFolder: Folder | null;
   selectedPanoramas: string[];
   viewMode: "grid" | "list";
   setViewMode: (mode: "grid" | "list") => void;
@@ -39,7 +38,6 @@ interface PanoramaGridProps {
 
 export default function PanoramaGrid({
   panoramas,
-  currentFolder,
   selectedPanoramas,
   viewMode,
   setViewMode,
@@ -56,9 +54,7 @@ export default function PanoramaGrid({
   getProjectPanoramas,
 }: PanoramaGridProps) {
   // Determine which panoramas to show based on currentFolder
-  const panoramasToShow = currentFolder
-    ? getProjectPanoramas()
-    : panoramas;
+  const panoramasToShow = getProjectPanoramas();
 
   return (
     <div className="md:col-span-9">
@@ -66,9 +62,7 @@ export default function PanoramaGrid({
         <CardHeader>
           <div className="flex justify-between items-center">
             <CardTitle>
-              {currentFolder
-                ? `360° Images in ${currentFolder.name}`
-                : "All 360° Images"}
+              {"All 360° Images"}
             </CardTitle>
             <div className="flex space-x-2">
               <Button

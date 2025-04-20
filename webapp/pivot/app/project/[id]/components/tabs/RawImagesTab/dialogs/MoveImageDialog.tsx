@@ -9,7 +9,7 @@ import {
   import { Button } from "@/components/ui/button";
   import { FolderOpen } from "lucide-react";
   import { Folder } from "../../../../hooks/useFolders";
-  import { RawImage } from "../../PanoramasTab/index";
+  import { RawImage } from "../../../../hooks/useRawImages";
   
   interface MoveImageDialogProps {
     open: boolean;
