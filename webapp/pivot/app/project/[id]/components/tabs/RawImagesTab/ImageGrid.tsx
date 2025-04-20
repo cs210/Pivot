@@ -143,8 +143,7 @@ export default function ImageGrid({
                     ref={folderInputRef}
                     type="file"
                     className="hidden"
-                    data-webkitdirectory="true"
-                    data-directory="true"
+                    {...{ webkitdirectory: "", directory: "" } as any}
                     multiple
                     accept="image/*"
                     onChange={handleFolderUpload}
