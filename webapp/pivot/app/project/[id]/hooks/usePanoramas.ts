@@ -14,7 +14,7 @@ export interface Panorama {
   user_id: string;
   created_at: string;
   updated_at: string;
-  url?: string; // Client-side property for display
+  url?: string | null; // Client-side property for display
   is_processing?: boolean; // Client-side property for UI state
 }
 
@@ -28,6 +28,7 @@ export function usePanoramas(projectId: string) {
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
   const [uploading, setUploading] = useState(false);
   const [processing, setProcessing] = useState(false);
+  const [loading, setLoading] = useState(true);
   
   // Dialog states
   const [renamePanoramaDialogOpen, setRenamePanoramaDialogOpen] = useState(false);
@@ -48,6 +49,7 @@ export function usePanoramas(projectId: string) {
   }, [projectId]);
 
   const fetchPanoramas = async () => {
+    setLoading(true);
     try {
       const { data, error } = await supabase
         .from("panoramas")
@@ -86,6 +88,77 @@ export function usePanoramas(projectId: string) {
     } catch (error) {
       console.error("Error fetching panoramas:", error);
       setPanoramas([]);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const updatePanorama = async (panoramaId: string, updateData: Partial<Panorama>) => {
+    try {
+      console.log(`Updating panorama ${panoramaId} with data:`, updateData);
+      
+      const { error } = await supabase
+        .from("panoramas")
+        .update(updateData)
+        .eq("id", panoramaId);
+
+      if (error) throw error;
+
+      // Update local state
+      setPanoramas(prevPanoramas => 
+        prevPanoramas.map(pano => 
+          pano.id === panoramaId 
+            ? { ...pano, ...updateData } 
+            : pano
+        )
+      );
+      
+      // If we're updating a URL or metadata that affects URLs, refresh the panorama
+      if (updateData.is_public !== undefined || updateData.storage_path) {
+        // Find the panorama to refresh its URL
+        const panoramaToRefresh = panoramas.find(p => p.id === panoramaId);
+        if (panoramaToRefresh) {
+          await refreshPanoramaUrl(panoramaToRefresh);
+        }
+      }
+      
+      return true;
+    } catch (error) {
+      console.error("Error updating panorama:", error);
+      throw error;
+    }
+  };
+  
+  const refreshPanoramaUrl = async (panorama: Panorama) => {
+    try {
+      let url;
+      if (panorama.is_public) {
+        // For public panoramas, use the public URL
+        url = supabase.storage
+          .from("panoramas")
+          .getPublicUrl(panorama.storage_path).data.publicUrl;
+      } else {
+        // For private panoramas, generate a signed URL
+        const { data: urlData } = await supabase.storage
+          .from("panoramas")
+          .createSignedUrl(panorama.storage_path, 3600); // 1 hour expiration
+
+        url = urlData?.signedUrl || null;
+      }
+      
+      // Update the panorama in state with the new URL
+      setPanoramas(prevPanoramas => 
+        prevPanoramas.map(p => 
+          p.id === panorama.id 
+            ? { ...p, url } 
+            : p
+        )
+      );
+      
+      return url;
+    } catch (error) {
+      console.error("Error refreshing panorama URL:", error);
+      return null;
     }
   };
 
@@ -257,6 +330,10 @@ export function usePanoramas(projectId: string) {
     return panoramas;
   };
 
+  const getPanoramaById = (id: string) => {
+    return panoramas.find(pano => pano.id === id) || null;
+  };
+
   return {
     // State variables
     panoramas,
@@ -269,6 +346,8 @@ export function usePanoramas(projectId: string) {
     setUploading,
     processing,
     setProcessing,
+    loading,
+    setLoading,
     
     // Dialog related states
     renamePanoramaDialogOpen,
@@ -302,8 +381,11 @@ export function usePanoramas(projectId: string) {
     handleRenamePanorama,
     handleDeletePanorama,
     handlePanoramaUpload,
+    updatePanorama,
     
     // Helper functions
-    getProjectPanoramas
+    getProjectPanoramas,
+    getPanoramaById,
+    refreshPanoramaUrl
   };
 }
