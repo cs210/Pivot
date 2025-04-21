@@ -123,110 +123,6 @@ export default function PanoramaViewerPage({
     }
   }, [rows, cols, panoramas, currentPanorama, getNodeAtPosition]);
 
-  // Process and validate marker data
-  const processMarker = useCallback((marker) => {
-    if (!marker) return null;
-    const processedMarker = { ...marker };
-
-    if (!processedMarker.id) {
-      processedMarker.id = `marker-${Date.now()}-${Math.random()
-        .toString(36)
-        .slice(2, 9)}`;
-    }
-
-    if (
-      !processedMarker.position ||
-      (typeof processedMarker.position === "object" &&
-        processedMarker.position.yaw === undefined &&
-        processedMarker.position.pitch === undefined &&
-        processedMarker.position.longitude === undefined &&
-        processedMarker.position.latitude === undefined)
-    ) {
-      console.warn("Marker missing position data:", marker);
-      processedMarker.position = { yaw: 0, pitch: 0 };
-    } else if (typeof processedMarker.position === "object") {
-      const position = { ...processedMarker.position };
-      processedMarker.position = {
-        yaw:
-          position.yaw !== undefined
-            ? position.yaw
-            : position.longitude !== undefined
-            ? position.longitude
-            : 0,
-        pitch:
-          position.pitch !== undefined
-            ? position.pitch
-            : position.latitude !== undefined
-            ? position.latitude
-            : 0,
-      };
-    }
-
-    if (!processedMarker.html && !processedMarker.image) {
-      processedMarker.html =
-        '<div style="width: 20px; height: 20px; border-radius: 50%; background-color: red; border: 2px solid white;"></div>';
-      processedMarker.anchor = processedMarker.anchor || "center center";
-    }
-
-    if (
-      processedMarker.tooltip &&
-      typeof processedMarker.tooltip === "object" &&
-      processedMarker.tooltip.content
-    ) {
-      // Tooltip is already correctly formatted.
-    } else if (
-      processedMarker.tooltip &&
-      typeof processedMarker.tooltip === "string"
-    ) {
-      processedMarker.tooltip = { content: processedMarker.tooltip };
-    } else if (!processedMarker.tooltip) {
-      processedMarker.tooltip = { content: "No description" };
-    }
-
-    return processedMarker;
-  }, []);
-
-  // Directly verify markers stored in the annotations column
-  const verifyMarkersInDatabase = async (panoramaId: string) => {
-    try {
-      console.log("Directly querying Supabase for panorama:", panoramaId);
-
-      const { data, error } = await supabase
-        .from("panoramas")
-        .select("*")
-        .eq("id", panoramaId)
-        .single();
-
-      if (error) {
-        console.error("Error querying panorama data:", error);
-        return;
-      }
-
-      console.log("Full panorama data:", data);
-      console.log("Column names:", Object.keys(data));
-
-      const metadata = data.metadata || {};
-
-      if (metadata.annotations) {
-        console.log("Annotations data:", metadata.annotations);
-        console.log(
-          `Found ${
-            Array.isArray(metadata.annotations) ? metadata.annotations.length : 0
-          } annotations`
-        );
-        if (Array.isArray(metadata.annotations)) {
-          metadata.annotations.forEach((anno, index) => {
-            console.log(`Annotation ${index}:`, anno);
-          });
-        }
-      }
-      return data;
-    } catch (err) {
-      console.error("Error verifying markers:", err);
-      return null;
-    }
-  };
-
   const handleCellClick = (x: number, y: number) => {
     const node = getNodeAtPosition(x, y);
     if (!node || !node.panorama_id) return;
@@ -240,8 +136,6 @@ export default function PanoramaViewerPage({
           ? `Yes (${pano.metadata.annotations.length})`
           : "No"
       );
-
-      verifyMarkersInDatabase(pano.id);
       setEditingMarker(null);
       setMarkerInput("");
 
@@ -563,6 +457,43 @@ export default function PanoramaViewerPage({
                   <button
                     className="mr-2 px-3 py-1 bg-gray-300 hover:opacity-90 rounded"
                     onClick={() => {
+                      // Check if this is a new marker that was just added
+                      const isNewMarker = editingMarker && 
+                        editingMarker.startsWith('marker-') && 
+                        !currentPanorama?.metadata?.annotations?.some(
+                          m => m.id === editingMarker && m.tooltip?.content
+                        );
+                        
+                      if (isNewMarker) {
+                        // If it's a new marker, remove it from the viewer
+                        if (markersPluginRef.current) {
+                          try {
+                            markersPluginRef.current.removeMarker(editingMarker);
+                          } catch (e) {
+                            console.error("Error removing marker on cancel:", e);
+                          }
+                        }
+                        
+                        // Also remove it from the panorama metadata
+                        setCurrentPanorama(prevPanorama => {
+                          if (!prevPanorama) return prevPanorama;
+                          
+                          const existingAnnotations = prevPanorama.metadata?.annotations || [];
+                          const updatedAnnotations = existingAnnotations.filter(
+                            marker => marker.id !== editingMarker
+                          );
+                          
+                          return {
+                            ...prevPanorama,
+                            metadata: {
+                              ...prevPanorama.metadata || {},
+                              annotations: updatedAnnotations
+                            }
+                          };
+                        });
+                      }
+                      
+                      // Clear the editing state regardless
                       setEditingMarker(null);
                       setMarkerInput("");
                     }}
