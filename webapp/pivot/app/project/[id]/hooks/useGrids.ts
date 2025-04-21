@@ -92,6 +92,7 @@ export function useGrids(projectId: string) {
   };
 
   const fetchData = async () => {
+    console.log("Starting fetchData for project:", projectId);
     setLoading(true);
     try {
       // 1. Fetch the default grid for this project
@@ -102,6 +103,8 @@ export function useGrids(projectId: string) {
         .eq("is_default", true)
         .single();
 
+      console.log("Grid query result:", { data: gridData, error: gridError });
+
       if (gridError && gridError.code !== 'PGRST116') { // PGRST116 is "no rows returned"
         throw gridError;
       }
@@ -110,6 +113,7 @@ export function useGrids(projectId: string) {
       
       if (!gridData) {
         // Create a default grid if none exists
+        console.log("Creating new grid for project:", projectId);
         const userId = (await supabase.auth.getUser()).data.user?.id;
         if (!userId) throw new Error("User not authenticated");
         
@@ -118,8 +122,8 @@ export function useGrids(projectId: string) {
           .insert({
             project_id: projectId,
             name: "Default Grid",
-            rows: 3,
-            cols: 3,
+            rows: 1,
+            cols: 1,
             is_default: true,
             is_public: false,
             user_id: userId
@@ -129,6 +133,7 @@ export function useGrids(projectId: string) {
           
         if (createError) throw createError;
         grid = newGrid;
+        console.log("New grid created:", grid);
       } else {
         grid = gridData;
       }
@@ -172,10 +177,13 @@ export function useGrids(projectId: string) {
       setAllPanoramas(panoramasWithUrls);
 
       // 3. Fetch all grid nodes for this grid
+      console.log("Fetching nodes for grid:", grid.id);
       const { data: nodesData, error: nodesError } = await supabase
         .from("grid_nodes")
         .select("*")
         .eq("grid_id", grid.id);
+
+      console.log("Nodes result:", nodesData);
 
       if (nodesError) {
         throw nodesError;

@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect } from "react";
+import React, { useEffect, useCallback } from "react";
 import { createClient } from "@/utils/supabase/client";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { X, Save, Plus, Minus } from "lucide-react";
@@ -41,9 +41,25 @@ export default function EnhancedImageGrid({
     setOpenDropdownCell
   } = useGrids(projectId);
 
+  // Use this approach to prevent the infinite render loop
   useEffect(() => {
-    fetchData();
-  }, [projectId, fetchData]);
+    let mounted = true;
+
+    const loadData = async () => {
+      // Only proceed if component is still mounted
+      if (mounted) {
+        await fetchData();
+      }
+    };
+
+    loadData();
+
+    // Cleanup function
+    return () => {
+      mounted = false;
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [projectId]); // Only depend on projectId
 
   return (
     <TabsContent
@@ -177,11 +193,11 @@ export default function EnhancedImageGrid({
                               )
                             }
                           >
-                            <div className="absolute -top-6 left-0 right-0 text-center">
+                            {/* <div className="absolute -top-6 left-0 right-0 text-center">
                               <span className="text-xs bg-background/70 px-2 py-1 rounded">
                                 ({x},{y})
                               </span>
-                            </div>
+                            </div> */}
                             
                             {panorama ? (
                               <>
@@ -190,9 +206,9 @@ export default function EnhancedImageGrid({
                                   alt={panorama.name}
                                   className="w-full h-full object-cover rounded-full"
                                 />
-                                <div className="absolute bottom-0 left-0 right-0 bg-black/50 text-white text-xs px-1 truncate text-center">
+                                {/* <div className="absolute bottom-0 left-0 right-0 bg-black/50 text-white text-xs px-1 truncate text-center">
                                   {panorama.name}
-                                </div>
+                                </div> */}
 
                                 {/* Unassign button */}
                                 <button
