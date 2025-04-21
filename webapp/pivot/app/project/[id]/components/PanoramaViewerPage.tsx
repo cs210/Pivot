@@ -5,6 +5,7 @@ import dynamic from "next/dynamic";
 import { createClient } from "@/utils/supabase/client";
 import { MarkersPlugin } from "@photo-sphere-viewer/markers-plugin";
 import { Card } from "@/components/ui/card";
+import { Panorama } from "../hooks/usePanoramas";
 
 // Dynamically import ReactPhotoSphereViewer to avoid SSR issues
 const ReactPhotoSphereViewer = dynamic(
@@ -39,11 +40,8 @@ interface Marker {
   html?: string;
 }
 
-interface PanoramaImage {
-  id: string;
-  project_id: string;
-  name: string;
-  url: string;
+interface AnnotatedPanorama {
+  panorama: Panorama[];
   markers?: Marker[];
   annotations?: any[]; // This column now stores the marker data (position, tooltip, etc.)
 }
