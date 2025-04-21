@@ -66,7 +66,6 @@ export default function PanoramaViewerPage({
 
   // State variables
   const [currentPanorama, setCurrentPanorama] = useState<Panorama | null>(null);
-  const [showDebugOverlay, setShowDebugOverlay] = useState<boolean>(false);
   const [editingMarker, setEditingMarker] = useState<string | null>(null);
   const [markerInput, setMarkerInput] = useState<string>("");
   const [showHelpModal, setShowHelpModal] = useState<boolean>(false);
@@ -397,12 +396,6 @@ export default function PanoramaViewerPage({
         {/* TOP: Panorama Viewer */}
         <div ref={viewerRef} className="flex-1 p-4 relative bg-gray-50">
           <div className="absolute top-2 right-2 z-10 flex space-x-2">
-            <button
-              className="bg-gray-100 hover:opacity-90 text-white px-3 py-1 rounded"
-              onClick={() => setShowDebugOverlay(!showDebugOverlay)}
-            >
-              {showDebugOverlay ? "Hide Debug" : "Show Debug"}
-            </button>
             <button
               className="bg-cyber-gradient text-white hover:opacity-90 px-3 py-1 rounded"
               onClick={() => setShowHelpModal(true)}
