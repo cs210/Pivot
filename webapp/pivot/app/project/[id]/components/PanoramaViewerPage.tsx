@@ -99,6 +99,30 @@ export default function PanoramaViewerPage({
     loadData();
   }, [projectId]);
 
+  // Add this effect after your initial data fetch effect:
+  useEffect(() => {
+    // Automatically select the node at position (0,0) if it exists
+    const autoSelectFirstNode = () => {
+      if (rows > 0 && cols > 0) {
+        const originNode = getNodeAtPosition(0, 0);
+        if (originNode && originNode.panorama_id) {
+          // Find the panorama that belongs to this node
+          const pano = panoramas.find(p => p.id === originNode.panorama_id);
+          if (pano) {
+            console.log("Auto-selecting origin panorama at (0,0):", pano.id);
+            setCurrentPanorama(pano);
+          }
+        }
+      }
+    };
+
+    // Only attempt to select a node if we have grid data and panoramas,
+    // and no panorama is currently selected
+    if (rows > 0 && cols > 0 && panoramas.length > 0 && !currentPanorama) {
+      autoSelectFirstNode();
+    }
+  }, [rows, cols, panoramas, currentPanorama, getNodeAtPosition]);
+
   // Process and validate marker data
   const processMarker = useCallback((marker) => {
     if (!marker) return null;
