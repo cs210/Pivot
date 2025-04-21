@@ -40,38 +40,6 @@ interface Marker {
   html?: string;
 }
 
-const extractMarkerData = (marker: any): Marker => {
-  // First, create a clean object with only what we need
-  const cleanMarker = {
-    id: marker.id,
-    position: {
-      yaw: marker.position?.yaw || 0,
-      pitch: marker.position?.pitch || 0
-    },
-    tooltip: typeof marker.tooltip === 'string' 
-      ? { content: marker.tooltip } 
-      : { content: marker.tooltip?.content || '' }
-  };
-
-  // Conditionally add HTML or image properties based on marker type
-  if (marker.html) {
-    cleanMarker.html = marker.html;
-    cleanMarker.anchor = marker.anchor || "center center";
-  }
-  
-  if (marker.image) {
-    cleanMarker.image = marker.image;
-    cleanMarker.size = marker.size ? { 
-      width: marker.size.width, 
-      height: marker.size.height 
-    } : undefined;
-    cleanMarker.anchor = marker.anchor || "bottom center";
-  }
-
-  console.log("Extracted clean marker data:", cleanMarker);
-  return cleanMarker;
-};
-
 export default function PanoramaViewerPage({
   projectId,
 }: {
@@ -662,9 +630,6 @@ export default function PanoramaViewerPage({
                       ) : (
                         <span className="text-sm text-gray-500">Unassigned</span>
                       )}
-                      <div className="absolute -bottom-6 left-0 right-0 text-center">
-                        <span className="text-xs opacity-60">({x},{y})</span>
-                      </div>
                     </div>
                   );
                 })
