@@ -1,13 +1,12 @@
-// 1. First, let's fix the API route - replace app/api/stitch-panorama/route.js with this
-
 // app/api/stitch-panorama/route.js
 import { NextResponse } from 'next/server';
-import { writeFile, mkdir, readdir } from 'fs/promises';
+import { writeFile, mkdir, readdir, readFile } from 'fs/promises';
 import { existsSync } from 'fs';
 import path from 'path';
 import { v4 as uuidv4 } from 'uuid';
 import { promisify } from 'util';
 import { exec } from 'child_process';
+import { createClient } from '@/utils/supabase/server';
 
 // Convert exec to Promise-based
 const execPromise = promisify(exec);
@@ -26,16 +25,15 @@ function log(message) {
 
 export async function POST(request) {
   try {
+    // Initialize Supabase client
+    const supabase = createClient();
+    
     log('Received panorama stitching request');
     
-    // Check if SSH key path is set
-    if (!SSH_KEY_PATH) {
-      log('Error: SSH_KEY_PATH environment variable not set');
-      return NextResponse.json(
-        { error: 'Server configuration error: SSH key not configured', debug: debugLog },
-        { status: 500 }
-      );
-    }
+    // Parse the request body instead of form data
+    const { panoramaId, sourceImages, sourceFolder, projectId } = await request.json();
+    
+    log(`Processing request for panorama ${panoramaId} with ${sourceImages?.length || 0} source images`);
     
     // Generate a unique job ID
     const jobId = uuidv4();
@@ -52,62 +50,57 @@ export async function POST(request) {
     await mkdir(jobDir, { recursive: true });
     log(`Created job directory: ${jobDir}`);
     
-    // Parse the form data from the request
-    const formData = await request.formData();
-    const userId = formData.get('userId');
-    const panoramaName = formData.get('panoramaName') || `panorama_${jobId}`;
+    // Download images from Supabase and save them locally
+    const savedFiles = [];
     
-    // Get all files from the form data
-    const files = formData.getAll('files');
-    log(`Received ${files.length} files for processing`);
-    
-    if (files.length === 0) {
-      log('No files received');
+    if (!sourceImages || sourceImages.length === 0) {
+      log('No source images provided');
       return NextResponse.json(
-        { error: 'No files were provided for stitching', debug: debugLog },
+        { error: 'No source images were provided for stitching', debug: debugLog },
         { status: 400 }
       );
     }
     
-    // Validate files (make sure they're images)
-    for (const file of files) {
-      if (!(file instanceof Blob)) {
-        continue;
-      }
-      
-      const type = file.type;
-      if (!type.startsWith('image/')) {
-        log(`Rejecting non-image file: ${type}`);
-        return NextResponse.json(
-          { error: 'All files must be images', debug: debugLog },
-          { status: 400 }
-        );
-      }
-    }
+    log(`Downloading ${sourceImages.length} images from Supabase`);
     
-    // Save files to the job directory
-    const savedFiles = [];
-    for (let i = 0; i < files.length; i++) {
-      const file = files[i];
+    for (let i = 0; i < sourceImages.length; i++) {
+      const imageId = sourceImages[i];
       
-      if (!(file instanceof Blob)) {
-        log(`Skipping non-file entry at index ${i}`);
+      // Get image data from database
+      const { data: imageData, error: dbError } = await supabase
+        .from("raw_images")
+        .select("*")
+        .eq("id", imageId)
+        .single();
+        
+      if (dbError || !imageData) {
+        log(`Error fetching image ${imageId} from database: ${dbError?.message || 'Image not found'}`);
         continue;
       }
       
-      const fileName = file.name || `image_${i}.jpg`;
+      // Download file from Supabase storage
+      const { data: fileData, error: storageError } = await supabase.storage
+        .from("raw-images")
+        .download(imageData.storage_path);
+        
+      if (storageError || !fileData) {
+        log(`Error downloading image ${imageId} from storage: ${storageError?.message || 'File not found'}`);
+        continue;
+      }
+      
+      // Save the file locally
+      const fileName = `image_${i}.jpg`;
       const filePath = path.join(jobDir, fileName);
       
-      // Convert blob to buffer and write to file
-      const arrayBuffer = await file.arrayBuffer();
-      const buffer = Buffer.from(arrayBuffer);
+      // Convert blob to buffer and save
+      const buffer = Buffer.from(await fileData.arrayBuffer());
       await writeFile(filePath, buffer);
       
       savedFiles.push(filePath);
-      log(`Saved file: ${filePath}`);
+      log(`Saved file from Supabase: ${filePath}`);
     }
     
-    log(`Successfully saved ${savedFiles.length} files`);
+    log(`Successfully saved ${savedFiles.length} files from Supabase`);
     
     // Check if SSH key exists
     if (!existsSync(SSH_KEY_PATH)) {
@@ -159,9 +152,36 @@ export async function POST(request) {
         { status: 500 }
       );
     }
+
+    // After copying files to the AWS server, add this:
+    try {
+      log('Verifying files were copied to remote server');
+      const { stdout } = await execPromise(
+        `ssh -i "${SSH_KEY_PATH}" -o StrictHostKeyChecking=no ${AWS_USER}@${AWS_HOST} "ls -la ${remoteDir}"`
+      );
+      log(`Remote directory contents: \n${stdout}`);
+          
+      // Specifically check for jpg files
+      const { stdout: jpgCount } = await execPromise(
+        `ssh -i "${SSH_KEY_PATH}" -o StrictHostKeyChecking=no ${AWS_USER}@${AWS_HOST} "find ${remoteDir} -name '*.jpg' | wc -l"`
+      );
+      
+      if (parseInt(jpgCount.trim()) === 0) {
+        log('No jpg files found in remote directory!');
+        return NextResponse.json(
+          { error: 'No image files were successfully transferred to the server', debug: debugLog },
+          { status: 500 }
+        );
+      }
+      
+      log(`Found ${jpgCount.trim()} jpg files in remote directory`);
+    } catch (error) {
+      log(`Error verifying remote files: ${error.message}`);
+      // Continue anyway
+    }
     
     // Create PTGui project and stitch panorama on AWS
-    const projectName = `${panoramaName.replace(/[^a-zA-Z0-9]/g, '_')}_${jobId}`;
+    const projectName = `${panoramaId.replace(/[^a-zA-Z0-9]/g, '_')}_${jobId}`;
     
     log(`Creating and stitching panorama project: ${projectName}`);
     
@@ -212,7 +232,7 @@ export async function POST(request) {
     // Get the output file name (PTGui might create a file with a different name)
     let outputFileName;
     let largestSize = 0;
-    
+
     try {
       log(`Listing remote directory to find output file`);
       const { stdout: lsOutput } = await execPromise(`ssh -i "${SSH_KEY_PATH}" -o StrictHostKeyChecking=no ${AWS_USER}@${AWS_HOST} "ls -la ${remoteDir}/"`);
@@ -229,9 +249,16 @@ export async function POST(request) {
           const size = parseInt(matches[1]);
           const name = matches[2].trim();
           
+          // Skip input files (with image_ prefix)
+          if (name.startsWith('image_')) {
+            log(`Skipping input file: ${name}`);
+            return;
+          }
+          
           // Check if this file contains the job ID or project name (most likely our panorama)
           if (name.includes(jobId) || name.includes(projectName)) {
             outputFileName = name;
+            largestSize = size;
             log(`Found panorama by ID/name match: ${outputFileName} (${size} bytes)`);
             return; // Break the loop once we find a match
           }
@@ -252,6 +279,8 @@ export async function POST(request) {
           { status: 500 }
         );
       }
+      
+      log(`Selected panorama output file: ${outputFileName} (${largestSize} bytes)`);
     } catch (error) {
       log(`Failed to list remote directory: ${error.message}`);
       // Continue anyway, we'll try to copy using the expected path
@@ -293,17 +322,90 @@ export async function POST(request) {
       // Continue anyway
     }
     
-    // Return a temporary URL to the panorama
-    const panoramaUrl = `/api/panoramas/${jobId}/${encodeURIComponent(path.basename(localResultPath))}`;
-    log(`Successfully created panorama. URL: ${panoramaUrl}`);
-    
-    return NextResponse.json({ 
-      panoramaUrl,
-      jobId,
-      message: "Panorama created successfully",
-      debug: debugLog
-    });
-    
+    // Upload the panorama to Supabase
+    try {
+      log(`Uploading panorama to Supabase storage`);
+      
+      // Read the local file
+      const fileBuffer = await readFile(localResultPath);
+      
+      // Generate a storage path
+      const storagePath = `${projectId}/${panoramaId}_${Date.now()}.jpg`;
+      
+      // Upload to Supabase storage
+      const { data: uploadData, error: uploadError } = await supabase.storage
+        .from("panoramas")
+        .upload(storagePath, fileBuffer, {
+          contentType: "image/jpeg",
+          cacheControl: "3600",
+          upsert: true,
+        });
+        
+      if (uploadError) {
+        log(`Error uploading panorama to Supabase: ${uploadError.message}`);
+        throw uploadError;
+      }
+      
+      log(`Successfully uploaded panorama to Supabase: ${uploadData.path}`);
+      
+      // Update the panorama record in the database
+      const { error: updateError } = await supabase
+        .from("panoramas")
+        .update({
+          storage_path: uploadData.path,
+          size_bytes: fileBuffer.length,
+          metadata: {
+            status: 'completed',
+            source_images: sourceImages,
+            source_folder: sourceFolder,
+            jobId: jobId
+          }
+        })
+        .eq("id", panoramaId);
+        
+      if (updateError) {
+        log(`Error updating panorama record: ${updateError.message}`);
+        throw updateError;
+      }
+      
+      log(`Successfully updated panorama database record`);
+      
+      // Return success with updated info
+      return NextResponse.json({ 
+        success: true,
+        panoramaId,
+        storagePath: uploadData.path,
+        jobId,
+        message: "Panorama created and uploaded successfully",
+        debug: debugLog
+      });
+    } catch (uploadError) {
+      log(`Failed to upload panorama to Supabase: ${uploadError.message}`);
+      
+      // Update the database to mark the panorama as failed
+      try {
+        await supabase
+          .from("panoramas")
+          .update({
+            metadata: {
+              status: 'failed',
+              error: uploadError.message || "Failed to upload panorama",
+              source_images: sourceImages,
+              source_folder: sourceFolder,
+            }
+          })
+          .eq("id", panoramaId);
+          
+        log(`Updated panorama record with failed status`);
+      } catch (dbError) {
+        log(`Failed to update panorama status: ${dbError.message}`);
+      }
+      
+      return NextResponse.json(
+        { error: `Failed to upload panorama: ${uploadError.message}`, debug: debugLog },
+        { status: 500 }
+      );
+    }
   } catch (error) {
     log(`Unhandled error in API route: ${error.message}`);
     console.error('Error processing panorama:', error);
