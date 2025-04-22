@@ -63,19 +63,22 @@ The core database schema is defined using PostgreSQL. The necessary `uuid-ossp` 
 *   `folders`: Represents a hierarchical folder structure within each project for organizing raw images. Folders belong to a `project_id` and can have an optional `parent_folder_id`.
 *   `raw_images`: Contains metadata about uploaded raw image files. Each image belongs to a `project_id`, `user_id`, and optionally a `folder_id` or `panorama_id` (if used to generate a panorama). The actual image file is stored in Supabase Storage.
 *   `panoramas`: Stores metadata for generated panorama images, including their `storage_path`, `project_id`, and `user_id`. Associated raw images might be linked via `raw_images.panorama_id`.
-*   `grid_nodes`: Defines nodes within a project's grid layout. Each node has coordinates (`grid_x`, `grid_y`), belongs to a `project_id`, and can optionally be linked to a specific `panorama_id`.
+*   `grids`: Defines customizable grid layouts for projects, with attributes for rows, columns, visibility settings, and a default flag. Each grid is linked to a `project_id` and `user_id`.
+*   `grid_nodes`: Defines nodes within a project's grid layout. Each node has coordinates (`grid_x`, `grid_y`), belongs to a `grid_id` and `project_id`, and can optionally be linked to a specific `panorama_id`.
 
 **Relationships:**
 
 *   `projects` are linked to `auth.users`.
-*   `folders`, `raw_images`, `panoramas`, and `grid_nodes` are linked to `projects`.
+*   `folders`, `raw_images`, `panoramas`, `grids`, and `grid_nodes` are linked to `projects`.
 *   `folders` can have parent-child relationships with other `folders`.
 *   `raw_images` can optionally belong to `folders`.
-*   `raw_images` and `grid_nodes` can optionally link to `panoramas`.
+*   `raw_images` can optionally link to `panoramas`.
+*   `grids` belong to a specific project and user.
+*   `grid_nodes` belong to a specific grid and can optionally link to a `panorama`, creating a layout of viewable panoramas within the grid.
 
 **Automatic Timestamps:**
 
-*   Triggers are set up to automatically update the `updated_at` column on `projects`, `folders`, `raw_images`, `panoramas`, and `grid_nodes` tables whenever a row is updated.
+*   Triggers are set up to automatically update the `updated_at` column on `projects`, `folders`, `raw_images`, `panoramas`, `grids`, and `grid_nodes` tables whenever a row is updated.
 
 **Indexes:**
 
@@ -111,10 +114,10 @@ These policies ensure that raw images remain private to the uploading user, whil
 
 ### Row Level Security (RLS)
 
-RLS is enabled on all primary data tables (`projects`, `folders`, `raw_images`, `panoramas`, `grid_nodes`) to enforce data privacy and security. The general policy is:
+RLS is enabled on all primary data tables (`projects`, `folders`, `raw_images`, `panoramas`, `grids`, `grid_nodes`) to enforce data privacy and security. The general policy is:
 
 *   **Users can only interact with their own data:** They can select, insert, update, and delete records directly associated with their `user_id` (e.g., their `projects`, `raw_images`, `panoramas`).
 *   **Project-based access:** For tables like `folders` and `grid_nodes`, users can interact with records belonging to projects they own.
-*   **Public Access:** The `panoramas` table allows public read access (`SELECT`) if the `is_public` flag is set to `TRUE`. Similarly, `grid_nodes` linked to public panoramas can also be viewed.
+*   **Public Access:** The `panoramas` table allows public read access (`SELECT`) if the `is_public` flag is set to `TRUE`. Similarly, `grids` marked as public can be viewed by anyone, and `grid_nodes` linked to public grids or public panoramas can also be viewed.
 
 These policies ensure that users can only access data they are authorized to see, based on their authentication status and project ownership.
