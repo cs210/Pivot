@@ -9,7 +9,7 @@ import {
   import { Button } from "@/components/ui/button";
   import { FolderOpen } from "lucide-react";
   import { Folder } from "../../../../hooks/useFolders";
-  import { RawImage } from "../../PanoramasTab/index";
+  import { RawImage } from "../../../../hooks/useRawImages";
   
   interface MoveImageDialogProps {
     open: boolean;
@@ -46,7 +46,7 @@ import {
               onClick={() => setTargetFolderId(null)}
             >
               <FolderOpen className="mr-2 h-4 w-4" />
-              Root (No Folder)
+              All Images
             </Button>
             {folders.map((folder) => (
               <Button

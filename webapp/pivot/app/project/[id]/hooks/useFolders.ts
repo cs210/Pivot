@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { createClient } from "@/utils/supabase/client";
 
 export interface Folder {
@@ -17,6 +17,9 @@ export function useFolders(projectId: string) {
   const [createFolderDialogOpen, setCreateFolderDialogOpen] = useState(false);
   const [renameFolderDialogOpen, setRenameFolderDialogOpen] = useState(false);
   const [folderToRename, setFolderToRename] = useState<Folder | null>(null);
+  const [deleteFolderDialogOpen, setDeleteFolderDialogOpen] = useState(false);
+  const [folderToDelete, setFolderToDelete] = useState<{ id: string; name: string } | null>(null);
+  const folderInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     fetchFolders();
@@ -103,7 +106,8 @@ export function useFolders(projectId: string) {
       }
     } catch (error) {
       console.error("Error creating folder:", error);
-      alert(`Failed to create folder: ${error.message || "Unknown error"}`);
+      const errorMessage = (error as Error).message || "Unknown error";
+      alert(`Failed to create folder: ${errorMessage}`);
     }
   };
 
@@ -137,20 +141,8 @@ export function useFolders(projectId: string) {
     }
   };
 
-  const handleDeleteFolder = async (folderId: string, imagesInFolder: number, panoramasInFolder: number, handleDeleteImage: Function, handleDeletePanorama: Function) => {
-    // Check if folder has images or panoramas
-    if (imagesInFolder > 0 || panoramasInFolder > 0) {
-      const confirmDelete = window.confirm(
-        `This folder contains ${imagesInFolder} images and ${panoramasInFolder} panoramas. Deleting it will also delete all contents inside. Continue?`
-      );
-
-      if (!confirmDelete) return;
-    }
-
+  const handleDeleteFolder = async (folderId: string) => {
     try {
-      // First delete all images in the folder using the provided handlers
-      // These functions should be passed from the parent components
-      
       // Then delete the folder
       const { error } = await supabase
         .from("folders")
@@ -165,7 +157,7 @@ export function useFolders(projectId: string) {
         setCurrentFolder(null);
       }
 
-      alert("Folder and its contents deleted successfully");
+      alert("Folder deleted successfully");
     } catch (error) {
       console.error("Error deleting folder:", error);
       alert("Failed to delete folder");
@@ -173,18 +165,34 @@ export function useFolders(projectId: string) {
   };
 
   return {
+    // State variables
     folders,
     setFolders,
     currentFolder,
     setCurrentFolder,
+    
+    // Folder name states
     newFolderName,
     setNewFolderName,
+    
+    // Dialog states
     createFolderDialogOpen,
     setCreateFolderDialogOpen,
     renameFolderDialogOpen,
     setRenameFolderDialogOpen,
+    deleteFolderDialogOpen,
+    setDeleteFolderDialogOpen,
+    
+    // Folder operation targets
     folderToRename,
     setFolderToRename,
+    folderToDelete,
+    setFolderToDelete,
+    
+    // Refs
+    folderInputRef,
+    
+    // Main functions
     fetchFolders,
     handleCreateFolder,
     handleRenameFolder,
