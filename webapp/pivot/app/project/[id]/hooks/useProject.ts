@@ -6,6 +6,7 @@ interface Project {
   name: string;
   created_at: string;
   user_id: string;
+  is_public: boolean;
 }
 
 export function useProject(projectId: string, router: any) {
@@ -86,6 +87,6 @@ export function useProject(projectId: string, router: any) {
     isEditing,
     setIsEditing,
     handleUpdateProject,
-    user
+    user,
   };
 }
