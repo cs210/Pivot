@@ -1,122 +1,144 @@
-import React from "react";
+import React, { useState, useEffect } from "react";
 import {
   StyleSheet,
   Text,
   View,
   TouchableOpacity,
+  FlatList,
   Image,
-  ScrollView,
+  ActivityIndicator,
+  Dimensions,
 } from "react-native";
 import { useNavigation } from "@react-navigation/native";
 import { LinearGradient } from "expo-linear-gradient";
 import { COLORS, GRADIENTS, STYLES, FONT } from "../theme";
 import Ionicons from "@expo/vector-icons/Ionicons";
+import * as FileSystem from "expo-file-system";
 
 const HomeScreen = () => {
   const navigation = useNavigation();
+  const [images, setImages] = useState<string[]>([]);
+  const [loading, setLoading] = useState(true);
+  const IMAGE_SIZE = (Dimensions.get("window").width - 40) / 3;
+
+  useEffect(() => {
+    (async () => {
+      const dir = `${FileSystem.documentDirectory}room_scanner/`;
+      const info = await FileSystem.getInfoAsync(dir);
+      if (!info.exists) {
+        setImages([]);
+        setLoading(false);
+        return;
+      }
+      const files = await FileSystem.readDirectoryAsync(dir);
+      const jpgs = files.filter((f) => f.match(/\.(jpe?g|png)$/));
+      setImages(jpgs.map((f) => dir + f));
+      setLoading(false);
+    })();
+  }, []);
 
   return (
     <LinearGradient colors={GRADIENTS.cyber} style={styles.container}>
-      <ScrollView contentContainerStyle={styles.content}>
-        <View style={styles.content}>
-          {/* Logo and app name */}
-          <View style={styles.logoContainer}>
-            <Ionicons name="compass-outline" size={32} color={COLORS.primary} />
-            <Text style={styles.logoText}>Pivot</Text>
-          </View>
+      <View style={styles.content}>
+        {/* Logo and app name */}
+        <View style={styles.logoContainer}>
+          <Ionicons name="compass-outline" size={32} color={COLORS.primary} />
+          <Text style={styles.logoText}>Pivot</Text>
+        </View>
 
-          <View style={[styles.infoCard, STYLES.card]}>
-            <Text style={styles.infoTitle}>How it works</Text>
-            <Text style={styles.infoText}>
-              Take a series of overlapping photos of your room to create a
-              complete 3D reconstruction.
-            </Text>
+        <View style={[styles.infoCard, STYLES.card]}>
+          <Text style={styles.infoTitle}>How it works</Text>
+          <Text style={styles.infoText}>
+            Take a series of overlapping photos of your room to create a
+            complete 3D reconstruction.
+          </Text>
 
-            <View style={styles.stepContainer}>
-              <View style={styles.step}>
-                <Text
-                  style={[
-                    styles.stepNumber,
-                    {
-                      backgroundColor: COLORS.primary,
-                      color: COLORS.primaryForeground,
-                    },
-                  ]}
-                >
-                  1
-                </Text>
-                <Text style={styles.stepText}>
-                  Stand in the center of your room
-                </Text>
-              </View>
-
-              <View style={styles.step}>
-                <Text
-                  style={[
-                    styles.stepNumber,
-                    {
-                      backgroundColor: COLORS.primary,
-                      color: COLORS.primaryForeground,
-                    },
-                  ]}
-                >
-                  2
-                </Text>
-                <Text style={styles.stepText}>
-                  Follow the on-screen guidance to move your camera
-                </Text>
-              </View>
-
-              <View style={styles.step}>
-                <Text
-                  style={[
-                    styles.stepNumber,
-                    {
-                      backgroundColor: COLORS.primary,
-                      color: COLORS.primaryForeground,
-                    },
-                  ]}
-                >
-                  3
-                </Text>
-                <Text style={styles.stepText}>
-                  Capture images until you've covered the entire room
-                </Text>
-              </View>
-            </View>
-          </View>
-
-          <View style={styles.buttonContainer}>
-            <TouchableOpacity
-              style={[styles.startButton, { backgroundColor: COLORS.primary }]}
-              onPress={() => navigation.navigate("Camera" as never)}
-            >
+          <View style={styles.stepContainer}>
+            <View style={styles.step}>
               <Text
                 style={[
-                  styles.startButtonText,
-                  { color: COLORS.primaryForeground },
+                  styles.stepNumber,
+                  {
+                    backgroundColor: COLORS.primary,
+                    color: COLORS.primaryForeground,
+                  },
                 ]}
               >
-                Start Scanning
+                1
               </Text>
-            </TouchableOpacity>
+              <Text style={styles.stepText}>
+                Stand in the center of your room
+              </Text>
+            </View>
 
-            <TouchableOpacity
-              style={[
-                styles.galleryButton,
-                { backgroundColor: COLORS.card, borderColor: COLORS.primary },
-              ]}
-              onPress={() => navigation.navigate("Gallery" as never)}
-            >
+            <View style={styles.step}>
               <Text
-                style={[styles.galleryButtonText, { color: COLORS.primary }]}
+                style={[
+                  styles.stepNumber,
+                  {
+                    backgroundColor: COLORS.primary,
+                    color: COLORS.primaryForeground,
+                  },
+                ]}
               >
-                View Gallery
+                2
               </Text>
-            </TouchableOpacity>
+              <Text style={styles.stepText}>
+                Follow the on-screen guidance to move your camera
+              </Text>
+            </View>
+
+            <View style={styles.step}>
+              <Text
+                style={[
+                  styles.stepNumber,
+                  {
+                    backgroundColor: COLORS.primary,
+                    color: COLORS.primaryForeground,
+                  },
+                ]}
+              >
+                3
+              </Text>
+              <Text style={styles.stepText}>
+                Capture images until you've covered the entire room
+              </Text>
+            </View>
           </View>
         </View>
-      </ScrollView>
+
+        {/* Inline gallery */}
+        <View style={styles.galleryContainer}>
+          {loading ? (
+            <ActivityIndicator size="large" color={COLORS.primary} />
+          ) : (
+            <FlatList
+              data={images}
+              keyExtractor={(uri) => uri}
+              numColumns={3}
+              renderItem={({ item }) => (
+                <Image
+                  source={{ uri: item }}
+                  style={{
+                    width: IMAGE_SIZE,
+                    height: IMAGE_SIZE,
+                    margin: 2,
+                    borderRadius: 6,
+                  }}
+                />
+              )}
+            />
+          )}
+        </View>
+
+        {/* camera button */}
+        <TouchableOpacity
+          style={styles.cameraButton}
+          onPress={() => navigation.navigate("Camera" as never)}
+        >
+          <Ionicons name="camera" size={36} color="white" />
+        </TouchableOpacity>
+      </View>
     </LinearGradient>
   );
 };
@@ -128,7 +150,7 @@ const styles = StyleSheet.create({
   },
   content: {
     padding: 20,
-    paddingTop: 40,
+    paddingTop: 60, // added extra top margin to avoid notch
     alignItems: "center",
   },
   logoContainer: {
@@ -226,6 +248,19 @@ const styles = StyleSheet.create({
     color: "#4a90e2",
     fontSize: 18,
     fontFamily: FONT.bold,
+  },
+  galleryContainer: {
+    width: "100%",
+    marginBottom: 30,
+  },
+  cameraButton: {
+    backgroundColor: COLORS.primary,
+    borderRadius: 50,
+    padding: 16,
+    alignItems: "center",
+    justifyContent: "center",
+    alignSelf: "center",
+    marginBottom: 30,
   },
 });
 
