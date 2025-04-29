@@ -2,6 +2,14 @@ import React from "react";
 import { NavigationContainer } from "@react-navigation/native";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import { StatusBar } from "expo-status-bar";
+import AppLoading from "expo-app-loading";
+import {
+  useFonts,
+  ChakraPetch_400Regular,
+  ChakraPetch_700Bold,
+} from "@expo-google-fonts/chakra-petch";
+import { Text } from "react-native";
+import { FONT } from "./theme";
 
 // Import screens
 import HomeScreen from "./screens/HomeScreen";
@@ -14,6 +22,21 @@ const GalleryScreen = require("./screens/GalleryScreen").default;
 const Stack = createNativeStackNavigator();
 
 export default function App() {
+  // Load custom fonts
+  const [fontsLoaded] = useFonts({
+    ChakraPetch_400Regular,
+    ChakraPetch_700Bold,
+  });
+  if (fontsLoaded) {
+    // Apply default font family to all Text elements
+    // Using 'as any' to bypass deprecated defaultProps type error
+    (Text as any).defaultProps = (Text as any).defaultProps || {};
+    (Text as any).defaultProps.style = {
+      fontFamily: FONT.regular,
+      ...((Text as any).defaultProps.style || {}),
+    };
+  }
+  if (!fontsLoaded) return <AppLoading />;
   return (
     <NavigationContainer>
       <StatusBar style="auto" />

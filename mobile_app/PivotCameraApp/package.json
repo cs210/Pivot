@@ -9,11 +9,15 @@
     "web": "expo start --web"
   },
   "dependencies": {
+    "@expo-google-fonts/chakra-petch": "^0.3.1",
     "@react-navigation/native": "^7.1.6",
     "@react-navigation/native-stack": "^7.3.10",
     "expo": "~52.0.43",
+    "expo-app-loading": "^2.1.1",
     "expo-camera": "^16.0.18",
     "expo-file-system": "^18.0.12",
+    "expo-font": "^13.0.4",
+    "expo-linear-gradient": "^14.0.2",
     "expo-media-library": "^17.0.6",
     "expo-sensors": "^14.0.2",
     "expo-status-bar": "~2.0.1",

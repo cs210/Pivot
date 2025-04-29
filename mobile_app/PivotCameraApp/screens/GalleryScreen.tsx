@@ -13,6 +13,8 @@ import {
 import * as FileSystem from "expo-file-system";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import { useNavigation, useIsFocused } from "@react-navigation/native";
+import { LinearGradient } from "expo-linear-gradient";
+import { COLORS, GRADIENTS, STYLES } from "../theme";
 
 const SCREEN_WIDTH = Dimensions.get("window").width;
 const IMAGE_WIDTH = (SCREEN_WIDTH - 50) / 3;
@@ -156,10 +158,15 @@ const GalleryScreen: React.FC = () => {
   };
 
   return (
-    <View style={styles.container}>
+    <LinearGradient colors={GRADIENTS.cyber} style={styles.container}>
       {/* Header with selection count and actions */}
-      <View style={styles.header}>
-        <Text style={styles.title}>
+      <View
+        style={[
+          styles.header,
+          { backgroundColor: COLORS.card, borderBottomColor: COLORS.border },
+        ]}
+      >
+        <Text style={[styles.title, { color: COLORS.foreground }]}>
           {selectedImages.length === 0
             ? `${images.length} Captured Images`
             : `${selectedImages.length} Selected`}
@@ -170,7 +177,7 @@ const GalleryScreen: React.FC = () => {
             style={styles.deleteButton}
             onPress={deleteSelectedImages}
           >
-            <Ionicons name="trash-outline" size={24} color="#ff3b30" />
+            <Ionicons name="trash-outline" size={24} color={COLORS.secondary} />
           </TouchableOpacity>
         )}
       </View>
@@ -182,13 +189,22 @@ const GalleryScreen: React.FC = () => {
         </View>
       ) : images.length === 0 ? (
         <View style={styles.emptyContainer}>
-          <Ionicons name="images-outline" size={60} color="#aaa" />
-          <Text style={styles.emptyText}>No images captured yet</Text>
+          <Ionicons name="images-outline" size={60} color={COLORS.secondary} />
+          <Text style={[styles.emptyText, { color: COLORS.foreground }]}>
+            No images captured yet
+          </Text>
           <TouchableOpacity
-            style={styles.captureButton}
+            style={[styles.captureButton, { backgroundColor: COLORS.primary }]}
             onPress={() => navigation.navigate("Camera" as never)}
           >
-            <Text style={styles.captureButtonText}>Start Capturing</Text>
+            <Text
+              style={[
+                styles.captureButtonText,
+                { color: COLORS.primaryForeground },
+              ]}
+            >
+              Start Capturing
+            </Text>
           </TouchableOpacity>
         </View>
       ) : (
@@ -203,17 +219,22 @@ const GalleryScreen: React.FC = () => {
 
           <View style={styles.footer}>
             <TouchableOpacity
-              style={styles.exportButton}
+              style={[styles.exportButton, { backgroundColor: COLORS.primary }]}
               onPress={exportImages}
             >
-              <Text style={styles.exportButtonText}>
+              <Text
+                style={[
+                  styles.exportButtonText,
+                  { color: COLORS.primaryForeground },
+                ]}
+              >
                 Export for 3D Reconstruction
               </Text>
             </TouchableOpacity>
           </View>
         </>
       )}
-    </View>
+    </LinearGradient>
   );
 };
 
