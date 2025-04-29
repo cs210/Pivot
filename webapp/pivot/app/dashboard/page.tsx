@@ -24,7 +24,17 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { PlusCircle, Folder, Trash2, Edit, Calendar } from "lucide-react";
+import {
+  PlusCircle,
+  Folder,
+  Trash2,
+  Edit,
+  Calendar,
+  Share2,
+  Copy,
+  CheckCircle2,
+  Globe,
+} from "lucide-react";
 import { Header } from "@/components/header";
 // Toast component not available - using alert instead
 
@@ -33,6 +43,7 @@ interface Project {
   name: string;
   created_at: string;
   user_id: string;
+  is_public?: boolean;
 }
 
 export default function Dashboard() {
@@ -44,8 +55,12 @@ export default function Dashboard() {
   const [newProjectName, setNewProjectName] = useState("");
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
   const [editDialogOpen, setEditDialogOpen] = useState(false);
+  const [shareDialogOpen, setShareDialogOpen] = useState(false);
   const [currentProject, setCurrentProject] = useState<Project | null>(null);
   const [editProjectName, setEditProjectName] = useState("");
+  const [shareLink, setShareLink] = useState("");
+  const [copied, setCopied] = useState(false);
+  const [activeTab, setActiveTab] = useState("all-projects");
 
   useEffect(() => {
     const checkUser = async () => {
@@ -93,6 +108,7 @@ export default function Dashboard() {
           {
             name: newProjectName.trim(),
             user_id: user.id,
+            is_public: false,
           },
         ])
         .select();
@@ -164,10 +180,60 @@ export default function Dashboard() {
     }
   };
 
+  const handleTogglePublic = async (project: Project) => {
+    try {
+      const newPublicState = !project.is_public;
+
+      const { error } = await supabase
+        .from("projects")
+        .update({ is_public: newPublicState })
+        .eq("id", project.id);
+
+      if (error) throw error;
+
+      // Update local state
+      setProjects(
+        projects.map((p) =>
+          p.id === project.id ? { ...p, is_public: newPublicState } : p
+        )
+      );
+
+      if (newPublicState) {
+        // Generate and show the share link
+        setCurrentProject(project);
+        const baseUrl = window.location.origin;
+        const link = `${baseUrl}/shared/${project.id}`;
+        setShareLink(link);
+        setShareDialogOpen(true);
+      }
+    } catch (error) {
+      console.error("Error updating project visibility:", error);
+      alert("Failed to update project visibility");
+    }
+  };
+
   const openEditDialog = (project: Project) => {
     setCurrentProject(project);
     setEditProjectName(project.name);
     setEditDialogOpen(true);
+  };
+
+  const openShareDialog = (project: Project) => {
+    setCurrentProject(project);
+    const baseUrl = window.location.origin;
+    const link = `${baseUrl}/shared/${project.id}`;
+    setShareLink(link);
+    setShareDialogOpen(true);
+  };
+
+  const copyToClipboard = async () => {
+    try {
+      await navigator.clipboard.writeText(shareLink);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch (err) {
+      console.error("Failed to copy: ", err);
+    }
   };
 
   const navigateToProject = (projectId: string) => {
@@ -179,6 +245,12 @@ export default function Dashboard() {
     router.push("/");
     router.refresh();
   };
+
+  // Filter projects based on active tab
+  const filteredProjects =
+    activeTab === "shared-projects"
+      ? projects.filter((project) => project.is_public)
+      : projects;
 
   return (
     <div className="flex flex-col min-h-screen text-foreground">
@@ -247,33 +319,65 @@ export default function Dashboard() {
             </div>
           </div>
 
+          <Tabs value={activeTab} onValueChange={setActiveTab} className="mb-6">
+            <TabsList className="bg-muted/100 border border-border/50">
+              <TabsTrigger
+                value="all-projects"
+                className="data-[state=active]:active-tab"
+              >
+                All Projects
+              </TabsTrigger>
+              <TabsTrigger
+                value="shared-projects"
+                className="data-[state=active]:active-tab"
+              >
+                Shared Projects
+              </TabsTrigger>
+            </TabsList>
+          </Tabs>
+
           {loading ? (
             <div className="text-center py-12">Loading your projects...</div>
-          ) : projects.length === 0 ? (
+          ) : filteredProjects.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-16 bg-muted/20 rounded-lg border border-border/40">
               <Folder className="h-16 w-16 text-muted-foreground mb-4" />
-              <h2 className="text-xl font-semibold mb-2">No projects yet</h2>
+              <h2 className="text-xl font-semibold mb-2">
+                {activeTab === "shared-projects"
+                  ? "No shared projects"
+                  : "No projects yet"}
+              </h2>
               <p className="text-muted-foreground mb-6">
-                Create your first project to get started
+                {activeTab === "shared-projects"
+                  ? "Share a project to make it visible to others"
+                  : "Create your first project to get started"}
               </p>
-              <Button
-                onClick={() => setCreateDialogOpen(true)}
-                className="bg-cyber-gradient hover:opacity-90"
-              >
-                <PlusCircle className="mr-2 h-4 w-4" />
-                Create Project
-              </Button>
+              {activeTab === "all-projects" && (
+                <Button
+                  onClick={() => setCreateDialogOpen(true)}
+                  className="bg-cyber-gradient hover:opacity-90"
+                >
+                  <PlusCircle className="mr-2 h-4 w-4" />
+                  Create Project
+                </Button>
+              )}
             </div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {projects.map((project) => (
+              {filteredProjects.map((project) => (
                 <Card
                   key={project.id}
-                  className="bg-background/80 backdrop-blur-sm border-border/50 hover:border-primary/50 transition-colors"
+                  className={`bg-background/80 backdrop-blur-sm border-border/50 hover:border-primary/50 transition-colors ${
+                    project.is_public ? "border-l-4 border-l-primary" : ""
+                  }`}
                 >
                   <CardHeader className="pb-2">
                     <CardTitle className="flex justify-between items-center">
-                      <span className="truncate">{project.name}</span>
+                      <div className="flex items-center gap-2">
+                        <span className="truncate">{project.name}</span>
+                        {project.is_public && (
+                          <Globe className="h-4 w-4 text-primary" />
+                        )}
+                      </div>
                       <div className="flex gap-1">
                         <Button
                           variant="ghost"
@@ -303,13 +407,32 @@ export default function Dashboard() {
                       </span>
                     </div>
                   </CardContent>
-                  <CardFooter>
+                  <CardFooter className="flex gap-2">
                     <Button
                       onClick={() => navigateToProject(project.id)}
-                      className="w-full bg-cyber-gradient hover:opacity-90"
+                      className="flex-1 bg-cyber-gradient hover:opacity-90"
                     >
                       Open Project
                     </Button>
+                    {project.is_public ? (
+                      <Button
+                        onClick={() => openShareDialog(project)}
+                        variant="outline"
+                        size="icon"
+                        className="h-10 w-10 cyber-border"
+                      >
+                        <Share2 className="h-4 w-4" />
+                      </Button>
+                    ) : (
+                      <Button
+                        onClick={() => handleTogglePublic(project)}
+                        variant="outline"
+                        size="icon"
+                        className="h-10 w-10 cyber-border"
+                      >
+                        <Share2 className="h-4 w-4" />
+                      </Button>
+                    )}
                   </CardFooter>
                 </Card>
               ))}
@@ -350,6 +473,56 @@ export default function Dashboard() {
                   Save Changes
                 </Button>
               </DialogFooter>
+            </DialogContent>
+          </Dialog>
+
+          {/* Share Link Dialog */}
+          <Dialog open={shareDialogOpen} onOpenChange={setShareDialogOpen}>
+            <DialogContent className="sm:max-w-[425px] bg-background text-white">
+              <DialogHeader>
+                <DialogTitle className="text-white">Share Project</DialogTitle>
+                <DialogDescription className="text-white/70">
+                  Anyone with this link can view your project without logging
+                  in.
+                </DialogDescription>
+              </DialogHeader>
+              <div className="flex items-center space-x-2 bg-muted/30 p-3 rounded-md">
+                <input
+                  type="text"
+                  readOnly
+                  value={shareLink}
+                  className="flex-1 bg-transparent border-none focus:outline-none text-sm text-white"
+                />
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={copyToClipboard}
+                  className="h-8"
+                >
+                  {copied ? (
+                    <CheckCircle2 className="h-4 w-4 text-green-500" />
+                  ) : (
+                    <Copy className="h-4 w-4" />
+                  )}
+                </Button>
+              </div>
+              <div className="mt-4 flex justify-between">
+                <Button
+                  variant="outline"
+                  onClick={() =>
+                    currentProject && handleTogglePublic(currentProject)
+                  }
+                  className="cyber-border"
+                >
+                  Make Private
+                </Button>
+                <Button
+                  onClick={() => setShareDialogOpen(false)}
+                  className="text-white bg-cyber-gradient hover:opacity-90"
+                >
+                  Done
+                </Button>
+              </div>
             </DialogContent>
           </Dialog>
         </div>
