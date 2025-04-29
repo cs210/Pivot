@@ -21,7 +21,13 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Share2, Copy, CheckCircle2 } from "lucide-react";
+import {
+  Share2,
+  Copy,
+  CheckCircle2,
+  Globe,
+  Link as LinkIcon,
+} from "lucide-react";
 import { createClient } from "@/utils/supabase/client";
 
 export default function ProjectPage() {
@@ -48,10 +54,27 @@ export default function ProjectPage() {
   useEffect(() => {
     if (project) {
       setIsPublic(project.is_public || false);
-    }
-  }, [project]);
 
-  const handleShareProject = async () => {
+      // Generate the share link when project loads
+      if (project.is_public) {
+        const baseUrl = window.location.origin;
+        const link = `${baseUrl}/shared/${projectId}`;
+        setShareLink(link);
+      }
+    }
+  }, [project, projectId]);
+
+  const handleShareButtonClick = () => {
+    // If already public, simply show the share dialog with the link
+    if (isPublic) {
+      setShareDialogOpen(true);
+    } else {
+      // If not public, toggle to public first
+      handleTogglePublic();
+    }
+  };
+
+  const handleTogglePublic = async () => {
     try {
       // Update the project's public status
       const { error } = await supabase
@@ -61,10 +84,11 @@ export default function ProjectPage() {
 
       if (error) throw error;
 
-      setIsPublic(!isPublic);
+      const newPublicState = !isPublic;
+      setIsPublic(newPublicState);
 
       // If we're making it public, generate and show the share link
-      if (!isPublic) {
+      if (newPublicState) {
         const baseUrl = window.location.origin;
         const link = `${baseUrl}/shared/${projectId}`;
         setShareLink(link);
@@ -118,14 +142,23 @@ export default function ProjectPage() {
             />
 
             <Button
-              onClick={handleShareProject}
+              onClick={handleShareButtonClick}
               variant={isPublic ? "default" : "outline"}
               className={
                 isPublic ? "bg-cyber-gradient hover:opacity-90" : "cyber-border"
               }
             >
-              <Share2 className="mr-2 h-4 w-4" />
-              {isPublic ? "Project Shared" : "Share Project"}
+              {isPublic ? (
+                <>
+                  <Globe className="mr-2 h-4 w-4" />
+                  Shared
+                </>
+              ) : (
+                <>
+                  <Share2 className="mr-2 h-4 w-4" />
+                  Share Project
+                </>
+              )}
             </Button>
           </div>
 
@@ -190,7 +223,7 @@ export default function ProjectPage() {
                 setProjectName={setProjectName}
                 handleUpdateProject={handleUpdateProject}
                 isPublic={isPublic}
-                handleShareProject={handleShareProject}
+                handleShareProject={handleTogglePublic}
               />
             </TabsContent>
           </Tabs>
@@ -228,6 +261,16 @@ export default function ProjectPage() {
               in.
             </DialogDescription>
           </DialogHeader>
+
+          <div className="flex items-center bg-primary/10 rounded-md p-3 mb-3">
+            <LinkIcon className="h-4 w-4 mr-2 text-primary" />
+            <span className="text-sm">
+              {isPublic
+                ? "This project is publicly accessible"
+                : "Share this project to generate a link"}
+            </span>
+          </div>
+
           <div className="flex items-center space-x-2 bg-muted/30 p-3 rounded-md">
             <input
               type="text"
@@ -248,12 +291,30 @@ export default function ProjectPage() {
               )}
             </Button>
           </div>
-          <DialogFooter className="mt-4">
+
+          <DialogFooter className="mt-4 flex justify-between">
+            {isPublic && (
+              <Button
+                variant="outline"
+                onClick={handleTogglePublic}
+                className="border-destructive/40 text-destructive hover:bg-destructive/10"
+              >
+                Make Private
+              </Button>
+            )}
             <Button
-              onClick={() => setShareDialogOpen(false)}
-              className="text-white bg-cyber-gradient hover:opacity-90"
+              onClick={() => {
+                if (!isPublic) {
+                  handleTogglePublic();
+                } else {
+                  setShareDialogOpen(false);
+                }
+              }}
+              className={`text-white ${
+                isPublic ? "bg-cyber-gradient hover:opacity-90" : "bg-primary"
+              }`}
             >
-              Done
+              {isPublic ? "Done" : "Share Project"}
             </Button>
           </DialogFooter>
         </DialogContent>
