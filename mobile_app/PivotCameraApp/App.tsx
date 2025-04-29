@@ -44,7 +44,7 @@ export default function App() {
         <Stack.Screen
           name="Home"
           component={HomeScreen}
-          options={{ title: "Pivot Room Scanner" }}
+          options={{ headerShown: false }}
         />
         <Stack.Screen
           name="Camera"
