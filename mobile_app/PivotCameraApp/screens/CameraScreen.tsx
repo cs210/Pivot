@@ -16,6 +16,8 @@ import * as MediaLibrary from "expo-media-library";
 import { Camera } from "expo-camera";
 import { useNavigation } from "@react-navigation/native";
 import Ionicons from "@expo/vector-icons/Ionicons";
+import { LinearGradient } from "expo-linear-gradient";
+import { COLORS, GRADIENTS, STYLES } from "../theme";
 
 const SCREEN_WIDTH = Dimensions.get("window").width;
 const SCREEN_HEIGHT = Dimensions.get("window").height;
@@ -54,29 +56,33 @@ const CameraScreen: React.FC = () => {
   const [cameraReady, setCameraReady] = useState<boolean>(false);
   const [capturing, setCapturing] = useState<boolean>(false);
   const [capturedImages, setCapturedImages] = useState<CapturedImage[]>([]);
-  
+
   // Add tutorial state
   const [showTutorial, setShowTutorial] = useState<boolean>(true);
   const [tutorialStep, setTutorialStep] = useState<number>(0);
-  
+
   // Tutorial steps content
   const tutorialSteps: TutorialStep[] = [
     {
       title: "Welcome to Room Scanner",
-      description: "This app helps you capture your entire room systematically to create a 3D model.",
+      description:
+        "This app helps you capture your entire room systematically to create a 3D model.",
     },
     {
       title: "Take Photos in a Circle",
-      description: "Stand in the center of your room and rotate in place, taking photos as you go. The app will guide you.",
+      description:
+        "Stand in the center of your room and rotate in place, taking photos as you go. The app will guide you.",
     },
     {
       title: "Cover All Angles",
-      description: "Capture 3 levels: floor, middle, and ceiling. Green dots show completed areas.",
+      description:
+        "Capture 3 levels: floor, middle, and ceiling. Green dots show completed areas.",
     },
     {
       title: "Follow the Arrows",
-      description: "Arrows will guide you to uncaptured regions. Make sure photos overlap by about 30-40%.",
-    }
+      description:
+        "Arrows will guide you to uncaptured regions. Make sure photos overlap by about 30-40%.",
+    },
   ];
 
   // Device orientation tracking
@@ -129,11 +135,11 @@ const CameraScreen: React.FC = () => {
         alpha: ((alpha * 180) / Math.PI + 360) % 360,
         beta: (beta * 180) / Math.PI,
       });
-      
+
       // Update current vertical level based on beta angle
-      if (beta * 180 / Math.PI < -30) {
+      if ((beta * 180) / Math.PI < -30) {
         setCurrentVerticalLevel(0); // Floor
-      } else if (beta * 180 / Math.PI > 30) {
+      } else if ((beta * 180) / Math.PI > 30) {
         setCurrentVerticalLevel(2); // Ceiling
       } else {
         setCurrentVerticalLevel(1); // Middle
@@ -394,7 +400,7 @@ const CameraScreen: React.FC = () => {
   }
 
   return (
-    <View style={styles.container}>
+    <LinearGradient colors={GRADIENTS.cyber} style={styles.container}>
       <CameraView
         ref={cameraRef}
         style={styles.camera}
@@ -422,7 +428,7 @@ const CameraScreen: React.FC = () => {
               </Text>
             </View>
           </View>
-          
+
           {/* Current Level Indicator */}
           <View style={styles.levelIndicator}>
             <Text style={styles.levelIndicatorText}>
@@ -495,8 +501,10 @@ const CameraScreen: React.FC = () => {
 
           {/* Capture button and instructions */}
           <View style={styles.controlsContainer}>
-            <View style={styles.instructionCard}>
-              <Text style={styles.instructionText}>
+            <View style={[styles.instructionCard, STYLES.card]}>
+              <Text
+                style={[styles.instructionText, { color: COLORS.foreground }]}
+              >
                 {needsPhotograph()
                   ? "Capture this angle of the room"
                   : "Move your camera to an uncaptured area"}
@@ -506,7 +514,11 @@ const CameraScreen: React.FC = () => {
             <TouchableOpacity
               style={[
                 styles.captureButton,
-                !needsPhotograph() && styles.captureButtonDisabled,
+                {
+                  borderColor: COLORS.primary,
+                  backgroundColor: COLORS.primaryForeground,
+                },
+                !needsPhotograph() && { opacity: 0.5 },
               ]}
               onPress={takePicture}
               disabled={!needsPhotograph() || capturing}
@@ -514,7 +526,12 @@ const CameraScreen: React.FC = () => {
               {capturing ? (
                 <View style={styles.capturingIndicator} />
               ) : (
-                <View style={styles.captureButtonInner} />
+                <View
+                  style={[
+                    styles.captureButtonInner,
+                    { backgroundColor: COLORS.primary },
+                  ]}
+                />
               )}
             </TouchableOpacity>
 
@@ -534,33 +551,37 @@ const CameraScreen: React.FC = () => {
       <Modal visible={showTutorial} animationType="slide" transparent={true}>
         <View style={styles.tutorialOverlay}>
           <View style={styles.tutorialCard}>
-            <Text style={styles.tutorialTitle}>{tutorialSteps[tutorialStep].title}</Text>
-            <Text style={styles.tutorialDescription}>{tutorialSteps[tutorialStep].description}</Text>
-            
+            <Text style={styles.tutorialTitle}>
+              {tutorialSteps[tutorialStep].title}
+            </Text>
+            <Text style={styles.tutorialDescription}>
+              {tutorialSteps[tutorialStep].description}
+            </Text>
+
             {/* Tutorial Navigation */}
             <View style={styles.tutorialNav}>
               <View style={styles.tutorialDots}>
                 {tutorialSteps.map((_, index) => (
-                  <View 
-                    key={`dot-${index}`} 
+                  <View
+                    key={`dot-${index}`}
                     style={[
                       styles.tutorialDot,
-                      tutorialStep === index && styles.tutorialDotActive
-                    ]} 
+                      tutorialStep === index && styles.tutorialDotActive,
+                    ]}
                   />
                 ))}
               </View>
-              
+
               {tutorialStep < tutorialSteps.length - 1 ? (
-                <TouchableOpacity 
-                  style={styles.tutorialButton} 
+                <TouchableOpacity
+                  style={styles.tutorialButton}
                   onPress={() => setTutorialStep(tutorialStep + 1)}
                 >
                   <Text style={styles.tutorialButtonText}>Next</Text>
                 </TouchableOpacity>
               ) : (
-                <TouchableOpacity 
-                  style={styles.tutorialButton} 
+                <TouchableOpacity
+                  style={styles.tutorialButton}
                   onPress={() => setShowTutorial(false)}
                 >
                   <Text style={styles.tutorialButtonText}>Get Started</Text>
@@ -570,7 +591,7 @@ const CameraScreen: React.FC = () => {
           </View>
         </View>
       </Modal>
-    </View>
+    </LinearGradient>
   );
 };
 
