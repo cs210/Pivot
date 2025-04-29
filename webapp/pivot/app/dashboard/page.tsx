@@ -23,7 +23,6 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   PlusCircle,
   Folder,
@@ -60,7 +59,6 @@ export default function Dashboard() {
   const [editProjectName, setEditProjectName] = useState("");
   const [shareLink, setShareLink] = useState("");
   const [copied, setCopied] = useState(false);
-  const [activeTab, setActiveTab] = useState("all-projects");
 
   useEffect(() => {
     const checkUser = async () => {
@@ -72,18 +70,21 @@ export default function Dashboard() {
         return;
       }
       setUser(user);
-      fetchProjects();
+      fetchProjects(user.id);
     };
 
     checkUser();
   }, [router, supabase]);
 
-  const fetchProjects = async () => {
+  const fetchProjects = async (userId) => {
     try {
       setLoading(true);
+
+      // Only fetch projects created by this user
       const { data, error } = await supabase
         .from("projects")
         .select("*")
+        .eq("user_id", userId) // Only get projects owned by the current user
         .order("created_at", { ascending: false });
 
       if (error) throw error;
@@ -240,17 +241,16 @@ export default function Dashboard() {
     router.push(`/project/${projectId}`);
   };
 
+  const navigateToSharedProject = (projectId: string) => {
+    // Open in a new tab
+    window.open(`/shared/${projectId}`, "_blank");
+  };
+
   const handleSignOut = async () => {
     await supabase.auth.signOut();
     router.push("/");
     router.refresh();
   };
-
-  // Filter projects based on active tab
-  const filteredProjects =
-    activeTab === "shared-projects"
-      ? projects.filter((project) => project.is_public)
-      : projects;
 
   return (
     <div className="flex flex-col min-h-screen text-foreground">
@@ -319,51 +319,26 @@ export default function Dashboard() {
             </div>
           </div>
 
-          <Tabs value={activeTab} onValueChange={setActiveTab} className="mb-6">
-            <TabsList className="bg-muted/100 border border-border/50">
-              <TabsTrigger
-                value="all-projects"
-                className="data-[state=active]:active-tab"
-              >
-                All Projects
-              </TabsTrigger>
-              <TabsTrigger
-                value="shared-projects"
-                className="data-[state=active]:active-tab"
-              >
-                Shared Projects
-              </TabsTrigger>
-            </TabsList>
-          </Tabs>
-
           {loading ? (
             <div className="text-center py-12">Loading your projects...</div>
-          ) : filteredProjects.length === 0 ? (
+          ) : projects.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-16 bg-muted/20 rounded-lg border border-border/40">
               <Folder className="h-16 w-16 text-muted-foreground mb-4" />
-              <h2 className="text-xl font-semibold mb-2">
-                {activeTab === "shared-projects"
-                  ? "No shared projects"
-                  : "No projects yet"}
-              </h2>
+              <h2 className="text-xl font-semibold mb-2">No projects yet</h2>
               <p className="text-muted-foreground mb-6">
-                {activeTab === "shared-projects"
-                  ? "Share a project to make it visible to others"
-                  : "Create your first project to get started"}
+                Create your first project to get started
               </p>
-              {activeTab === "all-projects" && (
-                <Button
-                  onClick={() => setCreateDialogOpen(true)}
-                  className="bg-cyber-gradient hover:opacity-90"
-                >
-                  <PlusCircle className="mr-2 h-4 w-4" />
-                  Create Project
-                </Button>
-              )}
+              <Button
+                onClick={() => setCreateDialogOpen(true)}
+                className="bg-cyber-gradient hover:opacity-90"
+              >
+                <PlusCircle className="mr-2 h-4 w-4" />
+                Create Project
+              </Button>
             </div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {filteredProjects.map((project) => (
+              {projects.map((project) => (
                 <Card
                   key={project.id}
                   className={`bg-background/80 backdrop-blur-sm border-border/50 hover:border-primary/50 transition-colors ${
@@ -406,6 +381,18 @@ export default function Dashboard() {
                         {new Date(project.created_at).toLocaleDateString()}
                       </span>
                     </div>
+                    {project.is_public && (
+                      <div className="mt-2">
+                        <Button
+                          variant="link"
+                          size="sm"
+                          className="text-xs text-primary p-0 h-auto"
+                          onClick={() => navigateToSharedProject(project.id)}
+                        >
+                          View shared version
+                        </Button>
+                      </div>
+                    )}
                   </CardContent>
                   <CardFooter className="flex gap-2">
                     <Button
@@ -512,15 +499,17 @@ export default function Dashboard() {
                   onClick={() =>
                     currentProject && handleTogglePublic(currentProject)
                   }
-                  className="cyber-border"
+                  className="border-destructive/40 text-destructive hover:bg-destructive/10"
                 >
                   Make Private
                 </Button>
                 <Button
-                  onClick={() => setShareDialogOpen(false)}
+                  onClick={() => {
+                    window.open(shareLink, "_blank");
+                  }}
                   className="text-white bg-cyber-gradient hover:opacity-90"
                 >
-                  Done
+                  Open Shared View
                 </Button>
               </div>
             </DialogContent>

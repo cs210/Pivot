@@ -13,8 +13,9 @@ export async function middleware(request: NextRequest) {
   // Get the pathname
   const pathname = request.nextUrl.pathname;
 
-  // Check if it's a shared project route - allow access without authentication
+  // Check if it's a shared project route - allow access regardless of authentication status
   if (pathname.startsWith("/shared/")) {
+    // Allow both authenticated and unauthenticated users to access shared project pages
     return response;
   }
 
