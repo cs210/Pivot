@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter, useParams } from "next/navigation";
 import Link from "next/link";
 import { Header } from "@/components/header";
@@ -12,12 +12,28 @@ import RawImagesTab from "./components/tabs/RawImagesTab";
 import PanoramasTab from "./components/tabs/PanoramasTab";
 import { useProject } from "./hooks/useProject";
 import PlaceLocationsTabContent from "./components/EnhancedImageGrid";
+import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Share2, Copy, CheckCircle2 } from "lucide-react";
+import { createClient } from "@/utils/supabase/client";
 
 export default function ProjectPage() {
   const router = useRouter();
   const params = useParams();
   const projectId = params.id as string;
   const [activeTab, setActiveTab] = useState("raw-images");
+  const [shareDialogOpen, setShareDialogOpen] = useState(false);
+  const [isPublic, setIsPublic] = useState(false);
+  const [shareLink, setShareLink] = useState("");
+  const [copied, setCopied] = useState(false);
+  const supabase = createClient();
 
   const {
     project,
@@ -28,6 +44,47 @@ export default function ProjectPage() {
     setIsEditing,
     handleUpdateProject,
   } = useProject(projectId, router);
+
+  useEffect(() => {
+    if (project) {
+      setIsPublic(project.is_public || false);
+    }
+  }, [project]);
+
+  const handleShareProject = async () => {
+    try {
+      // Update the project's public status
+      const { error } = await supabase
+        .from("projects")
+        .update({ is_public: !isPublic })
+        .eq("id", projectId);
+
+      if (error) throw error;
+
+      setIsPublic(!isPublic);
+
+      // If we're making it public, generate and show the share link
+      if (!isPublic) {
+        const baseUrl = window.location.origin;
+        const link = `${baseUrl}/shared/${projectId}`;
+        setShareLink(link);
+        setShareDialogOpen(true);
+      }
+    } catch (error) {
+      console.error("Error updating project visibility:", error);
+      alert("Failed to update project visibility");
+    }
+  };
+
+  const copyToClipboard = async () => {
+    try {
+      await navigator.clipboard.writeText(shareLink);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch (err) {
+      console.error("Failed to copy: ", err);
+    }
+  };
 
   if (loading) {
     return (
@@ -49,15 +106,28 @@ export default function ProjectPage() {
       <main className="flex-1 relative">
         <div className="absolute inset-0 bg-cyber-gradient opacity-5"></div>
         <div className="container mx-auto px-4 py-8 relative z-10">
-          <ProjectHeader
-            project={project}
-            projectName={projectName}
-            setProjectName={setProjectName}
-            isEditing={isEditing}
-            setIsEditing={setIsEditing}
-            handleUpdateProject={handleUpdateProject}
-            router={router}
-          />
+          <div className="flex justify-between items-center mb-6">
+            <ProjectHeader
+              project={project}
+              projectName={projectName}
+              setProjectName={setProjectName}
+              isEditing={isEditing}
+              setIsEditing={setIsEditing}
+              handleUpdateProject={handleUpdateProject}
+              router={router}
+            />
+
+            <Button
+              onClick={handleShareProject}
+              variant={isPublic ? "default" : "outline"}
+              className={
+                isPublic ? "bg-cyber-gradient hover:opacity-90" : "cyber-border"
+              }
+            >
+              <Share2 className="mr-2 h-4 w-4" />
+              {isPublic ? "Project Shared" : "Share Project"}
+            </Button>
+          </div>
 
           <Tabs
             value={activeTab}
@@ -119,6 +189,8 @@ export default function ProjectPage() {
                 projectName={projectName}
                 setProjectName={setProjectName}
                 handleUpdateProject={handleUpdateProject}
+                isPublic={isPublic}
+                handleShareProject={handleShareProject}
               />
             </TabsContent>
           </Tabs>
@@ -145,6 +217,47 @@ export default function ProjectPage() {
           </nav>
         </div>
       </footer>
+
+      {/* Share Dialog */}
+      <Dialog open={shareDialogOpen} onOpenChange={setShareDialogOpen}>
+        <DialogContent className="sm:max-w-[425px] bg-background text-white">
+          <DialogHeader>
+            <DialogTitle className="text-white">Share Project</DialogTitle>
+            <DialogDescription className="text-white/70">
+              Anyone with this link can view this project without needing to log
+              in.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex items-center space-x-2 bg-muted/30 p-3 rounded-md">
+            <input
+              type="text"
+              readOnly
+              value={shareLink}
+              className="flex-1 bg-transparent border-none focus:outline-none text-sm text-white"
+            />
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={copyToClipboard}
+              className="h-8"
+            >
+              {copied ? (
+                <CheckCircle2 className="h-4 w-4 text-green-500" />
+              ) : (
+                <Copy className="h-4 w-4" />
+              )}
+            </Button>
+          </div>
+          <DialogFooter className="mt-4">
+            <Button
+              onClick={() => setShareDialogOpen(false)}
+              className="text-white bg-cyber-gradient hover:opacity-90"
+            >
+              Done
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
