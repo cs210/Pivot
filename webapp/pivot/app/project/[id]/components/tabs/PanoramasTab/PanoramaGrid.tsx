@@ -57,7 +57,7 @@ export default function PanoramaGrid({
   const panoramasToShow = getProjectPanoramas();
 
   return (
-    <div className="md:col-span-9">
+    <div className="w-full">
       <Card className="bg-background/80 backdrop-blur-sm border-border/50">
         <CardHeader>
           <div className="flex justify-between items-center">
