@@ -299,7 +299,7 @@ export default function PanoramasTab({ projectId }: PanoramasTabProps) {
   };
 
   return (
-    <div className="grid grid-cols-1 gap-6 md:grid-cols-12">
+    <div className="w-full">
       {/* Panoramas content area */}
       <PanoramaGrid
         panoramas={panoramas}
