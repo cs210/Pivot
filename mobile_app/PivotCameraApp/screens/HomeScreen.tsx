@@ -40,12 +40,9 @@ const HomeScreen = () => {
 
   return (
     <LinearGradient colors={GRADIENTS.cyber} style={styles.container}>
-      <ScrollView
-        contentContainerStyle={[styles.scrollContent, { paddingTop: 60 }]} // Move paddingTop to inline style
-        showsVerticalScrollIndicator={false}
-      >
+      <View style={styles.fixedContent}>
         {/* Logo and app name */}
-        <View style={styles.logoContainer}>
+        <View style={[styles.logoContainer, { alignSelf: 'center' }]}>
           <Ionicons name="compass-outline" size={32} color={COLORS.primary} />
           <Text style={styles.logoText}>Pivot</Text>
         </View>
@@ -111,32 +108,41 @@ const HomeScreen = () => {
           </View>
         </View>
 
-        {/* Inline gallery */}
-        <View style={styles.galleryContainer}>
-          {loading ? (
-            <ActivityIndicator size="large" color={COLORS.primary} />
-          ) : (
-            <FlatList
-              data={images}
-              keyExtractor={(uri) => uri}
-              numColumns={3}
-              scrollEnabled={false}
-              renderItem={({ item }) => (
-                <Image
-                  source={{ uri: item }}
-                  style={{
-                    width: IMAGE_SIZE,
-                    height: IMAGE_SIZE,
-                    margin: 2,
-                    borderRadius: 6,
-                  }}
-                />
-              )}
-            />
-          )}
-        </View>
-      </ScrollView>
+        {/* Gallery header */}
+        <Text style={styles.galleryHeader}>Recent Captures</Text>
+      </View>
 
+      {/* Only the gallery is scrollable */}
+      <View style={styles.galleryContainer}>
+        {loading ? (
+          <ActivityIndicator size="large" color={COLORS.primary} />
+        ) : (
+          <FlatList
+            data={images}
+            keyExtractor={(uri) => uri}
+            numColumns={3}
+            contentContainerStyle={styles.galleryContent}
+            ListEmptyComponent={
+              <View style={styles.emptyGallery}>
+                <Ionicons name="images-outline" size={48} color={COLORS.secondary} />
+                <Text style={styles.emptyText}>No images captured yet</Text>
+              </View>
+            }
+            renderItem={({ item }) => (
+              <Image
+                source={{ uri: item }}
+                style={{
+                  width: IMAGE_SIZE,
+                  height: IMAGE_SIZE,
+                  margin: 2,
+                  borderRadius: 6,
+                }}
+              />
+            )}
+          />
+        )}
+      </View>
+      
       {/* Fixed camera button */}
       <View style={styles.cameraButtonContainer}>
         <TouchableOpacity
@@ -283,6 +289,30 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.3,
     shadowRadius: 4,
     elevation: 6,
+  },
+  fixedContent: {
+    paddingTop: 60,
+    paddingHorizontal: 20,
+  },
+  galleryHeader: {
+    fontSize: 20,
+    fontFamily: FONT.bold,
+    color: COLORS.primary,
+    marginBottom: 10,
+  },
+  galleryContent: {
+    paddingHorizontal: 20,
+  },
+  emptyGallery: {
+    alignItems: "center",
+    justifyContent: "center",
+    height: 200,
+  },
+  emptyText: {
+    fontSize: 16,
+    color: COLORS.secondary,
+    marginTop: 10,
+    fontFamily: FONT.regular,
   },
 });
 
