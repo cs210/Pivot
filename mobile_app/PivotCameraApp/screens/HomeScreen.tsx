@@ -341,7 +341,7 @@ const styles = StyleSheet.create({
   helpButton: {
     position: "absolute",
     top: 50,
-    left: 25,
+    left: 10,
     zIndex: 1,
     padding: 5, // Add some padding to make the touch target larger
   },
