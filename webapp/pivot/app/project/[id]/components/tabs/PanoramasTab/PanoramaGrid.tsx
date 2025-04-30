@@ -151,7 +151,7 @@ export default function PanoramaGrid({
                 >
                   <div className="aspect-square relative">
                     <img
-                      src={panorama.url}
+                      src={panorama.url ?? ""}
                       alt={panorama.name}
                       className="object-cover w-full h-full"
                     />
@@ -223,7 +223,7 @@ export default function PanoramaGrid({
                 >
                   <div className="h-10 w-10 mr-4 overflow-hidden rounded">
                     <img
-                      src={panorama.url}
+                      src={panorama.url ?? ""}
                       alt={panorama.name}
                       className="object-cover w-full h-full"
                     />
