@@ -21,6 +21,8 @@ const HomeScreen = () => {
   const [images, setImages] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
   const IMAGE_SIZE = (Dimensions.get("window").width - 40) / 3;
+  // Add state to track if "How it works" is visible
+  const [showHowItWorks, setShowHowItWorks] = useState(true);
 
   useEffect(() => {
     (async () => {
@@ -40,73 +42,91 @@ const HomeScreen = () => {
 
   return (
     <LinearGradient colors={GRADIENTS.cyber} style={styles.container}>
+      {/* Help button in top left */}
+      <TouchableOpacity
+        style={styles.helpButton}
+        onPress={() => setShowHowItWorks(!showHowItWorks)}
+      >
+        <Ionicons name="help-circle" size={50} color={COLORS.primary} />
+      </TouchableOpacity>
+
       <View style={styles.fixedContent}>
         {/* Logo and app name */}
-        <View style={[styles.logoContainer, { alignSelf: 'center' }]}>
+        <View style={[styles.logoContainer, { alignSelf: "center" }]}>
           <Ionicons name="compass-outline" size={32} color={COLORS.primary} />
           <Text style={styles.logoText}>Pivot</Text>
         </View>
 
-        <View style={[styles.infoCard, STYLES.card]}>
-          <Text style={styles.infoTitle}>How it works</Text>
-          <Text style={styles.infoText}>
-            Take a series of overlapping photos of your room to create a
-            complete 3D reconstruction.
-          </Text>
+        {showHowItWorks && (
+          <View style={[styles.infoCard, STYLES.card]}>
+            {/* Close button in top right */}
+            <TouchableOpacity
+              style={styles.closeButton}
+              onPress={() => setShowHowItWorks(false)}
+            >
+              <Ionicons name="close" size={24} color={COLORS.secondary} />
+            </TouchableOpacity>
 
-          <View style={styles.stepContainer}>
-            <View style={styles.step}>
-              <Text
-                style={[
-                  styles.stepNumber,
-                  {
-                    backgroundColor: COLORS.primary,
-                    color: COLORS.primaryForeground,
-                  },
-                ]}
-              >
-                1
-              </Text>
-              <Text style={styles.stepText}>
-                Stand in the center of your room
-              </Text>
-            </View>
+            <Text style={styles.infoTitle}>How it works</Text>
+            <Text style={styles.infoText}>
+              Take a series of overlapping photos of your room to create a
+              complete 3D reconstruction.
+            </Text>
 
-            <View style={styles.step}>
-              <Text
-                style={[
-                  styles.stepNumber,
-                  {
-                    backgroundColor: COLORS.primary,
-                    color: COLORS.primaryForeground,
-                  },
-                ]}
-              >
-                2
-              </Text>
-              <Text style={styles.stepText}>
-                Follow the on-screen guidance to move your camera
-              </Text>
-            </View>
+            <View style={styles.stepContainer}>
+              <View style={styles.step}>
+                <Text
+                  style={[
+                    styles.stepNumber,
+                    {
+                      backgroundColor: COLORS.primary,
+                      color: COLORS.primaryForeground,
+                    },
+                  ]}
+                >
+                  1
+                </Text>
+                <Text style={styles.stepText}>
+                  Stand in the center of your room
+                </Text>
+              </View>
 
-            <View style={styles.step}>
-              <Text
-                style={[
-                  styles.stepNumber,
-                  {
-                    backgroundColor: COLORS.primary,
-                    color: COLORS.primaryForeground,
-                  },
-                ]}
-              >
-                3
-              </Text>
-              <Text style={styles.stepText}>
-                Capture images until you've covered the entire room
-              </Text>
+              <View style={styles.step}>
+                <Text
+                  style={[
+                    styles.stepNumber,
+                    {
+                      backgroundColor: COLORS.primary,
+                      color: COLORS.primaryForeground,
+                    },
+                  ]}
+                >
+                  2
+                </Text>
+                <Text style={styles.stepText}>
+                  Follow the on-screen guidance to move your camera
+                </Text>
+              </View>
+
+              <View style={styles.step}>
+                <Text
+                  style={[
+                    styles.stepNumber,
+                    {
+                      backgroundColor: COLORS.primary,
+                      color: COLORS.primaryForeground,
+                    },
+                  ]}
+                >
+                  3
+                </Text>
+                <Text style={styles.stepText}>
+                  Capture images until you've covered the entire room
+                </Text>
+              </View>
             </View>
           </View>
-        </View>
+        )}
 
         {/* Gallery header */}
         <Text style={styles.galleryHeader}>Recent Captures</Text>
@@ -124,7 +144,11 @@ const HomeScreen = () => {
             contentContainerStyle={styles.galleryContent}
             ListEmptyComponent={
               <View style={styles.emptyGallery}>
-                <Ionicons name="images-outline" size={48} color={COLORS.secondary} />
+                <Ionicons
+                  name="images-outline"
+                  size={48}
+                  color={COLORS.secondary}
+                />
                 <Text style={styles.emptyText}>No images captured yet</Text>
               </View>
             }
@@ -142,7 +166,7 @@ const HomeScreen = () => {
           />
         )}
       </View>
-      
+
       {/* Fixed camera button */}
       <View style={styles.cameraButtonContainer}>
         <TouchableOpacity
@@ -313,6 +337,19 @@ const styles = StyleSheet.create({
     color: COLORS.secondary,
     marginTop: 10,
     fontFamily: FONT.regular,
+  },
+  helpButton: {
+    position: "absolute",
+    top: 50,
+    left: 25,
+    zIndex: 1,
+    padding: 5, // Add some padding to make the touch target larger
+  },
+  closeButton: {
+    position: "absolute",
+    top: 10,
+    right: 10,
+    zIndex: 1,
   },
 });
 
