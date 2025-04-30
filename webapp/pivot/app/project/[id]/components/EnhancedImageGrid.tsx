@@ -6,7 +6,7 @@ import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { X, Save, Plus, Minus, Eye } from "lucide-react";
 import { TabsContent } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
-import { useGrids } from "../hooks/useGrids";
+import { useGrids } from "../../../../hooks/useGrids";
 
 interface EnhancedImageGridProps {
   projectId: string;

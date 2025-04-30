@@ -1,7 +1,7 @@
 import { useEffect } from "react";
 import { createClient } from "@/utils/supabase/client";
-import { useFolders } from "../../../hooks/useFolders";
-import { useRawImages } from "../../../hooks/useRawImages";
+import { useFolders } from "../../../../../../hooks/useFolders";
+import { useRawImages } from "../../../../../../hooks/useRawImages";
 import FolderSidebar from "./FolderSidebar";
 import ImageGrid from "./ImageGrid";
 import CreateFolderDialog from "./dialogs/CreateFolderDialog";

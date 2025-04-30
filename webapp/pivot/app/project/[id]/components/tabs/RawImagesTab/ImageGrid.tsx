@@ -17,8 +17,8 @@ import {
   List,
   FolderPlus,
 } from "lucide-react";
-import { RawImage } from "../../../hooks/useRawImages";
-import { Folder } from "../../../hooks/useFolders";
+import { RawImage } from "../../../../../../hooks/useRawImages";
+import { Folder } from "../../../../../../hooks/useFolders";
 
 interface ImageGridProps {
   rawImages: RawImage[];
