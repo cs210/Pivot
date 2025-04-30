@@ -119,11 +119,11 @@ import {
                         : "border-border/50 hover:border-primary/70"
                     }`}
                     onClick={() => {
-                      setImagesToConvert((prev) =>
-                        prev.some((img) => img.id === image.id)
-                          ? prev.filter((img) => img.id !== image.id)
-                          : [...prev, image]
-                      );
+                        setImagesToConvert(
+                        imagesToConvert.some((img) => img.id === image.id)
+                          ? imagesToConvert.filter((img) => img.id !== image.id)
+                          : [...imagesToConvert, image]
+                        );
                     }}
                   >
                     <div className="aspect-square relative">
