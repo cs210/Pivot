@@ -310,7 +310,13 @@ export default function ExplorePage() {
   return (
     <div className="container mx-auto p-8">
       <h1 className="text-3xl font-bold mb-2">Explore {organization.name}</h1>
-      <p className="text-gray-500 mb-8">Browse and filter housing projects</p>
+      <div className="flex justify-between items-center mb-8">
+        <p className="text-gray-500">Browse and filter housing projects</p>
+        <Button onClick={() => router.push('/')} variant="outline" className="flex items-center gap-2">
+          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-home"><path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path><polyline points="9 22 9 12 15 12 15 22"></polyline></svg>
+          Return to Home
+        </Button>
+      </div>
       
       <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">
         {/* Filters Panel */}
@@ -351,9 +357,39 @@ export default function ExplorePage() {
                           checked={selectedResidenceTypes.includes(type)}
                           onCheckedChange={(checked) => {
                             if (checked) {
+                              // Add this residence type
                               setSelectedResidenceTypes(prev => [...prev, type]);
+                              
+                              // Also select all residences of this type
+                              const residencesOfType = housingType === 'Undergraduate' 
+                                ? UNDERGRADUATE_RESIDENCES[type as keyof typeof UNDERGRADUATE_RESIDENCES] || []
+                                : GRADUATE_RESIDENCES[type as keyof typeof GRADUATE_RESIDENCES] || [];
+                                
+                              setSelectedResidenceNames(prev => {
+                                // Create a new array with all previously selected residences
+                                const newSelection = [...prev];
+                                
+                                // Add each residence from this type if not already selected
+                                residencesOfType.forEach(residence => {
+                                  if (!newSelection.includes(residence)) {
+                                    newSelection.push(residence);
+                                  }
+                                });
+                                
+                                return newSelection;
+                              });
                             } else {
+                              // Remove this residence type
                               setSelectedResidenceTypes(prev => prev.filter(t => t !== type));
+                              
+                              // Also remove all residences belonging to this type
+                              const residencesOfType = housingType === 'Undergraduate' 
+                                ? UNDERGRADUATE_RESIDENCES[type as keyof typeof UNDERGRADUATE_RESIDENCES] || []
+                                : GRADUATE_RESIDENCES[type as keyof typeof GRADUATE_RESIDENCES] || [];
+                                
+                              setSelectedResidenceNames(prev => 
+                                prev.filter(name => !residencesOfType.includes(name))
+                              );
                             }
                           }}
                         />
