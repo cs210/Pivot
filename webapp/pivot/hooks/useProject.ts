@@ -1,12 +1,19 @@
 import { useState, useEffect } from "react";
 import { createClient } from "@/utils/supabase/client";
 
-interface Project {
+export interface Project {
   id: string;
   name: string;
   created_at: string;
   user_id: string;
   is_public: boolean;
+  organization_id: string;
+  metadata: {
+    housing_type?: string;
+    residence_type?: string;
+    residence_name?: string;
+    room_type?: string;
+  };
 }
 
 export function useProject(projectId: string, router: any) {

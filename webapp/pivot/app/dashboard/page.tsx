@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/utils/supabase/client";
 import { Button } from "@/components/ui/button";
@@ -35,66 +35,26 @@ import {
   Globe,
 } from "lucide-react";
 import { Header } from "@/components/header";
-// Toast component not available - using alert instead
-
-interface Project {
-  id: string;
-  name: string;
-  created_at: string;
-  user_id: string;
-  is_public?: boolean;
-}
+import { useProjects } from "@/hooks/useProjects";
 
 export default function Dashboard() {
   const router = useRouter();
-  const supabase = createClient();
-  const [loading, setLoading] = useState(true);
-  const [user, setUser] = useState<any>(null);
-  const [projects, setProjects] = useState<Project[]>([]);
+  const { 
+    projects, 
+    loading, 
+    user, 
+    createProject, 
+    deleteProject 
+  } = useProjects(router);
+  
   const [newProjectName, setNewProjectName] = useState("");
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
   const [editDialogOpen, setEditDialogOpen] = useState(false);
   const [shareDialogOpen, setShareDialogOpen] = useState(false);
-  const [currentProject, setCurrentProject] = useState<Project | null>(null);
+  const [currentProject, setCurrentProject] = useState<any>(null);
   const [editProjectName, setEditProjectName] = useState("");
   const [shareLink, setShareLink] = useState("");
   const [copied, setCopied] = useState(false);
-
-  useEffect(() => {
-    const checkUser = async () => {
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-      if (!user) {
-        router.push("/login");
-        return;
-      }
-      setUser(user);
-      fetchProjects(user.id);
-    };
-
-    checkUser();
-  }, [router, supabase]);
-
-  const fetchProjects = async (userId) => {
-    try {
-      setLoading(true);
-
-      // Only fetch projects created by this user
-      const { data, error } = await supabase
-        .from("projects")
-        .select("*")
-        .eq("user_id", userId) // Only get projects owned by the current user
-        .order("created_at", { ascending: false });
-
-      if (error) throw error;
-      setProjects(data || []);
-    } catch (error) {
-      console.error("Error fetching projects:", error);
-    } finally {
-      setLoading(false);
-    }
-  };
 
   const handleCreateProject = async () => {
     if (!newProjectName.trim()) {
@@ -103,30 +63,15 @@ export default function Dashboard() {
     }
 
     try {
-      const { data, error } = await supabase
-        .from("projects")
-        .insert([
-          {
-            name: newProjectName.trim(),
-            user_id: user.id,
-            is_public: false,
-          },
-        ])
-        .select();
-
-      if (error) throw error;
-
+      const newProject = await createProject(newProjectName.trim());
+      
       // Close dialog and reset form
       setNewProjectName("");
       setCreateDialogOpen(false);
 
       // Redirect to the new project's page
-      if (data && data.length > 0) {
-        router.push(`/project/${data[0].id}`);
-      } else {
-        // Fallback if no data returned
-        setProjects((prev) => [...prev]);
-        alert("Project created successfully");
+      if (newProject) {
+        router.push(`/project/${newProject.id}`);
       }
     } catch (error) {
       console.error("Error creating project:", error);
@@ -141,6 +86,8 @@ export default function Dashboard() {
     }
 
     try {
+      // We need to keep this logic since it's not in the useProjects hook
+      const supabase = createClient();
       const { error } = await supabase
         .from("projects")
         .update({ name: editProjectName.trim() })
@@ -148,32 +95,29 @@ export default function Dashboard() {
 
       if (error) throw error;
 
-      setProjects(
-        projects.map((p) =>
-          p.id === currentProject.id
-            ? { ...p, name: editProjectName.trim() }
-            : p
-        )
+      // Update local state - in a real implementation, you might want to add 
+      // an updateProject method to useProjects hook
+      const updatedProjects = projects.map((p) =>
+        p.id === currentProject.id
+          ? { ...p, name: editProjectName.trim() }
+          : p
       );
-
+      
       setEditDialogOpen(false);
       setCurrentProject(null);
 
       alert("Project updated successfully");
+      // Force a refresh to get updated data
+      router.refresh();
     } catch (error) {
       console.error("Error updating project:", error);
       alert("Failed to update project");
     }
   };
 
-  const handleDeleteProject = async (id: string) => {
+  const handleDeleteProjectClick = async (id: string) => {
     try {
-      const { error } = await supabase.from("projects").delete().eq("id", id);
-
-      if (error) throw error;
-
-      setProjects(projects.filter((p) => p.id !== id));
-
+      await deleteProject(id);
       alert("Project deleted successfully");
     } catch (error) {
       console.error("Error deleting project:", error);
@@ -181,8 +125,10 @@ export default function Dashboard() {
     }
   };
 
-  const handleTogglePublic = async (project: Project) => {
+  const handleTogglePublic = async (project: any) => {
     try {
+      // We need to keep this logic since it's not in the useProjects hook
+      const supabase = createClient();
       const newPublicState = !project.is_public;
 
       const { error } = await supabase
@@ -192,13 +138,6 @@ export default function Dashboard() {
 
       if (error) throw error;
 
-      // Update local state
-      setProjects(
-        projects.map((p) =>
-          p.id === project.id ? { ...p, is_public: newPublicState } : p
-        )
-      );
-
       if (newPublicState) {
         // Generate and show the share link
         setCurrentProject(project);
@@ -207,19 +146,22 @@ export default function Dashboard() {
         setShareLink(link);
         setShareDialogOpen(true);
       }
+      
+      // Force a refresh to get updated data
+      router.refresh();
     } catch (error) {
       console.error("Error updating project visibility:", error);
       alert("Failed to update project visibility");
     }
   };
 
-  const openEditDialog = (project: Project) => {
+  const openEditDialog = (project: any) => {
     setCurrentProject(project);
     setEditProjectName(project.name);
     setEditDialogOpen(true);
   };
 
-  const openShareDialog = (project: Project) => {
+  const openShareDialog = (project: any) => {
     setCurrentProject(project);
     const baseUrl = window.location.origin;
     const link = `${baseUrl}/shared/${project.id}`;
@@ -247,6 +189,7 @@ export default function Dashboard() {
   };
 
   const handleSignOut = async () => {
+    const supabase = createClient();
     await supabase.auth.signOut();
     router.push("/");
     router.refresh();
@@ -366,7 +309,7 @@ export default function Dashboard() {
                           variant="ghost"
                           size="icon"
                           className="h-8 w-8 hover:bg-destructive/20 hover:text-destructive"
-                          onClick={() => handleDeleteProject(project.id)}
+                          onClick={() => handleDeleteProjectClick(project.id)}
                         >
                           <Trash2 className="h-4 w-4" />
                         </Button>

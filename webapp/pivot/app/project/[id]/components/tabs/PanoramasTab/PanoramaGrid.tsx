@@ -16,7 +16,7 @@ import {
   Box,
   Loader2,
 } from "lucide-react";
-import { Panorama } from "../../../hooks/usePanoramas";
+import { Panorama } from "../../../../../../hooks/usePanoramas";
 
 interface PanoramaGridProps {
   panoramas: Panorama[];
@@ -57,7 +57,7 @@ export default function PanoramaGrid({
   const panoramasToShow = getProjectPanoramas();
 
   return (
-    <div className="md:col-span-9">
+    <div className="w-full">
       <Card className="bg-background/80 backdrop-blur-sm border-border/50">
         <CardHeader>
           <div className="flex justify-between items-center">
@@ -151,7 +151,7 @@ export default function PanoramaGrid({
                 >
                   <div className="aspect-square relative">
                     <img
-                      src={panorama.url}
+                      src={panorama.url ?? ""}
                       alt={panorama.name}
                       className="object-cover w-full h-full"
                     />
@@ -223,7 +223,7 @@ export default function PanoramaGrid({
                 >
                   <div className="h-10 w-10 mr-4 overflow-hidden rounded">
                     <img
-                      src={panorama.url}
+                      src={panorama.url ?? ""}
                       alt={panorama.name}
                       className="object-cover w-full h-full"
                     />
