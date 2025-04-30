@@ -8,8 +8,8 @@ import {
   } from "@/components/ui/dialog";
   import { Button } from "@/components/ui/button";
   import { FolderOpen } from "lucide-react";
-  import { Folder } from "../../../../hooks/useFolders";
-  import { RawImage } from "../../../../hooks/useRawImages";
+  import { Folder } from "../../../../../../../hooks/useFolders";
+  import { RawImage } from "../../../../../../../hooks/useRawImages";
   
   interface MoveImageDialogProps {
     open: boolean;

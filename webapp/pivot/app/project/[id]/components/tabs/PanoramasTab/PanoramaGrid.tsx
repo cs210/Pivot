@@ -16,7 +16,7 @@ import {
   Box,
   Loader2,
 } from "lucide-react";
-import { Panorama } from "../../../hooks/usePanoramas";
+import { Panorama } from "../../../../../../hooks/usePanoramas";
 
 interface PanoramaGridProps {
   panoramas: Panorama[];

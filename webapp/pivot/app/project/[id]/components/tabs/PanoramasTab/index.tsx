@@ -1,8 +1,8 @@
 import { useState, useRef, useEffect } from "react";
 import { createClient } from "@/utils/supabase/client";
-import { useFolders } from "../../../hooks/useFolders";
-import { useRawImages } from "../../../hooks/useRawImages";
-import { usePanoramas } from "../../../hooks/usePanoramas";
+import { useFolders } from "../../../../../../hooks/useFolders";
+import { useRawImages } from "../../../../../../hooks/useRawImages";
+import { usePanoramas } from "../../../../../../hooks/usePanoramas";
 import PanoramaGrid from "./PanoramaGrid";
 import RenamePanoramaDialog from "./dialogs/RenamePanoramaDialog";
 import Generate360Dialog from "./dialogs/Generate360Dialog";

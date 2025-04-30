@@ -8,7 +8,7 @@ import {
   } from "@/components/ui/dialog";
   import { Button } from "@/components/ui/button";
   import { FolderOpen, Loader2 } from "lucide-react";
-  import { Folder } from "../../../../hooks/useFolders";
+  import { Folder } from "../../../../../../../hooks/useFolders";
   import { RawImage } from "../index";
   
   interface Generate360DialogProps {
