@@ -7,26 +7,33 @@ import { Button } from "@/components/ui/button";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { HousingFilters } from '@/components/housing-filters';
 import { ProjectCard } from '@/components/project-card';
-import { useHousingFilters, Project } from '@/hooks/useHousingFilters';
+import { useHousingFilters } from '@/hooks/useHousingFilters';
 import { Header } from '@/components/header';
+import { useProjects } from '@/hooks/useProjects';
+import { PlusCircle } from "lucide-react";
 
 export default function ExplorePage() {
   const router = useRouter();
   const supabase = createClient();
   
-  const [user, setUser] = useState<any>(null);
+  // Use the useProjects hook to handle some of the project operations
+  const { 
+    user
+  } = useProjects(router);
+  
   const [userLoading, setUserLoading] = useState(true);
   const [organization, setOrganization] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(true);
-  const [projects, setProjects] = useState<Project[]>([]);
+  const [projects, setProjects] = useState<any[]>([]);
   
-  // Check user authentication status
+  // This useEffect is now redundant with useProjects hook, but we're keeping it
+  // for now to avoid disrupting the organization loading logic
   useEffect(() => {
     const checkUser = async () => {
       try {
         setUserLoading(true);
         const { data: { user } } = await supabase.auth.getUser();
-        setUser(user);
+        // No need to setUser since useProjects handles this
       } catch (error) {
         console.error('Error checking user:', error);
       } finally {
@@ -90,7 +97,7 @@ export default function ExplorePage() {
     }
     
     loadOrganization();
-  }, [user, userLoading]);
+  }, [user, userLoading, supabase]);
 
   // Use our custom hook for filtering
   const {
@@ -169,10 +176,13 @@ export default function ExplorePage() {
               <div className="text-center p-12 border rounded-lg">
                 <h3 className="text-lg font-medium">No spaces found</h3>
                 <p className="text-gray-500 mt-2">
-                  Try adjusting your filters or create a new project.
+                  Try adjusting your filters or go to your dashboard to create and manage your spaces.
                 </p>
-                <Button onClick={() => router.push('/project/new')} className="mt-4 bg-cyber-gradient hover:opacity-90 geometric-text">
-                  Create New Project
+                <Button 
+                  onClick={() => router.push('/dashboard')} 
+                  className="mt-4 bg-cyber-gradient hover:opacity-90 geometric-text"
+                >
+                  Publish New Spaces
                 </Button>
               </div>
             ) : (
