@@ -8,6 +8,7 @@ import {
   Image,
   ActivityIndicator,
   Dimensions,
+  ScrollView,
 } from "react-native";
 import { useNavigation } from "@react-navigation/native";
 import { LinearGradient } from "expo-linear-gradient";
@@ -39,7 +40,10 @@ const HomeScreen = () => {
 
   return (
     <LinearGradient colors={GRADIENTS.cyber} style={styles.container}>
-      <View style={styles.content}>
+      <ScrollView
+        contentContainerStyle={[styles.scrollContent, { paddingTop: 60 }]} // Move paddingTop to inline style
+        showsVerticalScrollIndicator={false}
+      >
         {/* Logo and app name */}
         <View style={styles.logoContainer}>
           <Ionicons name="compass-outline" size={32} color={COLORS.primary} />
@@ -116,6 +120,7 @@ const HomeScreen = () => {
               data={images}
               keyExtractor={(uri) => uri}
               numColumns={3}
+              scrollEnabled={false}
               renderItem={({ item }) => (
                 <Image
                   source={{ uri: item }}
@@ -130,8 +135,10 @@ const HomeScreen = () => {
             />
           )}
         </View>
+      </ScrollView>
 
-        {/* camera button */}
+      {/* Fixed camera button */}
+      <View style={styles.cameraButtonContainer}>
         <TouchableOpacity
           style={styles.cameraButton}
           onPress={() => navigation.navigate("Camera" as never)}
@@ -144,13 +151,15 @@ const HomeScreen = () => {
 };
 
 const styles = StyleSheet.create({
+  safeArea: {
+    flex: 1,
+  },
   container: {
     flex: 1,
     backgroundColor: "#f5f5f5",
   },
-  content: {
+  scrollContent: {
     padding: 20,
-    paddingTop: 60, // added extra top margin to avoid notch
     alignItems: "center",
   },
   logoContainer: {
@@ -251,16 +260,29 @@ const styles = StyleSheet.create({
   },
   galleryContainer: {
     width: "100%",
-    marginBottom: 30,
+    marginBottom: 90, // Increased bottom margin to make room for the camera button
+  },
+  cameraButtonContainer: {
+    position: "absolute",
+    bottom: 30,
+    left: 0,
+    right: 0,
+    alignItems: "center",
+    justifyContent: "center",
   },
   cameraButton: {
     backgroundColor: COLORS.primary,
     borderRadius: 50,
-    padding: 16,
+    width: 70,
+    height: 70,
     alignItems: "center",
     justifyContent: "center",
-    alignSelf: "center",
-    marginBottom: 30,
+    // Add shadow for better visibility
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+    elevation: 6,
   },
 });
 
