@@ -58,7 +58,27 @@ import {
             </DialogDescription>
           </DialogHeader>
   
-          <div className="flex items-center justify-end mb-2">
+          <div className="flex items-center justify-between mb-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                if (!folderSelectionMode) {
+                  // If all images are already selected, deselect all
+                  if (imagesToConvert.length === rawImages.length) {
+                    setImagesToConvert([]);
+                  } else {
+                    // Otherwise select all images
+                    setImagesToConvert([...rawImages]);
+                  }
+                }
+              }}
+              disabled={folderSelectionMode || rawImages.length === 0}
+            >
+              {imagesToConvert.length === rawImages.length && !folderSelectionMode && rawImages.length > 0 
+                ? "Deselect All" 
+                : "Select All"}
+            </Button>
             <Button
               variant="outline"
               size="sm"
