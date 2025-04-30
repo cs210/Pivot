@@ -56,6 +56,15 @@ export default function Home() {
                   </p>
                 </div>
                 <div className="flex flex-col gap-2 min-[400px]:flex-row">
+                <Link href={user ? "/explore" : "/register"}>
+                    <Button
+                      size="lg"
+                      className="bg-cyber-gradient hover:opacity-90 geometric-text"
+                    >
+                      Explore Spaces{" "}
+                      <ArrowRight className="h-4 w-4 ml-2" />
+                    </Button>
+                  </Link>
                   <Link href={user ? "/dashboard" : "/register"}>
                     <Button
                       size="lg"

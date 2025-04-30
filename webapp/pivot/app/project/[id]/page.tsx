@@ -10,7 +10,7 @@ import ProjectHeader from "./components/ProjectHeader";
 import ProjectSettings from "./components/ProjectSettings";
 import RawImagesTab from "./components/tabs/RawImagesTab";
 import PanoramasTab from "./components/tabs/PanoramasTab";
-import { useProject } from "./hooks/useProject";
+import { useProject } from "../../../hooks/useProject";
 import PlaceLocationsTabContent from "./components/EnhancedImageGrid";
 import { Button } from "@/components/ui/button";
 import {

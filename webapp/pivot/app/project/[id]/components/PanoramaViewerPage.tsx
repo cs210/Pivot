@@ -4,8 +4,8 @@ import React, { useEffect, useState, useRef, useCallback } from "react";
 import dynamic from "next/dynamic";
 import { createClient } from "@/utils/supabase/client";
 import { MarkersPlugin } from "@photo-sphere-viewer/markers-plugin";
-import { useGrids, GridNode } from "../hooks/useGrids";
-import { usePanoramas, Panorama } from "../hooks/usePanoramas";
+import { useGrids, GridNode } from "../../../../hooks/useGrids";
+import { usePanoramas, Panorama } from "../../../../hooks/usePanoramas";
 
 // Dynamically import ReactPhotoSphereViewer to avoid SSR issues
 const ReactPhotoSphereViewer = dynamic(
