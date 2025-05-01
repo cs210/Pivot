@@ -1,5 +1,11 @@
 import React, { useState, useEffect } from "react";
 import {
+  useNavigation,
+  useIsFocused,
+  useRoute,
+  RouteProp,
+} from "@react-navigation/native"; // Added useRoute, RouteProp
+import {
   StyleSheet,
   Text,
   View,
@@ -13,19 +19,30 @@ import {
   Modal,
   TextInput,
 } from "react-native";
-import { useNavigation, useIsFocused } from "@react-navigation/native";
 import { LinearGradient } from "expo-linear-gradient";
 import { COLORS, GRADIENTS, STYLES, FONT } from "../theme";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import * as FileSystem from "expo-file-system";
-import { ImageGroup } from "../types";
+import { ImageGroup, RootStackParamList } from "../types"; // Added RootStackParamList
 import { GroupStorage } from "../utils/groupStorage";
+import { supabase } from "../utils/supabase"; // Import supabase client
+
+// Define the type for the Home screen route parameters
+type HomeScreenRouteProp = RouteProp<RootStackParamList, "Home">;
+
+// Define a type for the project data we expect
+interface Project {
+  id: string;
+  name: string;
+  // Add other project fields if needed
+}
 
 const HomeScreen = () => {
   const navigation = useNavigation();
   const isFocused = useIsFocused();
+  const route = useRoute<HomeScreenRouteProp>(); // Get route object
   const [images, setImages] = useState<string[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(true); // Keep this for image loading
   const [groupsLoading, setGroupsLoading] = useState(true);
   const IMAGE_SIZE = (Dimensions.get("window").width - 40) / 3;
   const [showHowItWorks, setShowHowItWorks] = useState(true);
@@ -44,6 +61,10 @@ const HomeScreen = () => {
   const [addToGroupModalVisible, setAddToGroupModalVisible] = useState(false);
   const [selectedGroupId, setSelectedGroupId] = useState<string | null>(null);
 
+  // State for fetched projects
+  const [userProjects, setUserProjects] = useState<Project[]>([]);
+  const [projectsLoading, setProjectsLoading] = useState(false); // Loading state for projects
+
   // Load content based on active tab
   useEffect(() => {
     if (isFocused) {
@@ -54,6 +75,53 @@ const HomeScreen = () => {
       }
     }
   }, [isFocused, activeTab]);
+
+  // New useEffect to fetch project details when projectIds are available
+  useEffect(() => {
+    const projectIds = route.params?.projectIds;
+    if (projectIds && projectIds.length > 0) {
+      console.log("Received project IDs:", projectIds);
+      fetchProjectDetails(projectIds);
+    } else {
+      // Handle case where no project IDs are passed (e.g., user not logged in or no projects)
+      setUserProjects([]); // Clear projects if none are passed
+      console.log("No project IDs received.");
+    }
+  }, [route.params?.projectIds]); // Re-run when projectIds change
+
+  // Function to fetch project details from Supabase
+  const fetchProjectDetails = async (ids: string[]) => {
+    setProjectsLoading(true);
+    setUserProjects([]); // Clear previous projects
+    try {
+      // Replace 'projects' with your actual projects table name
+      // Replace 'id' and 'name' with your actual column names if different
+      const { data, error } = await supabase
+        .from("projects") // <<< Your projects table name
+        .select("id, name") // <<< Columns to fetch (id and name)
+        .in("id", ids); // Fetch projects whose 'id' is in the provided array
+
+      if (error) {
+        console.error("Error fetching project details:", error);
+        Alert.alert("Error", "Could not fetch project details.");
+        setUserProjects([]); // Ensure projects are empty on error
+      } else if (data) {
+        console.log("Fetched project details:", data);
+        setUserProjects(data as Project[]); // Set the fetched projects
+      } else {
+        setUserProjects([]); // Handle case where data is null
+      }
+    } catch (err) {
+      console.error("Unexpected error fetching projects:", err);
+      Alert.alert(
+        "Error",
+        "An unexpected error occurred while fetching projects."
+      );
+      setUserProjects([]);
+    } finally {
+      setProjectsLoading(false);
+    }
+  };
 
   const loadImages = async () => {
     try {
@@ -290,7 +358,17 @@ const HomeScreen = () => {
       <TouchableOpacity
         style={styles.profileButton}
         onPress={() => {
-          navigation.navigate("AuthScreen" as never); // Navigate to AuthScreen
+          // Check if user is likely logged in (has projects or projectIds passed)
+          // This is a basic check, you might have a more robust auth state check
+          if (
+            userProjects.length > 0 ||
+            (route.params?.projectIds && route.params.projectIds.length > 0)
+          ) {
+            // Navigate to a Profile screen or show logout option
+            Alert.alert("Profile", "Profile/Logout functionality to be added.");
+          } else {
+            navigation.navigate("AuthScreen" as never); // Navigate to AuthScreen if not logged in
+          }
         }}
       >
         <Ionicons
@@ -306,6 +384,31 @@ const HomeScreen = () => {
           <Ionicons name="compass-outline" size={32} color={COLORS.primary} />
           <Text style={styles.logoText}>Pivot</Text>
         </View>
+
+        {/* Display User Projects if available */}
+        {projectsLoading ? (
+          <ActivityIndicator
+            color={COLORS.primary}
+            style={{ marginVertical: 10 }}
+          />
+        ) : userProjects.length > 0 ? (
+          <View style={styles.projectsContainer}>
+            <Text style={styles.projectsHeader}>Your Projects:</Text>
+            {userProjects.map((project) => (
+              <Text key={project.id} style={styles.projectName}>
+                - {project.name}
+              </Text>
+            ))}
+          </View>
+        ) : (
+          // Optionally show a message if logged in but no projects, or hide if not logged in
+          route.params?.projectIds &&
+          route.params.projectIds.length === 0 && (
+            <Text style={styles.noProjectsText}>
+              No projects found for your account.
+            </Text>
+          )
+        )}
 
         {/* Tabs */}
         <View style={styles.tabContainer}>
@@ -1240,6 +1343,34 @@ const styles = StyleSheet.create({
   },
   groupSelectList: {
     paddingBottom: 20, // Restore original padding
+  },
+
+  // Add styles for the projects display
+  projectsContainer: {
+    marginBottom: 15,
+    padding: 10,
+    backgroundColor: "rgba(255, 255, 255, 0.1)", // Semi-transparent background
+    borderRadius: 8,
+  },
+  projectsHeader: {
+    fontSize: 16,
+    fontFamily: FONT.bold,
+    color: COLORS.primary,
+    marginBottom: 5,
+  },
+  projectName: {
+    fontSize: 14,
+    fontFamily: FONT.regular,
+    color: COLORS.foreground,
+    marginLeft: 10, // Indent project names
+    marginBottom: 3,
+  },
+  noProjectsText: {
+    fontSize: 14,
+    fontFamily: FONT.regular,
+    color: COLORS.secondary,
+    textAlign: "center",
+    marginVertical: 10,
   },
 });
 
