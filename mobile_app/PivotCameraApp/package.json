@@ -10,8 +10,10 @@
   },
   "dependencies": {
     "@expo-google-fonts/chakra-petch": "^0.3.1",
+    "@react-native-async-storage/async-storage": "^2.1.2",
     "@react-navigation/native": "^7.1.6",
     "@react-navigation/native-stack": "^7.3.10",
+    "@supabase/supabase-js": "^2.49.4",
     "expo": "~52.0.43",
     "expo-app-loading": "^2.1.1",
     "expo-camera": "^16.0.18",
