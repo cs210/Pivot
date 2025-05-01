@@ -15,9 +15,7 @@ import { LinearGradient } from "expo-linear-gradient";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import { COLORS, GRADIENTS, FONT, STYLES } from "../theme";
 import { useNavigation } from "@react-navigation/native";
-
-// TODO: Import Supabase client
-// import { supabase } from '../utils/supabase';
+import { supabase } from "../utils/supabase"; // Import the configured Supabase client
 
 const AuthScreen = () => {
   const navigation = useNavigation();
@@ -49,6 +47,14 @@ const AuthScreen = () => {
 
   return (
     <LinearGradient colors={GRADIENTS.cyber} style={styles.container}>
+      {/* Back button top-left */}
+      <TouchableOpacity
+        style={styles.topLeftBackButton}
+        onPress={() => navigation.goBack()} // Use goBack for standard pop animation
+      >
+        <Ionicons name="arrow-back" size={30} color={COLORS.primary} />
+      </TouchableOpacity>
+
       <KeyboardAvoidingView
         behavior={Platform.OS === "ios" ? "padding" : "height"}
         style={styles.keyboardAvoidingView}
@@ -117,15 +123,6 @@ const AuthScreen = () => {
               </TouchableOpacity>
             </View>
           )}
-
-          {/* Back Button (Optional) */}
-          <TouchableOpacity
-            style={styles.backButton}
-            onPress={() => navigation.goBack()}
-          >
-            <Ionicons name="arrow-back" size={24} color={COLORS.secondary} />
-            <Text style={styles.backButtonText}>Back</Text>
-          </TouchableOpacity>
         </ScrollView>
       </KeyboardAvoidingView>
     </LinearGradient>
@@ -135,6 +132,13 @@ const AuthScreen = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+  },
+  topLeftBackButton: {
+    position: "absolute",
+    top: 60, // Adjust as needed for status bar height
+    left: 20,
+    zIndex: 1,
+    padding: 10, // Increase touch target
   },
   keyboardAvoidingView: {
     flex: 1,
@@ -194,17 +198,6 @@ const styles = StyleSheet.create({
   },
   buttonSpacing: {
     marginVertical: 15, // Add space when loading indicator shows
-  },
-  backButton: {
-    marginTop: 30,
-    flexDirection: "row",
-    alignItems: "center",
-  },
-  backButtonText: {
-    color: COLORS.secondary,
-    fontFamily: FONT.regular,
-    fontSize: 16,
-    marginLeft: 5,
   },
 });
 
