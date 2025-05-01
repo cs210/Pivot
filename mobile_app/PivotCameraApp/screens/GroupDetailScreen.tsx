@@ -157,6 +157,14 @@ const GroupDetailScreen = () => {
     }
   };
 
+  const handlePublishToWeb = () => {
+    // This functionality will be implemented later
+    Alert.alert(
+      "Coming Soon",
+      "Publishing to web folder will be implemented in a future update."
+    );
+  };
+
   if (loading) {
     return (
       <LinearGradient colors={GRADIENTS.cyber} style={styles.container}>
@@ -210,21 +218,32 @@ const GroupDetailScreen = () => {
         </View>
       ) : null}
 
-      {/* Image count */}
+      {/* Image count and actions */}
       <View style={styles.statsContainer}>
         <Text style={styles.statsText}>
           {group.imageUris.length}{" "}
           {group.imageUris.length === 1 ? "image" : "images"}
         </Text>
-        {!editMode && (
-          <TouchableOpacity
-            style={styles.addImagesButton}
-            onPress={openAddImagesModal}
-          >
-            <Ionicons name="add" size={20} color={COLORS.primary} />
-            <Text style={styles.addImagesText}>Add Images</Text>
-          </TouchableOpacity>
-        )}
+        <View style={styles.actionsContainer}>
+          {!editMode && (
+            <>
+              <TouchableOpacity
+                style={styles.publishButton}
+                onPress={handlePublishToWeb}
+              >
+                <Ionicons name="cloud-upload" size={18} color={COLORS.primaryForeground} />
+                <Text style={styles.publishButtonText}>Publish to Folder on Web</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.addImagesButton}
+                onPress={openAddImagesModal}
+              >
+                <Ionicons name="add" size={20} color={COLORS.primary} />
+                <Text style={styles.addImagesText}>Add Images</Text>
+              </TouchableOpacity>
+            </>
+          )}
+        </View>
       </View>
 
       {/* Gallery */}
@@ -441,11 +460,30 @@ const styles = StyleSheet.create({
     opacity: 0.8,
   },
   statsContainer: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
+    flexDirection: "column",
     paddingHorizontal: 20,
     paddingBottom: 10,
+    gap: 10,
+  },
+  actionsContainer: {
+    flexDirection: "row",
+    justifyContent: "flex-end",
+    gap: 10,
+  },
+  publishButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: COLORS.primary,
+    paddingVertical: 8,
+    paddingHorizontal: 14,
+    borderRadius: 15,
+    justifyContent: "center",
+  },
+  publishButtonText: {
+    color: COLORS.primaryForeground,
+    fontFamily: FONT.bold,
+    fontSize: 14,
+    marginLeft: 5,
   },
   statsText: {
     fontSize: 16,
