@@ -16,6 +16,7 @@ export interface RawImage {
   uploaded_at: string;
   updated_at: string;
   url?: string; // URL for displaying the image in the UI
+  thumbnail_url?: string; // URL for displaying the thumbnail
 }
 
 export function useRawImages(projectId: string) {
@@ -54,7 +55,7 @@ export function useRawImages(projectId: string) {
       const imagesWithUrls = await Promise.all((data || []).map(async (img) => {
         // Get a URL for the image from storage. Signed URL for private bucket.
         const { data: urlData } = await supabase.storage
-          .from("raw-images")
+          .from("thumbnails")
           .createSignedUrl(img.storage_path, 3600); // 1 hour expiration
 
         return {
@@ -114,12 +115,23 @@ export function useRawImages(projectId: string) {
         throw new Error("Image URL is undefined");
       }
       
+      // if (!imageToDelete.thumbnail_url) {
+      //   throw new Error("Thumbnail URL is undefined");
+      // }
+
       const url = new URL(imageToDelete.url);
       const storagePath = url.pathname.split("/").slice(2).join("/");
 
       if (storagePath) {
         const { error: storageError } = await supabase.storage
           .from("raw_images")
+          .remove([storagePath]);
+
+        if (storageError) throw storageError;
+      }
+      if (storagePath) {
+        const { error: storageError } = await supabase.storage
+          .from("thumbnails")
           .remove([storagePath]);
 
         if (storageError) throw storageError;
