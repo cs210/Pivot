@@ -19,6 +19,7 @@ import * as FileSystem from "expo-file-system";
 import { ImageGroup } from "../types";
 import { GroupStorage } from "../utils/groupStorage";
 import { supabase } from "../utils/supabase"; // Import the centralized Supabase client
+import { decode as atob } from "base-64";
 
 // Define a type for the project data we expect
 interface Project {
@@ -324,18 +325,31 @@ const GroupDetailScreen = () => {
         const base64 = await FileSystem.readAsStringAsync(imageUri, {
           encoding: FileSystem.EncodingType.Base64,
         });
-
-        // Convert base64 to blob
-        const blob = await fetch(`data:image/jpeg;base64,${base64}`).then((r) =>
-          r.blob()
+        // Add logs for base64 preview
+        console.log("Reading file as base64 from:", imageUri);
+        console.log(
+          "Base64 string preview (first 100 chars):",
+          base64.substring(0, 100)
         );
+        console.log(`Base64 length: ${base64.length}`);
+
+        function base64ToBinary(base64String: string) {
+          const raw = atob(base64String);
+          const outputArray = new Uint8Array(raw.length);
+          for (let i = 0; i < raw.length; i++) {
+            outputArray[i] = raw.charCodeAt(i);
+          }
+          return outputArray;
+        }
+
+        const binaryData = base64ToBinary(base64);
 
         console.log(`Uploading file: ${fileName} to path: ${filePath}`);
 
-        // Upload to Supabase storage
         const { data: uploadData, error: uploadError } = await supabase.storage
-          .from("raw-images") // Must match the bucket name in Supabase
-          .upload(filePath, blob, {
+          .from("raw-images")
+          .upload(filePath, binaryData, {
+            contentType: "image/jpeg",
             cacheControl: "3600",
             upsert: true,
           });
@@ -346,6 +360,9 @@ const GroupDetailScreen = () => {
         }
 
         console.log("File uploaded successfully:", uploadData?.path);
+        if (!uploadError) {
+          console.log("Upload success, supabase returned:", uploadData);
+        }
 
         // Insert record into database with all required fields
         const { data, error } = await supabase
