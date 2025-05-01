@@ -40,6 +40,10 @@ const HomeScreen = () => {
   const [groupDescription, setGroupDescription] = useState("");
   const [editingGroup, setEditingGroup] = useState<ImageGroup | null>(null);
 
+  // Add this new state for the add to group modal
+  const [addToGroupModalVisible, setAddToGroupModalVisible] = useState(false);
+  const [selectedGroupId, setSelectedGroupId] = useState<string | null>(null);
+
   // Load content based on active tab
   useEffect(() => {
     if (isFocused) {
@@ -200,6 +204,23 @@ const HomeScreen = () => {
   // Open group details
   const openGroup = (group: ImageGroup) => {
     navigation.navigate("GroupDetail" as never, { groupId: group.id } as never);
+  };
+
+  // Add this new function to handle adding selected images to a group
+  const addSelectedImagesToGroup = async () => {
+    if (!selectedGroupId || selectedImages.length === 0) return;
+
+    try {
+      await GroupStorage.addImagesToGroup(selectedGroupId, selectedImages);
+      setSelectedImages([]);
+      setAddToGroupModalVisible(false);
+      setSelectedGroupId(null);
+      setEditMode(false);
+      Alert.alert("Success", "Images added to group");
+    } catch (error) {
+      console.error("Error adding images to group:", error);
+      Alert.alert("Error", "Failed to add images to group");
+    }
   };
 
   // Render a group item
@@ -504,14 +525,29 @@ const HomeScreen = () => {
       {/* Fixed camera button */}
       <View style={styles.cameraButtonContainer}>
         {activeTab === "recents" && editMode && selectedImages.length > 0 ? (
-          <TouchableOpacity
-            style={styles.deleteSelectedButton}
-            onPress={deleteSelectedImages}
-          >
-            <Text style={styles.deleteSelectedText}>
-              Delete Selected ({selectedImages.length})
-            </Text>
-          </TouchableOpacity>
+          <View style={styles.editActionsContainer}>
+            <TouchableOpacity
+              style={styles.addToGroupButton}
+              onPress={() => {
+                // Load groups before showing modal
+                loadGroups().then(() => {
+                  setAddToGroupModalVisible(true);
+                });
+              }}
+            >
+              <Text style={styles.addToGroupText}>
+                Add to Group ({selectedImages.length})
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.deleteSelectedButton}
+              onPress={deleteSelectedImages}
+            >
+              <Text style={styles.deleteSelectedText}>
+                Delete ({selectedImages.length})
+              </Text>
+            </TouchableOpacity>
+          </View>
         ) : (
           <TouchableOpacity
             style={styles.cameraButton}
@@ -574,6 +610,109 @@ const HomeScreen = () => {
                   {editingGroup ? "Save" : "Create"}
                 </Text>
               </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Add to Group Modal */}
+      <Modal
+        animationType="slide"
+        transparent={true}
+        visible={addToGroupModalVisible}
+        onRequestClose={() => setAddToGroupModalVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={[styles.modalContent, { backgroundColor: COLORS.card }]}>
+            <Text style={[styles.modalTitle, { color: COLORS.foreground }]}>
+              Add to Group
+            </Text>
+            <Text style={styles.modalSubtitle}>
+              Select a group to add {selectedImages.length} image
+              {selectedImages.length !== 1 ? "s" : ""}
+            </Text>
+
+            {groups.length === 0 ? (
+              <View style={styles.noGroupsContainer}>
+                <Ionicons
+                  name="folder-open"
+                  size={40}
+                  color={COLORS.secondary}
+                />
+                <Text style={styles.noGroupsText}>No groups available</Text>
+                <TouchableOpacity
+                  style={styles.createGroupFromModalButton}
+                  onPress={() => {
+                    setAddToGroupModalVisible(false);
+                    setEditingGroup(null);
+                    setGroupName("");
+                    setGroupDescription("");
+                    setModalVisible(true);
+                  }}
+                >
+                  <Text style={styles.createGroupFromModalText}>
+                    Create New Group
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            ) : (
+              <FlatList
+                data={groups}
+                keyExtractor={(item) => item.id}
+                renderItem={({ item }) => (
+                  <TouchableOpacity
+                    style={[
+                      styles.groupSelectItem,
+                      selectedGroupId === item.id && styles.selectedGroupItem,
+                    ]}
+                    onPress={() => setSelectedGroupId(item.id)}
+                  >
+                    <View style={styles.groupSelectInfo}>
+                      <Text style={styles.groupSelectName}>{item.name}</Text>
+                      <Text style={styles.groupSelectCount}>
+                        {item.imageUris.length} image
+                        {item.imageUris.length !== 1 ? "s" : ""}
+                      </Text>
+                    </View>
+                    {selectedGroupId === item.id && (
+                      <Ionicons
+                        name="checkmark-circle"
+                        size={24}
+                        color={COLORS.primary}
+                      />
+                    )}
+                  </TouchableOpacity>
+                )}
+                contentContainerStyle={styles.groupSelectList}
+              />
+            )}
+
+            <View style={styles.modalButtons}>
+              <TouchableOpacity
+                style={[styles.modalButton, { borderColor: COLORS.border }]}
+                onPress={() => setAddToGroupModalVisible(false)}
+              >
+                <Text style={{ color: COLORS.primary }}>Cancel</Text>
+              </TouchableOpacity>
+
+              {groups.length > 0 && (
+                <TouchableOpacity
+                  style={[
+                    styles.modalButton,
+                    {
+                      backgroundColor: selectedGroupId
+                        ? COLORS.primary
+                        : COLORS.muted,
+                    },
+                  ]}
+                  disabled={!selectedGroupId}
+                  onPress={addSelectedImagesToGroup}
+                >
+                  <Text style={{ color: COLORS.primaryForeground }}>
+                    Add to Group
+                  </Text>
+                </TouchableOpacity>
+              )}
             </View>
           </View>
         </View>
@@ -1004,6 +1143,84 @@ const styles = StyleSheet.create({
     top: 10,
     right: 10,
     zIndex: 1,
+  },
+  editActionsContainer: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    width: "80%",
+  },
+  addToGroupButton: {
+    backgroundColor: COLORS.primary,
+    borderRadius: 25,
+    paddingVertical: 12,
+    paddingHorizontal: 20,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  addToGroupText: {
+    color: "white",
+    fontFamily: FONT.bold,
+    fontSize: 16,
+  },
+  modalSubtitle: {
+    fontSize: 16,
+    fontFamily: FONT.regular,
+    marginBottom: 20,
+    textAlign: "center",
+    color: COLORS.secondary,
+  },
+  noGroupsContainer: {
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 20,
+  },
+  noGroupsText: {
+    fontSize: 16,
+    color: COLORS.secondary,
+    marginTop: 10,
+    fontFamily: FONT.regular,
+  },
+  createGroupFromModalButton: {
+    backgroundColor: COLORS.primary,
+    paddingVertical: 12,
+    paddingHorizontal: 20,
+    borderRadius: 8,
+    marginTop: 20,
+  },
+  createGroupFromModalText: {
+    color: COLORS.primaryForeground,
+    fontFamily: FONT.bold,
+    fontSize: 16,
+  },
+  groupSelectItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingVertical: 12,
+    paddingHorizontal: 20,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    marginBottom: 10,
+  },
+  selectedGroupItem: {
+    backgroundColor: COLORS.muted,
+  },
+  groupSelectInfo: {
+    flexDirection: "column",
+  },
+  groupSelectName: {
+    fontSize: 16,
+    fontFamily: FONT.bold,
+    color: COLORS.foreground,
+  },
+  groupSelectCount: {
+    fontSize: 14,
+    fontFamily: FONT.regular,
+    color: COLORS.secondary,
+  },
+  groupSelectList: {
+    paddingBottom: 20,
   },
 });
 
