@@ -286,6 +286,20 @@ const HomeScreen = () => {
         <Ionicons name="help-circle" size={50} color={COLORS.primary} />
       </TouchableOpacity>
 
+      {/* Profile button in top right */}
+      <TouchableOpacity
+        style={styles.profileButton}
+        onPress={() => {
+          navigation.navigate("AuthScreen" as never); // Navigate to AuthScreen
+        }}
+      >
+        <Ionicons
+          name="person-circle-outline"
+          size={50}
+          color={COLORS.primary}
+        />
+      </TouchableOpacity>
+
       <View style={styles.fixedContent}>
         {/* Logo and app name */}
         <View style={[styles.logoContainer, { alignSelf: "center" }]}>
@@ -1132,6 +1146,13 @@ const styles = StyleSheet.create({
     position: "absolute",
     top: 50,
     left: 10,
+    zIndex: 1,
+    padding: 5, // Add some padding to make the touch target larger
+  },
+  profileButton: {
+    position: "absolute",
+    top: 50,
+    right: 10,
     zIndex: 1,
     padding: 5, // Add some padding to make the touch target larger
   },
