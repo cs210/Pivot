@@ -160,7 +160,7 @@ export default function ImageGrid({
               <p className="text-muted-foreground mb-4">Uploading images...</p>
             </div>
           ) : viewMode === "grid" ? (
-            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 xl:grid-cols-8 gap-4">
               {imagesToShow.map((image) => (
                 <Card
                   key={image.id}
