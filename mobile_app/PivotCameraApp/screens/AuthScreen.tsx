@@ -14,11 +14,13 @@ import {
 import { LinearGradient } from "expo-linear-gradient";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import { COLORS, GRADIENTS, FONT, STYLES } from "../theme";
-import { useNavigation } from "@react-navigation/native";
+import { useNavigation, NavigationProp } from "@react-navigation/native"; // Import NavigationProp
 import { supabase } from "../utils/supabase"; // Import the configured Supabase client
+import { RootStackParamList } from "../types"; // Assuming you have a types file defining your navigation params
 
 const AuthScreen = () => {
-  const navigation = useNavigation();
+  // Define the navigation prop type more specifically
+  const navigation = useNavigation<NavigationProp<RootStackParamList>>();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
@@ -54,13 +56,16 @@ const AuthScreen = () => {
         console.error("Error fetching projects:", projectsError);
         Alert.alert("Error", "Could not fetch user projects.");
         // Decide if you still want to navigate or show a more specific error
+        // Maybe navigate back without project IDs?
+        // navigation.goBack(); // Or navigate to Home with empty array
+        navigation.navigate("Home", { projectIds: [] });
       } else {
-        const projectIds = projectsData.map((p) => p.id);
-        Alert.alert("User Project IDs", projectIds.join(", ")); // Display IDs in an alert
-        // TODO: Do something with the projectIds (e.g., store in state, pass to next screen)
+        const fetchedProjectIds = projectsData.map((p) => p.id);
+        console.log("User Project IDs:", fetchedProjectIds);
 
-        // Navigate back after successful login and project fetch
-        navigation.goBack();
+        // Navigate to Home screen and pass projectIds as params
+        // Ensure 'Home' is the correct route name in your navigator
+        navigation.navigate("Home", { projectIds: fetchedProjectIds });
       }
     } else {
       // Handle case where user data is unexpectedly null after successful login
@@ -70,7 +75,7 @@ const AuthScreen = () => {
       );
     }
 
-    setLoading(false);
+    setLoading(false); // Ensure loading is set to false in all paths
   };
 
   const handleSignUp = async () => {
