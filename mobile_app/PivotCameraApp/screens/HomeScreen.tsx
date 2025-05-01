@@ -626,60 +626,74 @@ const HomeScreen = () => {
               {selectedImages.length !== 1 ? "s" : ""}
             </Text>
 
-            {groups.length === 0 ? (
-              <View style={styles.noGroupsContainer}>
-                <Ionicons
-                  name="folder-open"
-                  size={40}
-                  color={COLORS.secondary}
-                />
-                <Text style={styles.noGroupsText}>No groups available</Text>
-                <TouchableOpacity
-                  style={styles.createGroupFromModalButton}
-                  onPress={() => {
-                    setAddToGroupModalVisible(false);
-                    setEditingGroup(null);
-                    setGroupName("");
-                    setGroupDescription("");
-                    setModalVisible(true);
-                  }}
-                >
-                  <Text style={styles.createGroupFromModalText}>
-                    Create New Group
-                  </Text>
-                </TouchableOpacity>
-              </View>
+            {groupsLoading ? ( // Added loading check for consistency
+              <ActivityIndicator size="small" color={COLORS.primary} />
             ) : (
               <FlatList
-                data={groups}
+                // Add a special item for creating a new group
+                data={[
+                  ...groups,
+                  { id: "create_new_group", name: "Create New Group" },
+                ]}
                 keyExtractor={(item) => item.id}
-                renderItem={({ item }) => (
-                  <TouchableOpacity
-                    style={[
-                      styles.groupSelectItem,
-                      selectedGroupId === item.id && styles.selectedGroupItem,
-                    ]}
-                    onPress={() => setSelectedGroupId(item.id)}
-                  >
-                    <View style={styles.groupSelectInfo}>
-                      <Text style={styles.groupSelectName}>{item.name}</Text>
-                      <Text style={styles.groupSelectCount}>
-                        {item.imageUris.length} image
-                        {item.imageUris.length !== 1 ? "s" : ""}
-                      </Text>
-                    </View>
-                    {selectedGroupId === item.id && (
-                      <Ionicons
-                        name="checkmark-circle"
-                        size={24}
-                        color={COLORS.primary}
-                      />
-                    )}
-                  </TouchableOpacity>
-                )}
+                renderItem={({ item }) => {
+                  // Check if it's the special 'create new group' item
+                  if (item.id === "create_new_group") {
+                    return (
+                      <TouchableOpacity
+                        style={[
+                          styles.createGroupFromModalButton,
+                          { marginTop: 10 },
+                        ]} // Reuse style
+                        onPress={() => {
+                          setAddToGroupModalVisible(false); // Close current modal
+                          setEditingGroup(null);
+                          setGroupName("");
+                          setGroupDescription("");
+                          setModalVisible(true); // Open create group modal
+                        }}
+                      >
+                        <Text style={styles.createGroupFromModalText}>
+                          <Ionicons
+                            name="add-circle-outline"
+                            size={16}
+                            color={COLORS.primaryForeground}
+                          />{" "}
+                          {item.name}
+                        </Text>
+                      </TouchableOpacity>
+                    );
+                  }
+                  // Otherwise, render a regular group item
+                  return (
+                    <TouchableOpacity
+                      style={[
+                        styles.groupSelectItem,
+                        selectedGroupId === item.id && styles.selectedGroupItem,
+                      ]}
+                      onPress={() => setSelectedGroupId(item.id)}
+                    >
+                      <View style={styles.groupSelectInfo}>
+                        <Text style={styles.groupSelectName}>{item.name}</Text>
+                        <Text style={styles.groupSelectCount}>
+                          {item.imageUris.length} image
+                          {item.imageUris.length !== 1 ? "s" : ""}
+                        </Text>
+                      </View>
+                      {selectedGroupId === item.id && (
+                        <Ionicons
+                          name="checkmark-circle"
+                          size={24}
+                          color={COLORS.primary}
+                        />
+                      )}
+                    </TouchableOpacity>
+                  );
+                }}
                 contentContainerStyle={styles.groupSelectList}
               />
             )}
+            {/* Removed the standalone button from here */}
 
             <View style={styles.modalButtons}>
               <TouchableOpacity
@@ -1173,6 +1187,7 @@ const styles = StyleSheet.create({
     color: COLORS.primaryForeground,
     fontFamily: FONT.bold,
     fontSize: 16,
+    textAlign: "center", // Center text within the button
   },
   groupSelectItem: {
     flexDirection: "row",
@@ -1202,7 +1217,7 @@ const styles = StyleSheet.create({
     color: COLORS.secondary,
   },
   groupSelectList: {
-    paddingBottom: 20,
+    paddingBottom: 20, // Restore original padding
   },
 });
 
