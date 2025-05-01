@@ -19,16 +19,31 @@ import * as FileSystem from "expo-file-system";
 import { ImageGroup } from "../types";
 import { GroupStorage } from "../utils/groupStorage";
 
+// Define a type for the project data we expect
+interface Project {
+  id: string;
+  name: string;
+  // Add other project fields if needed
+}
+
 type GroupDetailParams = {
   GroupDetail: {
     groupId: string;
+    projects?: Project[]; // Adjust this type based on your actual project type
   };
 };
 
 const GroupDetailScreen = () => {
   const navigation = useNavigation();
   const route = useRoute<RouteProp<GroupDetailParams, "GroupDetail">>();
-  const { groupId } = route.params;
+  const { groupId, projects } = route.params;
+
+  // Log projects for debugging
+  useEffect(() => {
+    if (projects) {
+      console.log("Projects received in GroupDetail:", projects);
+    }
+  }, [projects]);
 
   const [group, setGroup] = useState<ImageGroup | null>(null);
   const [loading, setLoading] = useState(true);
@@ -218,6 +233,25 @@ const GroupDetailScreen = () => {
         </View>
       ) : null}
 
+      {/* Projects Section - Display when available */}
+      {projects && projects.length > 0 && (
+        <View style={styles.projectsContainer}>
+          <Text style={styles.projectsTitle}>Available Projects:</Text>
+          <FlatList
+            horizontal
+            data={projects}
+            keyExtractor={(item) => item.id}
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.projectsListContent}
+            renderItem={({ item }) => (
+              <TouchableOpacity style={styles.projectItem}>
+                <Text style={styles.projectItemText}>{item.name}</Text>
+              </TouchableOpacity>
+            )}
+          />
+        </View>
+      )}
+
       {/* Image count and actions */}
       <View style={styles.statsContainer}>
         <Text style={styles.statsText}>
@@ -231,8 +265,14 @@ const GroupDetailScreen = () => {
                 style={styles.publishButton}
                 onPress={handlePublishToWeb}
               >
-                <Ionicons name="cloud-upload" size={18} color={COLORS.primaryForeground} />
-                <Text style={styles.publishButtonText}>Publish to Folder on Web</Text>
+                <Ionicons
+                  name="cloud-upload"
+                  size={18}
+                  color={COLORS.primaryForeground}
+                />
+                <Text style={styles.publishButtonText}>
+                  Publish to Folder on Web
+                </Text>
               </TouchableOpacity>
               <TouchableOpacity
                 style={styles.addImagesButton}
@@ -660,6 +700,30 @@ const styles = StyleSheet.create({
     color: COLORS.primaryForeground,
     fontFamily: FONT.bold,
     fontSize: 16,
+  },
+  projectsContainer: {
+    paddingHorizontal: 20,
+    paddingBottom: 15,
+  },
+  projectsTitle: {
+    fontSize: 18,
+    fontFamily: FONT.bold,
+    color: COLORS.foreground,
+    marginBottom: 10,
+  },
+  projectsListContent: {
+    paddingVertical: 10,
+  },
+  projectItem: {
+    backgroundColor: COLORS.card,
+    padding: 10,
+    borderRadius: 8,
+    marginRight: 10,
+  },
+  projectItemText: {
+    color: COLORS.primary,
+    fontFamily: FONT.bold,
+    fontSize: 14,
   },
 });
 

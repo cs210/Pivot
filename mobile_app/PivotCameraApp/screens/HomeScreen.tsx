@@ -271,7 +271,11 @@ const HomeScreen = () => {
 
   // Open group details
   const openGroup = (group: ImageGroup) => {
-    navigation.navigate("GroupDetail" as never, { groupId: group.id } as never);
+    // console.log("Opening group:", group);
+    navigation.navigate("GroupDetail", {
+      groupId: group.id,
+      projects: userProjects,
+    });
   };
 
   // Add this new function to handle adding selected images to a group
