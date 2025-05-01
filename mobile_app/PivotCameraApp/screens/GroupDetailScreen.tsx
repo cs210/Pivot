@@ -55,6 +55,10 @@ const GroupDetailScreen = () => {
     string[]
   >([]);
   const [loadingAvailableImages, setLoadingAvailableImages] = useState(false);
+  const [publishModalVisible, setPublishModalVisible] = useState(false);
+  const [selectedProjectId, setSelectedProjectId] = useState<string | null>(
+    null
+  );
 
   const IMAGE_SIZE = (Dimensions.get("window").width - 40) / 3;
 
@@ -173,11 +177,29 @@ const GroupDetailScreen = () => {
   };
 
   const handlePublishToWeb = () => {
-    // This functionality will be implemented later
+    // Open the modal to select a project
+    setPublishModalVisible(true);
+  };
+
+  const handleProjectSelect = (projectId: string) => {
+    setSelectedProjectId(projectId);
+  };
+
+  const handlePublishConfirm = () => {
+    if (!selectedProjectId) {
+      Alert.alert("Error", "Please select a project first");
+      return;
+    }
+
+    // For now, just close the modal and show a success message
     Alert.alert(
       "Coming Soon",
-      "Publishing to web folder will be implemented in a future update."
+      `Publishing to project "${
+        projects?.find((p) => p.id === selectedProjectId)?.name
+      }" will be implemented in a future update.`
     );
+    setPublishModalVisible(false);
+    setSelectedProjectId(null);
   };
 
   if (loading) {
@@ -449,6 +471,113 @@ const GroupDetailScreen = () => {
                 )}
               </>
             )}
+          </View>
+        </View>
+      </Modal>
+
+      {/* Publish to Web Modal */}
+      <Modal
+        animationType="slide"
+        transparent={true}
+        visible={publishModalVisible}
+        onRequestClose={() => setPublishModalVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Publish to Web Folder</Text>
+              <TouchableOpacity
+                style={styles.modalCloseButton}
+                onPress={() => {
+                  setPublishModalVisible(false);
+                  setSelectedProjectId(null);
+                }}
+              >
+                <Ionicons name="close" size={24} color={COLORS.secondary} />
+              </TouchableOpacity>
+            </View>
+
+            <View style={styles.publishModalContent}>
+              <Text style={styles.modalSubtitle}>
+                Select a project to publish images from "{group.name}"
+              </Text>
+
+              {!projects || projects.length === 0 ? (
+                <View style={styles.emptyGallery}>
+                  <Ionicons
+                    name="folder-outline"
+                    size={48}
+                    color={COLORS.secondary}
+                  />
+                  <Text style={styles.emptyText}>No projects available</Text>
+                </View>
+              ) : (
+                <FlatList
+                  data={projects}
+                  keyExtractor={(item) => item.id}
+                  contentContainerStyle={styles.projectsListVertical}
+                  renderItem={({ item }) => (
+                    <TouchableOpacity
+                      style={[
+                        styles.projectListItem,
+                        selectedProjectId === item.id &&
+                          styles.projectListItemSelected,
+                      ]}
+                      onPress={() => handleProjectSelect(item.id)}
+                    >
+                      <View style={styles.projectListItemContent}>
+                        <Ionicons
+                          name="folder"
+                          size={24}
+                          color={
+                            selectedProjectId === item.id
+                              ? COLORS.primaryForeground
+                              : COLORS.primary
+                          }
+                        />
+                        <Text
+                          style={[
+                            styles.projectListItemText,
+                            selectedProjectId === item.id &&
+                              styles.projectListItemTextSelected,
+                          ]}
+                        >
+                          {item.name}
+                        </Text>
+                      </View>
+                      <Ionicons
+                        name={
+                          selectedProjectId === item.id
+                            ? "checkmark-circle"
+                            : "ellipse-outline"
+                        }
+                        size={24}
+                        color={
+                          selectedProjectId === item.id
+                            ? COLORS.primaryForeground
+                            : COLORS.primary
+                        }
+                      />
+                    </TouchableOpacity>
+                  )}
+                />
+              )}
+
+              {projects && projects.length > 0 && (
+                <TouchableOpacity
+                  style={[
+                    styles.publishConfirmButton,
+                    !selectedProjectId && styles.publishConfirmButtonDisabled,
+                  ]}
+                  onPress={handlePublishConfirm}
+                  disabled={!selectedProjectId}
+                >
+                  <Text style={styles.publishConfirmButtonText}>
+                    Publish to Selected Project
+                  </Text>
+                </TouchableOpacity>
+              )}
+            </View>
           </View>
         </View>
       </Modal>
@@ -724,6 +853,54 @@ const styles = StyleSheet.create({
     color: COLORS.primary,
     fontFamily: FONT.bold,
     fontSize: 14,
+  },
+  publishModalContent: {
+    flex: 1,
+    padding: 20,
+  },
+  projectsListVertical: {
+    paddingVertical: 10,
+  },
+  projectListItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    backgroundColor: COLORS.card,
+    padding: 15,
+    borderRadius: 8,
+    marginBottom: 10,
+  },
+  projectListItemSelected: {
+    backgroundColor: COLORS.primary,
+  },
+  projectListItemContent: {
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  projectListItemText: {
+    color: COLORS.primary,
+    fontFamily: FONT.bold,
+    fontSize: 16,
+    marginLeft: 10,
+  },
+  projectListItemTextSelected: {
+    color: COLORS.primaryForeground,
+  },
+  publishConfirmButton: {
+    backgroundColor: COLORS.primary,
+    paddingVertical: 15,
+    paddingHorizontal: 20,
+    borderRadius: 10,
+    alignItems: "center",
+    marginTop: 20,
+  },
+  publishConfirmButtonDisabled: {
+    backgroundColor: COLORS.secondary,
+  },
+  publishConfirmButtonText: {
+    color: COLORS.primaryForeground,
+    fontFamily: FONT.bold,
+    fontSize: 16,
   },
 });
 
