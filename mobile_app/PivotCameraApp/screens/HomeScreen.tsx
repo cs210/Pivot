@@ -10,28 +10,46 @@ import {
   Dimensions,
   ScrollView,
   Alert,
+  Modal,
+  TextInput,
 } from "react-native";
 import { useNavigation, useIsFocused } from "@react-navigation/native";
 import { LinearGradient } from "expo-linear-gradient";
 import { COLORS, GRADIENTS, STYLES, FONT } from "../theme";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import * as FileSystem from "expo-file-system";
+import { ImageGroup } from "../types";
+import { GroupStorage } from "../utils/groupStorage";
 
 const HomeScreen = () => {
   const navigation = useNavigation();
   const isFocused = useIsFocused();
   const [images, setImages] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
+  const [groupsLoading, setGroupsLoading] = useState(true);
   const IMAGE_SIZE = (Dimensions.get("window").width - 40) / 3;
   const [showHowItWorks, setShowHowItWorks] = useState(true);
   const [editMode, setEditMode] = useState(false);
   const [selectedImages, setSelectedImages] = useState<string[]>([]);
-  // Add state for active tab
   const [activeTab, setActiveTab] = useState("recents");
 
+  // Group related states
+  const [groups, setGroups] = useState<ImageGroup[]>([]);
+  const [modalVisible, setModalVisible] = useState(false);
+  const [groupName, setGroupName] = useState("");
+  const [groupDescription, setGroupDescription] = useState("");
+  const [editingGroup, setEditingGroup] = useState<ImageGroup | null>(null);
+
+  // Load content based on active tab
   useEffect(() => {
-    loadImages();
-  }, [isFocused]);
+    if (isFocused) {
+      if (activeTab === "recents") {
+        loadImages();
+      } else if (activeTab === "groups") {
+        loadGroups();
+      }
+    }
+  }, [isFocused, activeTab]);
 
   const loadImages = async () => {
     try {
@@ -96,6 +114,145 @@ const HomeScreen = () => {
     if (editMode) {
       setSelectedImages([]);
     }
+  };
+
+  // Load groups function
+  const loadGroups = async () => {
+    try {
+      setGroupsLoading(true);
+      const loadedGroups = await GroupStorage.loadGroups();
+      setGroups(loadedGroups);
+    } catch (error) {
+      console.error("Error loading groups:", error);
+      Alert.alert("Error", "Failed to load groups");
+    } finally {
+      setGroupsLoading(false);
+    }
+  };
+
+  // Create/Edit group function
+  const handleCreateGroup = async () => {
+    if (!groupName.trim()) {
+      Alert.alert("Error", "Group name is required");
+      return;
+    }
+
+    try {
+      if (editingGroup) {
+        // Update existing group
+        const updatedGroup = {
+          ...editingGroup,
+          name: groupName,
+          description: groupDescription,
+        };
+        await GroupStorage.updateGroup(updatedGroup);
+      } else {
+        // Create new group
+        await GroupStorage.createGroup(groupName, groupDescription);
+      }
+
+      // Reset form and close modal
+      setGroupName("");
+      setGroupDescription("");
+      setEditingGroup(null);
+      setModalVisible(false);
+
+      // Reload groups
+      await loadGroups();
+    } catch (error) {
+      console.error("Error creating group:", error);
+      Alert.alert("Error", "Failed to create group");
+    }
+  };
+
+  // Delete group function
+  const handleDeleteGroup = (group: ImageGroup) => {
+    Alert.alert(
+      "Delete Group",
+      `Are you sure you want to delete the group "${group.name}"? This won't delete the images.`,
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Delete",
+          style: "destructive",
+          onPress: async () => {
+            try {
+              await GroupStorage.deleteGroup(group.id);
+              await loadGroups();
+            } catch (error) {
+              console.error("Error deleting group:", error);
+              Alert.alert("Error", "Failed to delete group");
+            }
+          },
+        },
+      ]
+    );
+  };
+
+  // Edit group function
+  const handleEditGroup = (group: ImageGroup) => {
+    setEditingGroup(group);
+    setGroupName(group.name);
+    setGroupDescription(group.description);
+    setModalVisible(true);
+  };
+
+  // Open group details
+  const openGroup = (group: ImageGroup) => {
+    navigation.navigate("GroupDetail" as never, { groupId: group.id } as never);
+  };
+
+  // Render a group item
+  const renderGroupItem = ({ item }: { item: ImageGroup }) => {
+    // Get the first image from the group to display as thumbnail
+    const thumbnailUri = item.imageUris.length > 0 ? item.imageUris[0] : null;
+    const imageCount = item.imageUris.length;
+
+    return (
+      <TouchableOpacity
+        style={[styles.groupCard, STYLES.card]}
+        onPress={() => openGroup(item)}
+        activeOpacity={0.7}
+      >
+        <View style={styles.thumbnailContainer}>
+          {thumbnailUri ? (
+            <Image source={{ uri: thumbnailUri }} style={styles.thumbnail} />
+          ) : (
+            <View style={styles.placeholderThumbnail}>
+              <Ionicons name="images" size={40} color={COLORS.secondary} />
+            </View>
+          )}
+          <View style={styles.imageCountBadge}>
+            <Text style={styles.imageCountText}>{imageCount}</Text>
+          </View>
+        </View>
+
+        <View style={styles.groupInfo}>
+          <Text style={styles.groupName} numberOfLines={1}>
+            {item.name}
+          </Text>
+          <Text style={styles.groupDescription} numberOfLines={2}>
+            {item.description || "No description"}
+          </Text>
+        </View>
+
+        <View style={styles.groupActions}>
+          <TouchableOpacity
+            style={styles.actionButton}
+            onPress={() => handleEditGroup(item)}
+          >
+            <Ionicons name="pencil" size={20} color={COLORS.primary} />
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.actionButton}
+            onPress={() => handleDeleteGroup(item)}
+          >
+            <Ionicons name="trash-outline" size={20} color={COLORS.secondary} />
+          </TouchableOpacity>
+        </View>
+      </TouchableOpacity>
+    );
   };
 
   return (
@@ -218,7 +375,7 @@ const HomeScreen = () => {
         )}
 
         {/* Gallery header with Edit button (only for Recents tab) */}
-        {activeTab === "recents" && (
+        {activeTab === "recents" ? (
           <View style={styles.headerRow}>
             <Text style={styles.galleryHeader}>Recent Captures</Text>
             {images.length > 0 && (
@@ -232,6 +389,22 @@ const HomeScreen = () => {
               </TouchableOpacity>
             )}
           </View>
+        ) : (
+          <View style={styles.headerRow}>
+            <Text style={styles.galleryHeader}>My Groups</Text>
+            <TouchableOpacity
+              style={styles.createGroupButton}
+              onPress={() => {
+                setEditingGroup(null);
+                setGroupName("");
+                setGroupDescription("");
+                setModalVisible(true);
+              }}
+            >
+              <Ionicons name="add-circle" size={20} color={COLORS.primary} />
+              <Text style={styles.createGroupText}>New Group</Text>
+            </TouchableOpacity>
+          </View>
         )}
       </View>
 
@@ -242,6 +415,7 @@ const HomeScreen = () => {
             <ActivityIndicator size="large" color={COLORS.primary} />
           ) : (
             <FlatList
+              key="recentsGrid"
               data={images}
               keyExtractor={(uri) => uri}
               numColumns={3}
@@ -291,9 +465,39 @@ const HomeScreen = () => {
           )}
         </View>
       ) : (
-        <View style={styles.emptyGroupsContainer}>
-          <Ionicons name="folder-open" size={60} color={COLORS.secondary} />
-          <Text style={styles.emptyGroupsText}>No groups created yet</Text>
+        <View style={styles.galleryContainer}>
+          {groupsLoading ? (
+            <View style={styles.loadingContainer}>
+              <ActivityIndicator size="large" color={COLORS.primary} />
+              <Text style={styles.loadingText}>Loading groups...</Text>
+            </View>
+          ) : groups.length === 0 ? (
+            <View style={styles.emptyGroupsContainer}>
+              <Ionicons name="folder-open" size={60} color={COLORS.secondary} />
+              <Text style={styles.emptyGroupsText}>No groups created yet</Text>
+              <TouchableOpacity
+                style={styles.createFirstGroupButton}
+                onPress={() => {
+                  setEditingGroup(null);
+                  setGroupName("");
+                  setGroupDescription("");
+                  setModalVisible(true);
+                }}
+              >
+                <Text style={styles.createFirstGroupText}>
+                  Create First Group
+                </Text>
+              </TouchableOpacity>
+            </View>
+          ) : (
+            <FlatList
+              key="groupsList"
+              data={groups}
+              renderItem={renderGroupItem}
+              keyExtractor={(item) => item.id}
+              contentContainerStyle={styles.groupsList}
+            />
+          )}
         </View>
       )}
 
@@ -317,12 +521,217 @@ const HomeScreen = () => {
           </TouchableOpacity>
         )}
       </View>
+
+      {/* Create/Edit Group Modal */}
+      <Modal
+        animationType="slide"
+        transparent={true}
+        visible={modalVisible}
+        onRequestClose={() => setModalVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={[styles.modalContent, { backgroundColor: COLORS.card }]}>
+            <Text style={[styles.modalTitle, { color: COLORS.foreground }]}>
+              {editingGroup ? "Edit Group" : "Create New Group"}
+            </Text>
+
+            <TextInput
+              style={[styles.input, { borderColor: COLORS.border }]}
+              placeholder="Group Name"
+              value={groupName}
+              onChangeText={setGroupName}
+              placeholderTextColor={COLORS.secondary}
+            />
+
+            <TextInput
+              style={[
+                styles.input,
+                { borderColor: COLORS.border, height: 100 },
+              ]}
+              placeholder="Description (optional)"
+              value={groupDescription}
+              onChangeText={setGroupDescription}
+              multiline
+              placeholderTextColor={COLORS.secondary}
+            />
+
+            <View style={styles.modalButtons}>
+              <TouchableOpacity
+                style={[styles.modalButton, { borderColor: COLORS.border }]}
+                onPress={() => setModalVisible(false)}
+              >
+                <Text style={{ color: COLORS.primary }}>Cancel</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[
+                  styles.modalButton,
+                  { backgroundColor: COLORS.primary },
+                ]}
+                onPress={handleCreateGroup}
+              >
+                <Text style={{ color: COLORS.primaryForeground }}>
+                  {editingGroup ? "Save" : "Create"}
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </LinearGradient>
   );
 };
 
 const styles = StyleSheet.create({
-  // ...existing code...
+  // ...existing styles...
+
+  // Group-related styles
+  createGroupButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    backgroundColor: COLORS.card,
+    borderRadius: 15,
+  },
+  createGroupText: {
+    color: COLORS.primary,
+    fontFamily: FONT.bold,
+    fontSize: 14,
+    marginLeft: 5,
+  },
+  createFirstGroupButton: {
+    backgroundColor: COLORS.primary,
+    paddingVertical: 12,
+    paddingHorizontal: 20,
+    borderRadius: 8,
+    marginTop: 20,
+  },
+  createFirstGroupText: {
+    color: COLORS.primaryForeground,
+    fontFamily: FONT.bold,
+    fontSize: 16,
+  },
+  groupsList: {
+    padding: 15,
+    paddingBottom: 100, // Extra space for the camera button
+  },
+  groupCard: {
+    flexDirection: "row",
+    marginBottom: 15,
+    padding: 15,
+    borderRadius: 10,
+  },
+  thumbnailContainer: {
+    width: 80,
+    height: 80,
+    borderRadius: 8,
+    overflow: "hidden",
+    marginRight: 15,
+    backgroundColor: COLORS.muted,
+  },
+  thumbnail: {
+    width: "100%",
+    height: "100%",
+  },
+  placeholderThumbnail: {
+    width: "100%",
+    height: "100%",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  imageCountBadge: {
+    position: "absolute",
+    bottom: 0,
+    right: 0,
+    backgroundColor: COLORS.primary,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderTopLeftRadius: 8,
+    borderBottomRightRadius: 8,
+  },
+  imageCountText: {
+    color: COLORS.primaryForeground,
+    fontFamily: FONT.bold,
+    fontSize: 12,
+  },
+  groupInfo: {
+    flex: 1,
+    justifyContent: "center",
+  },
+  groupName: {
+    fontSize: 18,
+    fontFamily: FONT.bold,
+    marginBottom: 5,
+    color: COLORS.foreground,
+  },
+  groupDescription: {
+    fontSize: 14,
+    fontFamily: FONT.regular,
+    color: COLORS.secondary,
+  },
+  groupActions: {
+    justifyContent: "space-around",
+    padding: 5,
+  },
+  actionButton: {
+    padding: 8,
+  },
+  modalOverlay: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+    backgroundColor: "rgba(0,0,0,0.5)",
+  },
+  modalContent: {
+    width: "85%",
+    padding: 20,
+    borderRadius: 15,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 3.84,
+    elevation: 5,
+  },
+  modalTitle: {
+    fontSize: 20,
+    fontFamily: FONT.bold,
+    marginBottom: 20,
+    textAlign: "center",
+  },
+  input: {
+    width: "100%",
+    padding: 12,
+    borderWidth: 1,
+    borderRadius: 8,
+    marginBottom: 15,
+    fontFamily: FONT.regular,
+    color: COLORS.foreground,
+  },
+  modalButtons: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+  },
+  modalButton: {
+    flex: 1,
+    padding: 12,
+    borderRadius: 8,
+    borderWidth: 1,
+    marginHorizontal: 5,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  loadingText: {
+    marginTop: 15,
+    color: COLORS.secondary,
+    fontSize: 16,
+    fontFamily: FONT.regular,
+  },
 
   tabContainer: {
     flexDirection: "row",
