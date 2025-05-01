@@ -749,7 +749,7 @@ const styles = StyleSheet.create({
   },
   groupsList: {
     padding: 15,
-    paddingBottom: 100, // Extra space for the camera button
+    paddingBottom: 120, // Increased padding to avoid overlap with camera button and create group button in list
   },
   groupCard: {
     flexDirection: "row",
@@ -1079,7 +1079,7 @@ const styles = StyleSheet.create({
   },
   galleryContainer: {
     width: "100%",
-    marginBottom: 90, // Increased bottom margin to make room for the camera button
+    flex: 1, // Allow the gallery to expand
   },
   cameraButtonContainer: {
     position: "absolute",
@@ -1115,6 +1115,7 @@ const styles = StyleSheet.create({
   },
   galleryContent: {
     paddingHorizontal: 20,
+    paddingBottom: 100, // Add padding to avoid overlap with camera button
   },
   emptyGallery: {
     alignItems: "center",
