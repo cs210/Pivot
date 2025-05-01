@@ -23,11 +23,11 @@ const HomeScreen = () => {
   const [images, setImages] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
   const IMAGE_SIZE = (Dimensions.get("window").width - 40) / 3;
-  // Add state to track if "How it works" is visible
   const [showHowItWorks, setShowHowItWorks] = useState(true);
-  // Add states for edit mode
   const [editMode, setEditMode] = useState(false);
   const [selectedImages, setSelectedImages] = useState<string[]>([]);
+  // Add state for active tab
+  const [activeTab, setActiveTab] = useState("recents");
 
   useEffect(() => {
     loadImages();
@@ -115,7 +115,38 @@ const HomeScreen = () => {
           <Text style={styles.logoText}>Pivot</Text>
         </View>
 
-        {showHowItWorks && (
+        {/* Tabs */}
+        <View style={styles.tabContainer}>
+          <TouchableOpacity
+            style={[styles.tab, activeTab === "recents" && styles.activeTab]}
+            onPress={() => setActiveTab("recents")}
+          >
+            <Text
+              style={[
+                styles.tabText,
+                activeTab === "recents" && styles.activeTabText,
+              ]}
+            >
+              Recents
+            </Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[styles.tab, activeTab === "groups" && styles.activeTab]}
+            onPress={() => setActiveTab("groups")}
+          >
+            <Text
+              style={[
+                styles.tabText,
+                activeTab === "groups" && styles.activeTabText,
+              ]}
+            >
+              Groups
+            </Text>
+          </TouchableOpacity>
+        </View>
+
+        {showHowItWorks && activeTab === "recents" && (
           <View style={[styles.infoCard, STYLES.card]}>
             {/* Close button in top right */}
             <TouchableOpacity
@@ -186,80 +217,89 @@ const HomeScreen = () => {
           </View>
         )}
 
-        {/* Gallery header with Edit button */}
-        <View style={styles.headerRow}>
-          <Text style={styles.galleryHeader}>Recent Captures</Text>
-          {images.length > 0 && (
-            <TouchableOpacity
-              style={styles.editButton}
-              onPress={toggleEditMode}
-            >
-              <Text style={styles.editButtonText}>
-                {editMode ? "Done" : "Edit"}
-              </Text>
-            </TouchableOpacity>
-          )}
-        </View>
-      </View>
-
-      {/* Only the gallery is scrollable */}
-      <View style={styles.galleryContainer}>
-        {loading ? (
-          <ActivityIndicator size="large" color={COLORS.primary} />
-        ) : (
-          <FlatList
-            data={images}
-            keyExtractor={(uri) => uri}
-            numColumns={3}
-            contentContainerStyle={styles.galleryContent}
-            ListEmptyComponent={
-              <View style={styles.emptyGallery}>
-                <Ionicons
-                  name="images-outline"
-                  size={48}
-                  color={COLORS.secondary}
-                />
-                <Text style={styles.emptyText}>No images captured yet</Text>
-              </View>
-            }
-            renderItem={({ item }) => (
+        {/* Gallery header with Edit button (only for Recents tab) */}
+        {activeTab === "recents" && (
+          <View style={styles.headerRow}>
+            <Text style={styles.galleryHeader}>Recent Captures</Text>
+            {images.length > 0 && (
               <TouchableOpacity
-                activeOpacity={editMode ? 0.6 : 1}
-                onPress={() => editMode && toggleImageSelection(item)}
-                style={styles.imageContainer}
+                style={styles.editButton}
+                onPress={toggleEditMode}
               >
-                <Image source={{ uri: item }} style={styles.image} />
-                {editMode && (
-                  <TouchableOpacity
-                    style={[
-                      styles.deleteButton,
-                      selectedImages.includes(item) &&
-                        styles.selectedDeleteButton,
-                    ]}
-                    onPress={() => toggleImageSelection(item)}
-                  >
-                    <Ionicons
-                      name={
-                        selectedImages.includes(item)
-                          ? "checkmark-circle"
-                          : "close-circle"
-                      }
-                      size={24}
-                      color={
-                        selectedImages.includes(item) ? COLORS.primary : "red"
-                      }
-                    />
-                  </TouchableOpacity>
-                )}
+                <Text style={styles.editButtonText}>
+                  {editMode ? "Done" : "Edit"}
+                </Text>
               </TouchableOpacity>
             )}
-          />
+          </View>
         )}
       </View>
 
+      {/* Content based on active tab */}
+      {activeTab === "recents" ? (
+        <View style={styles.galleryContainer}>
+          {loading ? (
+            <ActivityIndicator size="large" color={COLORS.primary} />
+          ) : (
+            <FlatList
+              data={images}
+              keyExtractor={(uri) => uri}
+              numColumns={3}
+              contentContainerStyle={styles.galleryContent}
+              ListEmptyComponent={
+                <View style={styles.emptyGallery}>
+                  <Ionicons
+                    name="images-outline"
+                    size={48}
+                    color={COLORS.secondary}
+                  />
+                  <Text style={styles.emptyText}>No images captured yet</Text>
+                </View>
+              }
+              renderItem={({ item }) => (
+                <TouchableOpacity
+                  activeOpacity={editMode ? 0.6 : 1}
+                  onPress={() => editMode && toggleImageSelection(item)}
+                  style={styles.imageContainer}
+                >
+                  <Image source={{ uri: item }} style={styles.image} />
+                  {editMode && (
+                    <TouchableOpacity
+                      style={[
+                        styles.deleteButton,
+                        selectedImages.includes(item) &&
+                          styles.selectedDeleteButton,
+                      ]}
+                      onPress={() => toggleImageSelection(item)}
+                    >
+                      <Ionicons
+                        name={
+                          selectedImages.includes(item)
+                            ? "checkmark-circle"
+                            : "close-circle"
+                        }
+                        size={24}
+                        color={
+                          selectedImages.includes(item) ? COLORS.primary : "red"
+                        }
+                      />
+                    </TouchableOpacity>
+                  )}
+                </TouchableOpacity>
+              )}
+            />
+          )}
+        </View>
+      ) : (
+        <View style={styles.emptyGroupsContainer}>
+          <Ionicons name="folder-open" size={60} color={COLORS.secondary} />
+          <Text style={styles.emptyGroupsText}>No groups created yet</Text>
+        </View>
+      )}
+
       {/* Fixed camera button */}
       <View style={styles.cameraButtonContainer}>
-        {editMode && selectedImages.length > 0 ? (
+        {activeTab === "recents" && editMode && selectedImages.length > 0 ? (
           <TouchableOpacity
             style={styles.deleteSelectedButton}
             onPress={deleteSelectedImages}
@@ -283,6 +323,42 @@ const HomeScreen = () => {
 
 const styles = StyleSheet.create({
   // ...existing code...
+
+  tabContainer: {
+    flexDirection: "row",
+    marginBottom: 20,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.border,
+  },
+  tab: {
+    paddingVertical: 12,
+    paddingHorizontal: 20,
+    marginRight: 10,
+  },
+  activeTab: {
+    borderBottomWidth: 3,
+    borderBottomColor: COLORS.primary,
+  },
+  tabText: {
+    fontSize: 16,
+    fontFamily: FONT.bold,
+    color: COLORS.secondary,
+  },
+  activeTabText: {
+    color: COLORS.primary,
+  },
+  emptyGroupsContainer: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+    paddingBottom: 70,
+  },
+  emptyGroupsText: {
+    fontSize: 18,
+    color: COLORS.foreground,
+    fontFamily: FONT.regular,
+    marginTop: 20,
+  },
 
   headerRow: {
     flexDirection: "row",
