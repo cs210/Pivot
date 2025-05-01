@@ -18,6 +18,7 @@ import Ionicons from "@expo/vector-icons/Ionicons";
 import * as FileSystem from "expo-file-system";
 import { ImageGroup } from "../types";
 import { GroupStorage } from "../utils/groupStorage";
+import { supabase } from "../utils/supabase"; // Import the centralized Supabase client
 
 // Define a type for the project data we expect
 interface Project {
@@ -185,21 +186,199 @@ const GroupDetailScreen = () => {
     setSelectedProjectId(projectId);
   };
 
-  const handlePublishConfirm = () => {
+  const handlePublishConfirm = async () => {
     if (!selectedProjectId) {
       Alert.alert("Error", "Please select a project first");
       return;
     }
 
-    // For now, just close the modal and show a success message
-    Alert.alert(
-      "Coming Soon",
-      `Publishing to project "${
-        projects?.find((p) => p.id === selectedProjectId)?.name
-      }" will be implemented in a future update.`
-    );
-    setPublishModalVisible(false);
-    setSelectedProjectId(null);
+    if (!group || group.imageUris.length === 0) {
+      Alert.alert("Error", "No images to upload");
+      return;
+    }
+
+    try {
+      setPublishModalVisible(false);
+
+      // Show loading indicator
+      setLoading(true);
+
+      // Get the selected project
+      const selectedProject = projects?.find((p) => p.id === selectedProjectId);
+
+      // Check if the user is authenticated
+      const { data: userData, error: userError } =
+        await supabase.auth.getUser();
+      if (userError || !userData.user) {
+        throw new Error(
+          "You must be logged in to publish images. Error: " +
+            userError?.message
+        );
+      }
+
+      console.log("Authenticated as user:", userData.user.id);
+
+      // Upload all images in the group to Supabase
+      await uploadGroupImagesToSupabase(group.imageUris, selectedProjectId);
+
+      Alert.alert(
+        "Success",
+        `Published ${group.imageUris.length} images to project "${selectedProject?.name}"`
+      );
+    } catch (error) {
+      console.error("Error publishing images:", error);
+      // Log the detailed error
+      if (error instanceof Error) {
+        console.error("Error details:", error.message);
+      } else {
+        console.error("Unknown error:", JSON.stringify(error));
+      }
+
+      // Format the error message for display
+      let errorMessage = "Unknown error";
+      if (error instanceof Error) {
+        errorMessage = error.message;
+      } else if (typeof error === "object" && error !== null) {
+        // Try to extract more detailed error message from Supabase error object
+        errorMessage = JSON.stringify(error);
+      }
+
+      Alert.alert("Error", `Failed to publish images: ${errorMessage}`);
+    } finally {
+      setLoading(false);
+      setSelectedProjectId(null);
+    }
+  };
+
+  // Function to upload all images in a group to Supabase
+  const uploadGroupImagesToSupabase = async (
+    imageUris: string[],
+    projectId: string
+  ) => {
+    if (imageUris.length === 0) return;
+
+    const uploadProgress = (current: number, total: number) => {
+      console.log(`Uploading image ${current} of ${total}`);
+    };
+
+    try {
+      // First verify we have a valid session
+      const {
+        data: { session },
+        error: sessionError,
+      } = await supabase.auth.getSession();
+      if (sessionError || !session) {
+        throw new Error(
+          "No active session. Please login first: " +
+            (sessionError?.message || "")
+        );
+      }
+
+      console.log("Using session for user:", session.user.id);
+
+      // Validate user has access to this project
+      const { data: projectData, error: projectError } = await supabase
+        .from("projects")
+        .select("id, name")
+        .eq("id", projectId)
+        .single();
+
+      if (projectError) {
+        if (projectError.code === "PGRST116") {
+          throw new Error(
+            `Project not found or you don't have access to this project`
+          );
+        }
+        throw new Error(
+          "Error checking project access: " + projectError.message
+        );
+      }
+
+      if (!projectData) {
+        throw new Error(
+          "Project not found or you don't have permission to access it"
+        );
+      }
+
+      console.log("Verified access to project:", projectData.name);
+
+      for (let i = 0; i < imageUris.length; i++) {
+        const imageUri = imageUris[i];
+
+        // Extract filename from URI
+        const fileName = imageUri.split("/").pop() || `image_${Date.now()}.jpg`;
+
+        // Define storage path (same format as the web app)
+        const filePath = `${projectId}/${fileName}`;
+
+        uploadProgress(i + 1, imageUris.length);
+
+        // Get file info
+        const fileInfo = await FileSystem.getInfoAsync(imageUri);
+        if (!fileInfo.exists) {
+          console.error(`File does not exist: ${imageUri}`);
+          continue;
+        }
+
+        // Read the file as base64
+        const base64 = await FileSystem.readAsStringAsync(imageUri, {
+          encoding: FileSystem.EncodingType.Base64,
+        });
+
+        // Convert base64 to blob
+        const blob = await fetch(`data:image/jpeg;base64,${base64}`).then((r) =>
+          r.blob()
+        );
+
+        console.log(`Uploading file: ${fileName} to path: ${filePath}`);
+
+        // Upload to Supabase storage
+        const { data: uploadData, error: uploadError } = await supabase.storage
+          .from("raw-images") // Must match the bucket name in Supabase
+          .upload(filePath, blob, {
+            cacheControl: "3600",
+            upsert: true,
+          });
+
+        if (uploadError) {
+          console.error("Storage upload error:", uploadError);
+          throw uploadError;
+        }
+
+        console.log("File uploaded successfully:", uploadData?.path);
+
+        // Insert record into database with all required fields
+        const { data, error } = await supabase
+          .from("raw_images")
+          .insert([
+            {
+              filename: fileName,
+              storage_path: uploadData.path,
+              project_id: projectId,
+              folder_id: null, // No folder initially
+              user_id: session.user.id, // Always use the session user ID
+              content_type: "image/jpeg", // Default to JPEG
+              size_bytes: fileInfo.size || 0,
+              metadata: {
+                source: "mobile_app",
+                group_name: group?.name || "",
+                upload_date: new Date().toISOString(),
+              },
+            },
+          ])
+          .select();
+
+        if (error) {
+          console.error("Database insert error:", error);
+          throw new Error(`Database insert error: ${error.message}`);
+        }
+
+        console.log("Image record created in database:", data);
+      }
+    } catch (error) {
+      console.error("Error in uploadGroupImagesToSupabase:", error);
+      throw error;
+    }
   };
 
   if (loading) {
