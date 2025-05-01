@@ -9,8 +9,9 @@ import {
   ActivityIndicator,
   Dimensions,
   ScrollView,
+  Alert,
 } from "react-native";
-import { useNavigation } from "@react-navigation/native";
+import { useNavigation, useIsFocused } from "@react-navigation/native";
 import { LinearGradient } from "expo-linear-gradient";
 import { COLORS, GRADIENTS, STYLES, FONT } from "../theme";
 import Ionicons from "@expo/vector-icons/Ionicons";
@@ -18,14 +19,23 @@ import * as FileSystem from "expo-file-system";
 
 const HomeScreen = () => {
   const navigation = useNavigation();
+  const isFocused = useIsFocused();
   const [images, setImages] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
   const IMAGE_SIZE = (Dimensions.get("window").width - 40) / 3;
   // Add state to track if "How it works" is visible
   const [showHowItWorks, setShowHowItWorks] = useState(true);
+  // Add states for edit mode
+  const [editMode, setEditMode] = useState(false);
+  const [selectedImages, setSelectedImages] = useState<string[]>([]);
 
   useEffect(() => {
-    (async () => {
+    loadImages();
+  }, [isFocused]);
+
+  const loadImages = async () => {
+    try {
+      setLoading(true);
       const dir = `${FileSystem.documentDirectory}room_scanner/`;
       const info = await FileSystem.getInfoAsync(dir);
       if (!info.exists) {
@@ -36,9 +46,57 @@ const HomeScreen = () => {
       const files = await FileSystem.readDirectoryAsync(dir);
       const jpgs = files.filter((f) => f.match(/\.(jpe?g|png)$/));
       setImages(jpgs.map((f) => dir + f));
+    } catch (error) {
+      console.error("Error loading images:", error);
+    } finally {
       setLoading(false);
-    })();
-  }, []);
+    }
+  };
+
+  const toggleImageSelection = (uri: string) => {
+    if (selectedImages.includes(uri)) {
+      setSelectedImages(selectedImages.filter((img) => img !== uri));
+    } else {
+      setSelectedImages([...selectedImages, uri]);
+    }
+  };
+
+  const deleteSelectedImages = async () => {
+    if (selectedImages.length === 0) return;
+
+    Alert.alert(
+      "Delete Images",
+      `Are you sure you want to delete ${selectedImages.length} selected image${
+        selectedImages.length > 1 ? "s" : ""
+      }?`,
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Delete",
+          style: "destructive",
+          onPress: async () => {
+            try {
+              for (const uri of selectedImages) {
+                await FileSystem.deleteAsync(uri);
+              }
+              setSelectedImages([]);
+              loadImages();
+            } catch (error) {
+              console.error("Error deleting images:", error);
+              Alert.alert("Error", "Failed to delete selected images");
+            }
+          },
+        },
+      ]
+    );
+  };
+
+  const toggleEditMode = () => {
+    setEditMode(!editMode);
+    if (editMode) {
+      setSelectedImages([]);
+    }
+  };
 
   return (
     <LinearGradient colors={GRADIENTS.cyber} style={styles.container}>
@@ -128,8 +186,20 @@ const HomeScreen = () => {
           </View>
         )}
 
-        {/* Gallery header */}
-        <Text style={styles.galleryHeader}>Recent Captures</Text>
+        {/* Gallery header with Edit button */}
+        <View style={styles.headerRow}>
+          <Text style={styles.galleryHeader}>Recent Captures</Text>
+          {images.length > 0 && (
+            <TouchableOpacity
+              style={styles.editButton}
+              onPress={toggleEditMode}
+            >
+              <Text style={styles.editButtonText}>
+                {editMode ? "Done" : "Edit"}
+              </Text>
+            </TouchableOpacity>
+          )}
+        </View>
       </View>
 
       {/* Only the gallery is scrollable */}
@@ -153,15 +223,35 @@ const HomeScreen = () => {
               </View>
             }
             renderItem={({ item }) => (
-              <Image
-                source={{ uri: item }}
-                style={{
-                  width: IMAGE_SIZE,
-                  height: IMAGE_SIZE,
-                  margin: 2,
-                  borderRadius: 6,
-                }}
-              />
+              <TouchableOpacity
+                activeOpacity={editMode ? 0.6 : 1}
+                onPress={() => editMode && toggleImageSelection(item)}
+                style={styles.imageContainer}
+              >
+                <Image source={{ uri: item }} style={styles.image} />
+                {editMode && (
+                  <TouchableOpacity
+                    style={[
+                      styles.deleteButton,
+                      selectedImages.includes(item) &&
+                        styles.selectedDeleteButton,
+                    ]}
+                    onPress={() => toggleImageSelection(item)}
+                  >
+                    <Ionicons
+                      name={
+                        selectedImages.includes(item)
+                          ? "checkmark-circle"
+                          : "close-circle"
+                      }
+                      size={24}
+                      color={
+                        selectedImages.includes(item) ? COLORS.primary : "red"
+                      }
+                    />
+                  </TouchableOpacity>
+                )}
+              </TouchableOpacity>
             )}
           />
         )}
@@ -169,18 +259,97 @@ const HomeScreen = () => {
 
       {/* Fixed camera button */}
       <View style={styles.cameraButtonContainer}>
-        <TouchableOpacity
-          style={styles.cameraButton}
-          onPress={() => navigation.navigate("Camera" as never)}
-        >
-          <Ionicons name="camera" size={36} color="white" />
-        </TouchableOpacity>
+        {editMode && selectedImages.length > 0 ? (
+          <TouchableOpacity
+            style={styles.deleteSelectedButton}
+            onPress={deleteSelectedImages}
+          >
+            <Text style={styles.deleteSelectedText}>
+              Delete Selected ({selectedImages.length})
+            </Text>
+          </TouchableOpacity>
+        ) : (
+          <TouchableOpacity
+            style={styles.cameraButton}
+            onPress={() => navigation.navigate("Camera" as never)}
+          >
+            <Ionicons name="camera" size={36} color="white" />
+          </TouchableOpacity>
+        )}
       </View>
     </LinearGradient>
   );
 };
 
 const styles = StyleSheet.create({
+  // ...existing code...
+
+  headerRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 10,
+  },
+
+  editButton: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    backgroundColor: COLORS.card,
+    borderRadius: 15,
+  },
+
+  editButtonText: {
+    color: COLORS.primary,
+    fontFamily: FONT.bold,
+    fontSize: 14,
+  },
+
+  imageContainer: {
+    margin: 2,
+    width: (Dimensions.get("window").width - 40) / 3,
+    height: (Dimensions.get("window").width - 40) / 3,
+    borderRadius: 6,
+    position: "relative",
+    overflow: "hidden",
+  },
+
+  image: {
+    width: "100%",
+    height: "100%",
+    borderRadius: 6,
+  },
+
+  deleteButton: {
+    position: "absolute",
+    top: 5,
+    left: 5,
+    backgroundColor: "rgba(255,255,255,0.7)",
+    borderRadius: 12,
+    width: 24,
+    height: 24,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+
+  selectedDeleteButton: {
+    backgroundColor: "rgba(255,255,255,0.9)",
+  },
+
+  deleteSelectedButton: {
+    backgroundColor: COLORS.secondary,
+    borderRadius: 25,
+    paddingVertical: 12,
+    paddingHorizontal: 20,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+
+  deleteSelectedText: {
+    color: "white",
+    fontFamily: FONT.bold,
+    fontSize: 16,
+  },
+
   safeArea: {
     flex: 1,
   },
