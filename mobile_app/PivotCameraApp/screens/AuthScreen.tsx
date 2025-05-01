@@ -25,12 +25,51 @@ const AuthScreen = () => {
 
   const handleLogin = async () => {
     setLoading(true);
-    // TODO: Implement Supabase login
-    Alert.alert("Login Attempt", `Email: ${email}, Password: ${password}`);
-    // Example:
-    // const { error } = await supabase.auth.signInWithPassword({ email, password });
-    // if (error) Alert.alert('Login Error', error.message);
-    // else { /* Navigate to HomeScreen or main app */ }
+    const { data: loginData, error: loginError } =
+      await supabase.auth.signInWithPassword({
+        email,
+        password,
+      });
+
+    if (loginError) {
+      Alert.alert("Login Error", loginError.message);
+      setLoading(false);
+      return; // Stop execution if login failed
+    }
+
+    // Login successful, now fetch projects
+    if (loginData?.user) {
+      const userId = loginData.user.id;
+      console.log("Logged in user ID:", userId); // Log user ID for debugging
+
+      // Fetch project IDs associated with the user
+      // Replace 'user_projects' with your actual table name
+      // Replace 'user_id' and 'project_id' with your actual column names if different
+      const { data: projectsData, error: projectsError } = await supabase
+        .from("projects") // <<< Your table name here
+        .select("id") // <<< Your project ID column name here
+        .eq("user_id", userId); // <<< Your user ID column name here
+
+      if (projectsError) {
+        console.error("Error fetching projects:", projectsError);
+        Alert.alert("Error", "Could not fetch user projects.");
+        // Decide if you still want to navigate or show a more specific error
+      } else {
+        const projectIds = projectsData.map((p) => p.id);
+        Alert.alert("User Project IDs", projectIds.join(", ")); // Display IDs in an alert
+        // TODO: Do something with the projectIds (e.g., store in state, pass to next screen)
+
+        // Navigate back after successful login and project fetch
+        navigation.goBack();
+      }
+    } else {
+      // Handle case where user data is unexpectedly null after successful login
+      Alert.alert(
+        "Login Error",
+        "Could not retrieve user information after login."
+      );
+    }
+
     setLoading(false);
   };
 
