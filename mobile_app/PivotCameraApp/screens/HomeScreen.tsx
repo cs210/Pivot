@@ -423,7 +423,14 @@ const HomeScreen = () => {
               }}
             >
               <Ionicons name="add-circle" size={20} color={COLORS.primary} />
-              <Text style={styles.createGroupText}>New Group</Text>
+              <Text
+                style={[
+                  styles.createGroupText,
+                  { fontFamily: undefined, fontSize: 16, fontWeight: "600" },
+                ]}
+              >
+                New Group
+              </Text>
             </TouchableOpacity>
           </View>
         )}
@@ -494,21 +501,8 @@ const HomeScreen = () => {
             </View>
           ) : groups.length === 0 ? (
             <View style={styles.emptyGroupsContainer}>
-              <Ionicons name="folder-open" size={60} color={COLORS.secondary} />
+              {/* <Ionicons name="folder-open" size={60} color={COLORS.secondary} /> */}
               <Text style={styles.emptyGroupsText}>No groups created yet</Text>
-              <TouchableOpacity
-                style={styles.createFirstGroupButton}
-                onPress={() => {
-                  setEditingGroup(null);
-                  setGroupName("");
-                  setGroupDescription("");
-                  setModalVisible(true);
-                }}
-              >
-                <Text style={styles.createFirstGroupText}>
-                  Create First Group
-                </Text>
-              </TouchableOpacity>
             </View>
           ) : (
             <FlatList
@@ -738,18 +732,6 @@ const styles = StyleSheet.create({
     fontFamily: FONT.bold,
     fontSize: 14,
     marginLeft: 5,
-  },
-  createFirstGroupButton: {
-    backgroundColor: COLORS.primary,
-    paddingVertical: 12,
-    paddingHorizontal: 20,
-    borderRadius: 8,
-    marginTop: 20,
-  },
-  createFirstGroupText: {
-    color: COLORS.primaryForeground,
-    fontFamily: FONT.bold,
-    fontSize: 16,
   },
   groupsList: {
     padding: 15,
