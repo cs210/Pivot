@@ -14,8 +14,6 @@ import { FONT } from "./theme";
 // Import screens
 import HomeScreen from "./screens/HomeScreen";
 import CameraScreen from "./screens/CameraScreen";
-import GroupsScreen from "./screens/GroupsScreen";
-import GroupDetailScreen from "./screens/GroupDetailScreen";
 
 // Import GalleryScreen with a require statement to avoid module resolution issues
 const GalleryScreen = require("./screens/GalleryScreen").default;
@@ -57,16 +55,6 @@ export default function App() {
           name="Gallery"
           component={GalleryScreen}
           options={{ title: "Captured Images" }}
-        />
-        <Stack.Screen
-          name="Groups"
-          component={GroupsScreen}
-          options={{ title: "Image Groups" }}
-        />
-        <Stack.Screen
-          name="GroupDetail"
-          component={GroupDetailScreen}
-          options={{ headerShown: false }}
         />
       </Stack.Navigator>
     </NavigationContainer>

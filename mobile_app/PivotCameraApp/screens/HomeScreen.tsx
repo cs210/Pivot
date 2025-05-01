@@ -15,62 +15,30 @@ import { LinearGradient } from "expo-linear-gradient";
 import { COLORS, GRADIENTS, STYLES, FONT } from "../theme";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import * as FileSystem from "expo-file-system";
-import { ImageGroup } from "../types";
-import { GroupStorage } from "../utils/groupStorage";
-import { HomeScreenNavigationProp } from "../navigation/types";
 
 const HomeScreen = () => {
-  const navigation = useNavigation<HomeScreenNavigationProp>();
+  const navigation = useNavigation();
   const [images, setImages] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
-  const [groupsLoading, setGroupsLoading] = useState(true);
-  const [groups, setGroups] = useState<ImageGroup[]>([]);
   const IMAGE_SIZE = (Dimensions.get("window").width - 40) / 3;
+  // Add state to track if "How it works" is visible
   const [showHowItWorks, setShowHowItWorks] = useState(true);
-  const [activeTab, setActiveTab] = useState("recent"); // 'recent' or 'groups'
 
-  // Load images for Recent tab
   useEffect(() => {
-    loadImages();
-  }, []);
-
-  // Load groups whenever the Groups tab is shown
-  useEffect(() => {
-    if (activeTab === "groups") {
-      loadGroups();
-    }
-  }, [activeTab]);
-
-  const loadImages = async () => {
-    try {
-      setLoading(true);
+    (async () => {
       const dir = `${FileSystem.documentDirectory}room_scanner/`;
       const info = await FileSystem.getInfoAsync(dir);
       if (!info.exists) {
         setImages([]);
+        setLoading(false);
         return;
       }
       const files = await FileSystem.readDirectoryAsync(dir);
       const jpgs = files.filter((f) => f.match(/\.(jpe?g|png)$/));
       setImages(jpgs.map((f) => dir + f));
-    } catch (error) {
-      console.error("Error loading images:", error);
-    } finally {
       setLoading(false);
-    }
-  };
-
-  const loadGroups = async () => {
-    try {
-      setGroupsLoading(true);
-      const loadedGroups = await GroupStorage.loadGroups();
-      setGroups(loadedGroups);
-    } catch (error) {
-      console.error("Error loading groups:", error);
-    } finally {
-      setGroupsLoading(false);
-    }
-  };
+    })();
+  }, []);
 
   return (
     <LinearGradient colors={GRADIENTS.cyber} style={styles.container}>
@@ -160,216 +128,42 @@ const HomeScreen = () => {
           </View>
         )}
 
-        {/* Tab navigation */}
-        <View style={styles.tabContainer}>
-          <TouchableOpacity
-            style={[
-              styles.tab,
-              activeTab === "recent" && [
-                styles.activeTab,
-                { borderColor: COLORS.primary },
-              ],
-            ]}
-            onPress={() => setActiveTab("recent")}
-          >
-            <Ionicons
-              name="images-outline"
-              size={20}
-              color={activeTab === "recent" ? COLORS.primary : COLORS.secondary}
-            />
-            <Text
-              style={[
-                styles.tabText,
-                {
-                  color:
-                    activeTab === "recent" ? COLORS.primary : COLORS.secondary,
-                },
-              ]}
-            >
-              Recent
-            </Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={[
-              styles.tab,
-              activeTab === "groups" && [
-                styles.activeTab,
-                { borderColor: COLORS.primary },
-              ],
-            ]}
-            onPress={() => setActiveTab("groups")}
-          >
-            <Ionicons
-              name="folder-outline"
-              size={20}
-              color={activeTab === "groups" ? COLORS.primary : COLORS.secondary}
-            />
-            <Text
-              style={[
-                styles.tabText,
-                {
-                  color:
-                    activeTab === "groups" ? COLORS.primary : COLORS.secondary,
-                },
-              ]}
-            >
-              Groups
-            </Text>
-          </TouchableOpacity>
-        </View>
+        {/* Gallery header */}
+        <Text style={styles.galleryHeader}>Recent Captures</Text>
       </View>
 
       {/* Only the gallery is scrollable */}
       <View style={styles.galleryContainer}>
-        {activeTab === "recent" ? (
-          loading ? (
-            <ActivityIndicator size="large" color={COLORS.primary} />
-          ) : (
-            <FlatList
-              data={images}
-              keyExtractor={(uri) => uri}
-              numColumns={3}
-              contentContainerStyle={styles.galleryContent}
-              ListEmptyComponent={
-                <View style={styles.emptyGallery}>
-                  <Ionicons
-                    name="images-outline"
-                    size={48}
-                    color={COLORS.secondary}
-                  />
-                  <Text style={styles.emptyText}>No images captured yet</Text>
-                </View>
-              }
-              renderItem={({ item }) => (
-                <Image
-                  source={{ uri: item }}
-                  style={{
-                    width: IMAGE_SIZE,
-                    height: IMAGE_SIZE,
-                    margin: 2,
-                    borderRadius: 6,
-                  }}
-                />
-              )}
-            />
-          )
-        ) : /* Groups Tab Content */
-        groupsLoading ? (
+        {loading ? (
           <ActivityIndicator size="large" color={COLORS.primary} />
         ) : (
-          <View style={styles.groupsContainer}>
-            {groups.length === 0 ? (
+          <FlatList
+            data={images}
+            keyExtractor={(uri) => uri}
+            numColumns={3}
+            contentContainerStyle={styles.galleryContent}
+            ListEmptyComponent={
               <View style={styles.emptyGallery}>
                 <Ionicons
-                  name="folder-outline"
+                  name="images-outline"
                   size={48}
                   color={COLORS.secondary}
                 />
-                <Text style={styles.emptyText}>No groups created yet</Text>
-                <TouchableOpacity
-                  style={[
-                    styles.createGroupButton,
-                    { backgroundColor: COLORS.primary },
-                  ]}
-                  onPress={() => navigation.navigate("Groups")}
-                >
-                  <Text
-                    style={{
-                      color: COLORS.primaryForeground,
-                      fontFamily: FONT.bold,
-                    }}
-                  >
-                    Create Group
-                  </Text>
-                </TouchableOpacity>
+                <Text style={styles.emptyText}>No images captured yet</Text>
               </View>
-            ) : (
-              <FlatList
-                data={groups}
-                keyExtractor={(item) => item.id}
-                contentContainerStyle={styles.groupsList}
-                renderItem={({ item }) => {
-                  // Display thumbnail from first image in group if available
-                  const thumbnailUri =
-                    item.imageUris.length > 0 ? item.imageUris[0] : null;
-
-                  return (
-                    <TouchableOpacity
-                      style={[styles.groupCard, STYLES.card]}
-                      onPress={() =>
-                        navigation.navigate("GroupDetail", { groupId: item.id })
-                      }
-                    >
-                      <View style={styles.groupCardContent}>
-                        <View style={styles.groupThumbnail}>
-                          {thumbnailUri ? (
-                            <Image
-                              source={{ uri: thumbnailUri }}
-                              style={styles.thumbnailImage}
-                            />
-                          ) : (
-                            <View
-                              style={[
-                                styles.placeholderThumbnail,
-                                { backgroundColor: COLORS.muted },
-                              ]}
-                            >
-                              <Ionicons
-                                name="images"
-                                size={24}
-                                color={COLORS.secondary}
-                              />
-                            </View>
-                          )}
-                        </View>
-                        <View style={styles.groupInfo}>
-                          <Text
-                            style={[
-                              styles.groupName,
-                              { color: COLORS.foreground },
-                            ]}
-                            numberOfLines={1}
-                          >
-                            {item.name}
-                          </Text>
-                          <Text
-                            style={[
-                              styles.groupImageCount,
-                              { color: COLORS.secondary },
-                            ]}
-                          >
-                            {item.imageUris.length}{" "}
-                            {item.imageUris.length === 1 ? "image" : "images"}
-                          </Text>
-                        </View>
-                        <Ionicons
-                          name="chevron-forward"
-                          size={20}
-                          color={COLORS.secondary}
-                        />
-                      </View>
-                    </TouchableOpacity>
-                  );
+            }
+            renderItem={({ item }) => (
+              <Image
+                source={{ uri: item }}
+                style={{
+                  width: IMAGE_SIZE,
+                  height: IMAGE_SIZE,
+                  margin: 2,
+                  borderRadius: 6,
                 }}
-                ListFooterComponent={
-                  <TouchableOpacity
-                    style={[
-                      styles.manageGroupsButton,
-                      { borderColor: COLORS.primary },
-                    ]}
-                    onPress={() => navigation.navigate("Groups")}
-                  >
-                    <Text
-                      style={{ color: COLORS.primary, fontFamily: FONT.bold }}
-                    >
-                      Manage Groups
-                    </Text>
-                  </TouchableOpacity>
-                }
               />
             )}
-          </View>
+          />
         )}
       </View>
 
@@ -377,7 +171,7 @@ const HomeScreen = () => {
       <View style={styles.cameraButtonContainer}>
         <TouchableOpacity
           style={styles.cameraButton}
-          onPress={() => navigation.navigate("Camera")}
+          onPress={() => navigation.navigate("Camera" as never)}
         >
           <Ionicons name="camera" size={36} color="white" />
         </TouchableOpacity>
@@ -556,87 +350,6 @@ const styles = StyleSheet.create({
     top: 10,
     right: 10,
     zIndex: 1,
-  },
-  tabContainer: {
-    flexDirection: "row",
-    justifyContent: "space-around",
-    marginBottom: 20,
-  },
-  tab: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingVertical: 10,
-    paddingHorizontal: 20,
-    borderRadius: 20,
-    borderWidth: 1,
-    borderColor: "transparent",
-  },
-  activeTab: {
-    backgroundColor: "white",
-  },
-  tabText: {
-    marginLeft: 5,
-    fontSize: 16,
-    fontFamily: FONT.bold,
-  },
-  groupsContainer: {
-    flex: 1,
-    width: "100%",
-  },
-  groupsList: {
-    paddingHorizontal: 20,
-  },
-  groupCard: {
-    marginBottom: 15,
-    padding: 15,
-    borderRadius: 10,
-  },
-  groupCardContent: {
-    flexDirection: "row",
-    alignItems: "center",
-  },
-  groupThumbnail: {
-    width: 50,
-    height: 50,
-    borderRadius: 6,
-    overflow: "hidden",
-    marginRight: 12,
-  },
-  thumbnailImage: {
-    width: "100%",
-    height: "100%",
-  },
-  placeholderThumbnail: {
-    width: "100%",
-    height: "100%",
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  groupInfo: {
-    flex: 1,
-  },
-  groupName: {
-    fontSize: 16,
-    fontFamily: FONT.bold,
-    marginBottom: 4,
-  },
-  groupImageCount: {
-    fontSize: 14,
-    fontFamily: FONT.regular,
-  },
-  createGroupButton: {
-    paddingVertical: 10,
-    paddingHorizontal: 20,
-    borderRadius: 8,
-    marginTop: 15,
-  },
-  manageGroupsButton: {
-    padding: 12,
-    borderRadius: 8,
-    borderWidth: 1,
-    alignItems: "center",
-    marginTop: 15,
-    marginBottom: 30,
   },
 });
 
