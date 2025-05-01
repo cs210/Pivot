@@ -15,6 +15,7 @@ import { FONT } from "./theme";
 import HomeScreen from "./screens/HomeScreen";
 import CameraScreen from "./screens/CameraScreen";
 import GroupDetailScreen from "./screens/GroupDetailScreen";
+import AuthScreen from "./screens/AuthScreen"; // Import the AuthScreen
 
 // Import GalleryScreen with a require statement to avoid module resolution issues
 const GalleryScreen = require("./screens/GalleryScreen").default;
@@ -61,6 +62,11 @@ export default function App() {
           name="GroupDetail"
           component={GroupDetailScreen}
           options={{ headerShown: false }}
+        />
+        <Stack.Screen
+          name="AuthScreen"
+          component={AuthScreen}
+          options={{ headerShown: false }} // Hide the header for AuthScreen
         />
       </Stack.Navigator>
     </NavigationContainer>
