@@ -488,9 +488,7 @@ const GroupDetailScreen = () => {
                   size={18}
                   color={COLORS.primaryForeground}
                 />
-                <Text style={styles.publishButtonText}>
-                  Publish to Folder on Web
-                </Text>
+                <Text style={styles.publishButtonText}>Publish to Web</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 style={styles.addImagesButton}
