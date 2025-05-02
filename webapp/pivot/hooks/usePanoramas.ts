@@ -1,6 +1,13 @@
 import { useState, useEffect, useRef } from "react";
 import { createClient } from "@/utils/supabase/client";
 import { RawImage } from "./useRawImages";
+import {
+  getCachedPanoramas,
+  cachePanoramas,
+  addPanoramaToCache,
+  removePanoramaFromCache,
+  updatePanoramaInCache
+} from "./cache-service";
 
 export interface Panorama {
   id: string;
@@ -48,9 +55,21 @@ export function usePanoramas(projectId: string) {
     fetchPanoramas();
   }, [projectId]);
 
-  const fetchPanoramas = async () => {
+  const fetchPanoramas = async (forceRefresh = false) => {
     setLoading(true);
+    
     try {
+      // Check if we have cached panoramas
+      const cachedData = getCachedPanoramas(projectId);
+      
+      if (cachedData && !forceRefresh) {
+        console.log("Using cached panoramas");
+        setPanoramas(cachedData);
+        setLoading(false);
+        return;
+      }
+      
+      // If no cache or force refresh, fetch from database
       const { data, error } = await supabase
         .from("panoramas")
         .select("*")
@@ -84,6 +103,10 @@ export function usePanoramas(projectId: string) {
         };
       }));
 
+      // Update the cache
+      cachePanoramas(projectId, transformedData);
+      
+      // Update state
       setPanoramas(transformedData);
     } catch (error) {
       console.error("Error fetching panoramas:", error);
@@ -112,6 +135,9 @@ export function usePanoramas(projectId: string) {
             : pano
         )
       );
+      
+      // Update the cache
+      updatePanoramaInCache(projectId, panoramaId, updateData);
       
       // If we're updating a URL or metadata that affects URLs, refresh the panorama
       if (updateData.is_public !== undefined || updateData.storage_path) {
@@ -147,13 +173,21 @@ export function usePanoramas(projectId: string) {
       }
       
       // Update the panorama in state with the new URL
+      const updatedPanorama = {
+        ...panorama,
+        url
+      };
+      
       setPanoramas(prevPanoramas => 
         prevPanoramas.map(p => 
           p.id === panorama.id 
-            ? { ...p, url } 
+            ? updatedPanorama
             : p
         )
       );
+      
+      // Update the cache
+      updatePanoramaInCache(projectId, panorama.id, { url });
       
       return url;
     } catch (error) {
@@ -176,13 +210,17 @@ export function usePanoramas(projectId: string) {
 
       if (error) throw error;
 
-      setPanoramas(
-        panoramas.map((pano) =>
-          pano.id === panoramaToRename.id
-            ? { ...pano, name: newPanoramaName.trim() }
-            : pano
-        )
+      const updatedPanoramas = panoramas.map((pano) =>
+        pano.id === panoramaToRename.id
+          ? { ...pano, name: newPanoramaName.trim() }
+          : pano
       );
+      
+      // Update state
+      setPanoramas(updatedPanoramas);
+      
+      // Update cache
+      updatePanoramaInCache(projectId, panoramaToRename.id, { name: newPanoramaName.trim() });
 
       setRenamePanoramaDialogOpen(false);
       setPanoramaToRename(null);
@@ -224,6 +262,9 @@ export function usePanoramas(projectId: string) {
       // Update local state
       setPanoramas(panoramas.filter((pano) => pano.id !== panoramaId));
       setSelectedPanoramas(selectedPanoramas.filter((id) => id !== panoramaId));
+      
+      // Update cache
+      removePanoramaFromCache(projectId, panoramaId);
 
       if (showAlert) {
         alert("360 image deleted successfully");
@@ -306,9 +347,18 @@ export function usePanoramas(projectId: string) {
 
         console.log("Panorama record created in database:", data);
 
-        // Add to local state
+        // Add to local state with URL
         if (data && data.length > 0) {
-          setPanoramas((prev) => [...prev, ...data]);
+          const newPanorama = {
+            ...data[0],
+            url: urlData.signedUrl,
+            is_processing: false
+          };
+          
+          setPanoramas((prev) => [...prev, newPanorama]);
+          
+          // Add to cache
+          addPanoramaToCache(projectId, newPanorama);
         }
       }
 
