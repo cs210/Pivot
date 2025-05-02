@@ -46,7 +46,7 @@ export function useProjects(router: any) {
     }
 
     try {
-      const { data, error } = await supabase
+      const { data: projectData, error: projectError } = await supabase
         .from("projects")
         .insert([
           {
@@ -58,12 +58,34 @@ export function useProjects(router: any) {
         ])
         .select();
 
-      if (error) throw error;
+      if (projectError) throw projectError;
 
-      if (data && data.length > 0) {
+      // Get the project ID from the inserted data
+      const userId = (await supabase.auth.getUser()).data.user?.id;
+
+      // create a 1x1 grid 
+      const { data: gridData, error: gridError } = await supabase
+        .from("grids")
+        .insert([
+          {
+            project_id: projectData[0].id,
+            name: "Default Grid",
+            rows: 1,
+            cols: 1,
+            is_default: true,
+            is_public: false,
+            user_id: userId,
+          },
+        ])
+        .select();
+      if (gridError) throw gridError;
+      console.log("Grid created:", gridData);
+
+
+      if (projectData && projectData.length > 0) {
         // Add the new project to the local state
-        setProjects(prev => [data[0], ...prev]);
-        return data[0];
+        setProjects(prev => [projectData[0], ...prev]);
+        return projectData[0];
       }
       return null;
     } catch (error) {

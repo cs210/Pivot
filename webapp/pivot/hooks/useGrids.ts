@@ -92,7 +92,6 @@ export function useGrids(projectId: string) {
   };
 
   const fetchData = async () => {
-    console.log("Starting fetchData for project:", projectId);
     setLoading(true);
     try {
       // 1. Fetch the default grid for this project
@@ -112,31 +111,11 @@ export function useGrids(projectId: string) {
       let grid: Grid;
       
       if (!gridData) {
-        // Create a default grid if none exists
-        console.log("Creating new grid for project:", projectId);
-        const userId = (await supabase.auth.getUser()).data.user?.id;
-        if (!userId) throw new Error("User not authenticated");
-        
-        const { data: newGrid, error: createError } = await supabase
-          .from("grids")
-          .insert({
-            project_id: projectId,
-            name: "Default Grid",
-            rows: 1,
-            cols: 1,
-            is_default: true,
-            is_public: false,
-            user_id: userId
-          })
-          .select()
-          .single();
-          
-        if (createError) throw createError;
-        grid = newGrid;
-        console.log("New grid created:", grid);
-      } else {
-        grid = gridData;
+        // throw error
+        throw new Error("No default grid found for this project");
       }
+
+      grid = gridData;
       
       // Set grid data
       setCurrentGrid(grid);
