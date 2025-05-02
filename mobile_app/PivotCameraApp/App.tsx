@@ -2,7 +2,7 @@ import React from "react";
 import { NavigationContainer } from "@react-navigation/native";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import { StatusBar } from "expo-status-bar";
-import AppLoading from "expo-app-loading";
+import * as SplashScreen from "expo-splash-screen";
 import {
   useFonts,
   ChakraPetch_400Regular,
@@ -24,21 +24,20 @@ const GalleryScreen = require("./screens/GalleryScreen").default;
 const Stack = createNativeStackNavigator();
 
 export default function App() {
+  React.useEffect(() => {
+    SplashScreen.preventAutoHideAsync();
+  }, []);
   // Load custom fonts
   const [fontsLoaded] = useFonts({
     ChakraPetch_400Regular,
     ChakraPetch_700Bold,
   });
-  if (fontsLoaded) {
-    // Apply default font family to all Text elements
-    // Using 'as any' to bypass deprecated defaultProps type error
-    (Text as any).defaultProps = (Text as any).defaultProps || {};
-    (Text as any).defaultProps.style = {
-      fontFamily: FONT.regular,
-      ...((Text as any).defaultProps.style || {}),
-    };
-  }
-  if (!fontsLoaded) return <AppLoading />;
+  React.useEffect(() => {
+    if (fontsLoaded) {
+      SplashScreen.hideAsync();
+    }
+  }, [fontsLoaded]);
+  if (!fontsLoaded) return null;
   return (
     <NavigationContainer>
       <StatusBar style="auto" />

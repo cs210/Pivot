@@ -27,6 +27,11 @@ import { ImageGroup, RootStackParamList } from "../types"; // Added RootStackPar
 import { GroupStorage } from "../utils/groupStorage";
 import { supabase } from "../utils/supabase"; // Import supabase client
 
+// App.tsx or index.js (top of file)
+import "react-native-url-polyfill/auto";
+require("randombytes");
+global.Buffer = require("buffer").Buffer;
+
 // Define the type for the Home screen route parameters
 type HomeScreenRouteProp = RouteProp<RootStackParamList, "Home">;
 
