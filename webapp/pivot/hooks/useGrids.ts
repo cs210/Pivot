@@ -1,6 +1,16 @@
 import { createClient } from "@/utils/supabase/client";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Panorama } from "./usePanoramas";
+import {
+  getCachedGrid,
+  getCachedGridNodes,
+  getCachedPanoramas,
+  cacheGrid,
+  cacheGridNodes,
+  updateGridInCache,
+  updateGridNodeInCache,
+  removeGridNodeFromCache
+} from "./cache-service";
 
 export interface Grid {
   id: string;
@@ -91,9 +101,45 @@ export function useGrids(projectId: string) {
     setHasChanges(true);
   };
 
-  const fetchData = async () => {
-    setLoading(true);
+  const fetchData = async (forceRefresh = false) => {
+    console.log("Starting fetchData for project:", projectId);
+    
     try {
+      // Check if we have cached grid data
+      const cachedGrid = getCachedGrid(projectId);
+      const cachedGridNodes = getCachedGridNodes(projectId);
+      const cachedPanoramas = getCachedPanoramas(projectId);
+      
+      if (cachedGrid && cachedGridNodes && cachedPanoramas && !forceRefresh) {
+        console.log("Using cached grid data");
+        setCurrentGrid(cachedGrid);
+        setRows(cachedGrid.rows);
+        setCols(cachedGrid.cols);
+        setIsPublic(cachedGrid.is_public);
+        setGridNodes(cachedGridNodes);
+        
+        // Set the panoramas
+        setAllPanoramas(cachedPanoramas);
+        
+        // Calculate unassigned panoramas
+        const usedPanoramaIds = new Set<string>();
+        Object.values(cachedGridNodes).forEach(node => {
+          if (node.panorama_id) {
+            usedPanoramaIds.add(node.panorama_id);
+          }
+        });
+        
+        const unassigned = cachedPanoramas.filter(
+          (pano) => !usedPanoramaIds.has(pano.id)
+        );
+        setUnassignedPanoramas(unassigned);
+        
+        setLoading(false);
+        return;
+      }
+      
+      // If no cache or force refresh, fetch from database
+      
       // 1. Fetch the default grid for this project
       const { data: gridData, error: gridError } = await supabase
         .from("grids")
@@ -117,6 +163,9 @@ export function useGrids(projectId: string) {
 
       grid = gridData;
       
+      // Cache the grid
+      cacheGrid(projectId, grid);
+      
       // Set grid data
       setCurrentGrid(grid);
       setRows(grid.rows);
@@ -124,34 +173,41 @@ export function useGrids(projectId: string) {
       setIsPublic(grid.is_public);
 
       // 2. Fetch all panoramas for this project
-      const { data: panoramasData, error: panoramasError } = await supabase
-        .from("panoramas")
-        .select("*")
-        .eq("project_id", projectId);
+      let panoramasWithUrls: Panorama[] = [];
+      
+      // Check if we have cached panoramas even if the grid wasn't cached
+      if (cachedPanoramas && !forceRefresh) {
+        panoramasWithUrls = cachedPanoramas;
+      } else {
+        const { data: panoramasData, error: panoramasError } = await supabase
+          .from("panoramas")
+          .select("*")
+          .eq("project_id", projectId);
 
-      if (panoramasError) {
-        throw panoramasError;
+        if (panoramasError) {
+          throw panoramasError;
+        }
+
+        // Add signed URLs to panoramas
+        panoramasWithUrls = await Promise.all(
+          (panoramasData || []).map(async (pano) => {
+            let url;
+            if (pano.is_public) {
+              // For public panoramas, use the public URL
+              url = supabase.storage
+                .from("panoramas")
+                .getPublicUrl(pano.storage_path).data.publicUrl;
+            } else {
+              // For private panoramas, generate a signed URL
+              const { data: urlData } = await supabase.storage
+                .from("panoramas")
+                .createSignedUrl(pano.storage_path, 3600); // 1 hour expiration
+              url = urlData?.signedUrl || null;
+            }
+            return { ...pano, url };
+          })
+        );
       }
-
-      // Add signed URLs to panoramas
-      const panoramasWithUrls = await Promise.all(
-        (panoramasData || []).map(async (pano) => {
-          let url;
-          if (pano.is_public) {
-            // For public panoramas, use the public URL
-            url = supabase.storage
-              .from("panoramas")
-              .getPublicUrl(pano.storage_path).data.publicUrl;
-          } else {
-            // For private panoramas, generate a signed URL
-            const { data: urlData } = await supabase.storage
-              .from("panoramas")
-              .createSignedUrl(pano.storage_path, 3600); // 1 hour expiration
-            url = urlData?.signedUrl || null;
-          }
-          return { ...pano, url };
-        })
-      );
       
       setAllPanoramas(panoramasWithUrls);
 
@@ -185,6 +241,9 @@ export function useGrids(projectId: string) {
         });
       }
       
+      // Cache the grid nodes
+      cacheGridNodes(projectId, nodesMap);
+      
       setGridNodes(nodesMap);
       
       // Determine unassigned panoramas (not used in any grid node)
@@ -199,6 +258,11 @@ export function useGrids(projectId: string) {
       setLoading(false);
     }
   };
+
+  // Initial data fetch
+  useEffect(() => {
+    fetchData();
+  }, [projectId]);
 
   // Assign a panorama to a grid position
   const handleAssignPanorama = async (x: number, y: number, panoramaId: string) => {
@@ -218,10 +282,14 @@ export function useGrids(projectId: string) {
         if (error) throw error;
         
         // Update local state
+        const updatedNode = { ...existingNode, panorama_id: panoramaId };
         setGridNodes(prev => ({
           ...prev,
-          [posKey]: { ...existingNode, panorama_id: panoramaId }
+          [posKey]: updatedNode
         }));
+        
+        // Update cache
+        updateGridNodeInCache(projectId, posKey, updatedNode);
       } else {
         // Create new node
         const { data, error } = await supabase
@@ -232,6 +300,8 @@ export function useGrids(projectId: string) {
             grid_x: x,
             grid_y: y,
             panorama_id: panoramaId,
+            rotation_degrees: 0,
+            scale_factor: 1
           })
           .select()
           .single();
@@ -243,6 +313,9 @@ export function useGrids(projectId: string) {
           ...prev,
           [posKey]: data
         }));
+        
+        // Update cache
+        updateGridNodeInCache(projectId, posKey, data);
       }
       
       // Update unassigned panoramas list
@@ -292,10 +365,14 @@ export function useGrids(projectId: string) {
       );
       
       // Update local state
+      const updatedNode = { ...existingNode, panorama_id: null };
       setGridNodes(prev => ({
         ...prev,
-        [posKey]: { ...existingNode, panorama_id: null }
+        [posKey]: updatedNode
       }));
+      
+      // Update cache
+      updateGridNodeInCache(projectId, posKey, updatedNode);
       
       // Add the panorama back to unassigned list
       if (unassignedPanorama) {
@@ -328,8 +405,18 @@ export function useGrids(projectId: string) {
       if (updateError) throw updateError;
       
       // Update the current grid in state
-      setCurrentGrid({
+      const updatedGrid = {
         ...currentGrid,
+        rows,
+        cols,
+        is_public: isPublic,
+        updated_at: new Date().toISOString()
+      };
+      
+      setCurrentGrid(updatedGrid);
+      
+      // Update the cache
+      updateGridInCache(projectId, currentGrid.id, {
         rows,
         cols,
         is_public: isPublic,
@@ -374,6 +461,9 @@ export function useGrids(projectId: string) {
         nodesToDelete.forEach(node => {
           const key = getPosKey(node.grid_x, node.grid_y);
           delete updatedGridNodes[key];
+          
+          // Remove from cache as well
+          removeGridNodeFromCache(projectId, key);
         });
         
         setGridNodes(updatedGridNodes);
@@ -441,6 +531,7 @@ export function useGrids(projectId: string) {
     decreaseRows,
     increaseCols,
     decreaseCols,
-    setOpenDropdownCell
+    setOpenDropdownCell,
+    setIsPublic
   };
 }
