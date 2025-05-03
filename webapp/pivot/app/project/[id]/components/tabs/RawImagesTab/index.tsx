@@ -103,6 +103,15 @@ export default function RawImagesTab({ projectId }: RawImagesTabProps) {
             upsert: true,
           });
 
+        if (uploadErrorRaw) {
+          console.error("Storage upload error for raw image:", {
+            message: uploadErrorRaw.message,
+            name: uploadErrorRaw.name,
+            fullError: JSON.stringify(uploadErrorRaw, null, 2),
+          });
+          throw uploadErrorRaw;
+        }
+
         console.log(`Creating thumbnail for file: ${fileName}`);
           
         // Turn file into thumbnail
@@ -126,15 +135,6 @@ export default function RawImagesTab({ projectId }: RawImagesTabProps) {
             cacheControl: "3600",
             upsert: true,
           });
-
-        if (uploadErrorRaw) {
-          console.error("Storage upload error:", {
-            message: uploadErrorRaw.message,
-            name: uploadErrorRaw.name,
-            fullError: JSON.stringify(uploadErrorRaw, null, 2),
-          });
-          throw uploadErrorRaw;
-        }
 
         if (uploadErrorThumb) {
           console.error("Storage upload error:", {
