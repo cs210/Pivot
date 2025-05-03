@@ -16,7 +16,9 @@ CREATE TRIGGER organization_domain_change_trigger
 AFTER UPDATE OF domain_restriction ON organizations
 FOR EACH ROW
 WHEN (OLD.domain_restriction IS DISTINCT FROM NEW.domain_restriction)
-EXECUTE FUNCTION handle_organization_domain_change();-- Enable the necessary extensions
+EXECUTE FUNCTION handle_organization_domain_change();
+
+-- Enable the necessary extensions
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 
 -- Create organizations table and insert first organization
@@ -197,62 +199,70 @@ ALTER TABLE grids ENABLE ROW LEVEL SECURITY;
 ALTER TABLE grid_nodes ENABLE ROW LEVEL SECURITY;
 
 -- Organizations RLS Policies
-CREATE POLICY "organizations_select_policy" ON organizations
-    FOR SELECT
-    USING (
-        -- Public organizations are visible to everyone
-        (domain_restriction IS NULL) OR
-        -- Or the user's email matches the organization's domain
-        (
-            domain_restriction IS NOT NULL AND
-            auth.email() LIKE '%@' || domain_restriction
-        )
-    );
+CREATE POLICY "Organizations Select: Anyone can see public organizations"
+ON organizations
+FOR SELECT
+USING (domain_restriction IS NULL);
+
+CREATE POLICY "Organizations Select: Users can see their own organizations (domain restricted)"
+ON organizations
+FOR SELECT
+USING (
+    domain_restriction IS NOT NULL AND
+    auth.email() LIKE '%@' || domain_restriction
+);
 
 -- Projects RLS Policies
-CREATE POLICY "projects_select_policy" ON projects
-    FOR SELECT
-    USING (
-        -- User owns the project
-        user_id = auth.uid() OR
-        -- Project is public (regardless of organization)
-        is_public = TRUE OR
-        -- User's email matches the organization's domain restriction
-        (
-            organization_id IS NOT NULL AND
-            EXISTS (
-                SELECT 1 FROM organizations 
-                WHERE id = projects.organization_id 
-                AND domain_restriction IS NOT NULL
-                AND auth.email() LIKE '%@' || domain_restriction
-            )
-        )
-    );
+CREATE POLICY "Projects Select: Users can see their own projects"
+ON projects
+FOR SELECT
+USING (user_id = auth.uid());
 
-CREATE POLICY "projects_update_policy" ON projects
-    FOR UPDATE
-    USING (user_id = auth.uid());
+CREATE POLICY "Projects Select: Anyone can see public projects"
+ON projects
+FOR SELECT
+USING (is_public = TRUE);
 
-CREATE POLICY "projects_insert_policy" ON projects
-    FOR INSERT
-    WITH CHECK (auth.uid() IS NOT NULL);
+CREATE POLICY "Projects Select: Users can see projects in their organizations"
+ON projects
+FOR SELECT
+USING (
+    organization_id IS NOT NULL AND
+    EXISTS (
+        SELECT 1 FROM organizations 
+        WHERE id = projects.organization_id 
+        AND domain_restriction IS NOT NULL
+        AND auth.email() LIKE '%@' || domain_restriction
+    )
+);
 
-CREATE POLICY "projects_delete_policy" ON projects
-    FOR DELETE
-    USING (auth.uid() = user_id);
+CREATE POLICY "Projects Update: Users can update their own projects"
+ON projects
+FOR UPDATE
+USING (user_id = auth.uid());
+
+CREATE POLICY "Projects Insert: All authenticated users can create projects"
+ON projects
+FOR INSERT
+WITH CHECK (auth.uid() IS NOT NULL);
+
+CREATE POLICY "Projects Delete: Users can delete their own projects"
+ON projects
+FOR DELETE
+USING (auth.uid() = user_id);
 
 -- Folders RLS Policies
-CREATE POLICY "folders_select_policy"
+CREATE POLICY "Folders Select: Users can see folders in their own projects"
 ON folders FOR SELECT
 USING (
     EXISTS (
         SELECT 1 FROM projects
         WHERE projects.id = folders.project_id
-        AND (projects.user_id = auth.uid() OR projects.is_public = TRUE)
+        AND projects.user_id = auth.uid()
     )
 );
 
-CREATE POLICY "folders_insert_policy"
+CREATE POLICY "Folders Insert: Users can create folders in their own projects"
 ON folders FOR INSERT
 WITH CHECK (
     EXISTS (
@@ -262,7 +272,7 @@ WITH CHECK (
     )
 );
 
-CREATE POLICY "folders_update_policy"
+CREATE POLICY "Folders Update: Users can update folders in their own projects"
 ON folders FOR UPDATE
 USING (
     EXISTS (
@@ -272,7 +282,7 @@ USING (
     )
 );
 
-CREATE POLICY "folders_delete_policy"
+CREATE POLICY "Folders Delete: Users can delete folders in their own projects"
 ON folders FOR DELETE
 USING (
     EXISTS (
@@ -283,43 +293,54 @@ USING (
 );
 
 -- Raw Images RLS Policies
-CREATE POLICY "raw_images_select_policy"
+CREATE POLICY "Raw Images Select: Users can see raw images in their own projects"
 ON raw_images FOR SELECT
 USING (
-    auth.uid() = user_id OR
     EXISTS (
         SELECT 1 FROM projects
         WHERE projects.id = raw_images.project_id
-        AND projects.is_public = TRUE
+        AND projects.user_id = auth.uid()
     )
 );
 
-CREATE POLICY "raw_images_insert_policy"
+CREATE POLICY "Raw Images Insert: Users can create raw images in their own projects"
 ON raw_images FOR INSERT
-WITH CHECK (auth.uid() = user_id);
+WITH CHECK (
+    EXISTS (
+        SELECT 1 FROM projects
+        WHERE projects.id = raw_images.project_id
+        AND projects.user_id = auth.uid()
+    )
+    AND auth.uid() = user_id  -- Ensure the authenticated user is set as the owner
+);
 
-CREATE POLICY "raw_images_update_policy"
+CREATE POLICY "Raw Images Update: Users can update their own raw images"
 ON raw_images FOR UPDATE
 USING (auth.uid() = user_id);
 
-CREATE POLICY "raw_images_delete_policy"
+CREATE POLICY "Raw Images Delete: Users can delete their own raw images"
 ON raw_images FOR DELETE
 USING (auth.uid() = user_id);
 
 -- Panoramas RLS Policies
-CREATE POLICY "panoramas_select_policy"
+CREATE POLICY "Panoramas Select: Users can see their own panoramas"
+ON panoramas FOR SELECT
+USING (auth.uid() = user_id);
+
+CREATE POLICY "Panoramas Select: Anyone can see public panoramas"
 ON panoramas FOR SELECT
 USING (
-    -- User owns the panorama
-    auth.uid() = user_id 
-    -- OR the panorama belongs to a public project
-    OR EXISTS (
+    EXISTS (
         SELECT 1 FROM projects 
         WHERE projects.id = panoramas.project_id 
         AND projects.is_public = TRUE
     )
-    -- OR the user belongs to the same organization as the project
-    OR EXISTS (
+);
+
+CREATE POLICY "Panoramas Select: Users can see panoramas in their organizations"
+ON panoramas FOR SELECT
+USING (
+    EXISTS (
         SELECT 1 FROM projects
         JOIN organizations ON organizations.id = projects.organization_id
         WHERE projects.id = panoramas.project_id 
@@ -328,32 +349,43 @@ USING (
     )
 );
 
-CREATE POLICY "panoramas_insert_policy"
+CREATE POLICY "Panoramas Insert: Users can create panoramas in their own projects"
 ON panoramas FOR INSERT
-WITH CHECK (auth.uid() = user_id);
-
-CREATE POLICY "panoramas_update_policy"
+WITH CHECK (
+    EXISTS (
+        SELECT 1 FROM projects
+        WHERE projects.id = raw_images.project_id
+        AND projects.user_id = auth.uid()
+    )
+    AND auth.uid() = user_id  -- Ensure the authenticated user is set as the owner
+);
+CREATE POLICY "Panoramas Update: Users can update their own panoramas"
 ON panoramas FOR UPDATE
 USING (auth.uid() = user_id);
 
-CREATE POLICY "panoramas_delete_policy"
+CREATE POLICY "Panoramas Delete: Users can delete their own panoramas"
 ON panoramas FOR DELETE
 USING (auth.uid() = user_id);
 
 -- Grids RLS Policies
-CREATE POLICY "grids_select_policy"
+CREATE POLICY "Grids Select: Users can see their own grids"
+ON grids FOR SELECT
+USING (auth.uid() = user_id);
+
+CREATE POLICY "Grids Select: Anyone can see public grids"
 ON grids FOR SELECT
 USING (
-  -- User owns the grid
-  auth.uid() = user_id
-  -- OR the grid belongs to a public project
-  OR EXISTS (
+  EXISTS (
     SELECT 1 FROM projects 
     WHERE projects.id = grids.project_id 
     AND projects.is_public = TRUE
   )
-  -- OR the user belongs to the same organization as the project
-  OR EXISTS (
+);
+
+CREATE POLICY "Grids Select: Users can see grids in their organizations"
+ON grids FOR SELECT
+USING (
+  EXISTS (
     SELECT 1 FROM projects
     JOIN organizations ON organizations.id = projects.organization_id
     WHERE projects.id = grids.project_id 
@@ -362,7 +394,7 @@ USING (
   )
 );
 
-CREATE POLICY "grids_insert_policy" 
+CREATE POLICY "Grids Insert: Users can create grids in their own projects"
 ON grids FOR INSERT
 WITH CHECK (
   project_id IN (
@@ -370,38 +402,48 @@ WITH CHECK (
   )
 );
 
-CREATE POLICY "grids_update_policy"
+CREATE POLICY "Grids Update: Users can update their own grids"
 ON grids FOR UPDATE
 USING (auth.uid() = user_id);
 
-CREATE POLICY "grids_delete_policy"
+CREATE POLICY "Grids Delete: Users can delete their own grids"
 ON grids FOR DELETE
 USING (auth.uid() = user_id);
 
 -- Grid Nodes RLS Policies
-CREATE POLICY "grid_nodes_select_policy"
+CREATE POLICY "Grid Nodes Select: Users can see their own grid nodes"
 ON grid_nodes FOR SELECT
 USING (
     EXISTS (
         SELECT 1 FROM projects
         WHERE projects.id = grid_nodes.project_id
-        AND (
-            -- User owns the project
-            projects.user_id = auth.uid() 
-            -- OR the project is public
-            OR projects.is_public = TRUE
-            -- OR the user belongs to the same organization as the project
-            OR EXISTS (
-                SELECT 1 FROM organizations
-                WHERE organizations.id = projects.organization_id
-                AND organizations.domain_restriction IS NOT NULL
-                AND auth.email() LIKE '%@' || organizations.domain_restriction
-            )
-        )
+        AND projects.user_id = auth.uid()
     )
 );
 
-CREATE POLICY "grid_nodes_insert_policy"
+CREATE POLICY "Grid Nodes Select: Anyone can see grid nodes in public projects"
+ON grid_nodes FOR SELECT
+USING (
+    EXISTS (
+        SELECT 1 FROM projects
+        WHERE projects.id = grid_nodes.project_id
+        AND projects.is_public = TRUE
+    )
+);
+
+CREATE POLICY "Grid Nodes Select: Users can see grid nodes in their organizations"
+ON grid_nodes FOR SELECT
+USING (
+    EXISTS (
+        SELECT 1 FROM projects
+        JOIN organizations ON organizations.id = projects.organization_id
+        WHERE projects.id = grid_nodes.project_id
+        AND organizations.domain_restriction IS NOT NULL
+        AND auth.email() LIKE '%@' || organizations.domain_restriction
+    )
+);
+
+CREATE POLICY "Grid Nodes Insert: Users can create grid nodes in their own projects"
 ON grid_nodes FOR INSERT
 WITH CHECK (
     EXISTS (
@@ -411,7 +453,7 @@ WITH CHECK (
     )
 );
 
-CREATE POLICY "grid_nodes_update_policy"
+CREATE POLICY "Grid Nodes Update: Users can update their own grid nodes"
 ON grid_nodes FOR UPDATE
 USING (
     EXISTS (
@@ -421,7 +463,7 @@ USING (
     )
 );
 
-CREATE POLICY "grid_nodes_delete_policy"
+CREATE POLICY "Grid Nodes Delete: Users can delete their own grid nodes"
 ON grid_nodes FOR DELETE
 USING (
     EXISTS (
@@ -432,23 +474,23 @@ USING (
 );
 
 -- Storage Bucket Policies for 'panoramas' bucket
-CREATE POLICY "panoramas_storage_insert_policy"
+CREATE POLICY "Panoramas Storage Insert: Authenticated users can upload panoramas"
 ON storage.objects FOR INSERT
 TO authenticated
 WITH CHECK (bucket_id = 'panoramas' AND auth.uid() = owner);
 
-CREATE POLICY "panoramas_storage_update_policy"
+CREATE POLICY "Panoramas Storage Update: Users can update their own panoramas"
 ON storage.objects FOR UPDATE
 TO authenticated
 USING (bucket_id = 'panoramas' AND auth.uid() = owner);
 
-CREATE POLICY "panoramas_storage_delete_policy"
+CREATE POLICY "Panoramas Storage Delete: Users can delete their own panoramas"
 ON storage.objects FOR DELETE
 TO authenticated
 USING (bucket_id = 'panoramas' AND auth.uid() = owner);
 
 -- Combined policy for viewing panoramas - either as owner, from public projects, or same organization
-CREATE POLICY "panoramas_storage_select_policy"
+CREATE POLICY "Panoramas Storage Select: Users can view their own panos, panos in their org, or public panos"
 ON storage.objects FOR SELECT
 TO authenticated
 USING (
@@ -476,7 +518,7 @@ USING (
 );
 
 -- Separate policy specifically for anonymous access to public panoramas
-CREATE POLICY "panoramas_storage_select_anon_policy"
+CREATE POLICY "Panoramas Storage Select: Anyone can view public panoramas"
 ON storage.objects FOR SELECT
 TO anon
 USING (
@@ -490,108 +532,96 @@ USING (
 );
 
 -- Storage Bucket Policies for 'raw-images' bucket
-CREATE POLICY "raw_images_storage_insert_policy"
+CREATE POLICY "Raw Images Storage Insert: Users can upload raw images as themselves"
 ON storage.objects FOR INSERT
 TO authenticated
 WITH CHECK (bucket_id = 'raw-images' AND auth.uid() = owner);
 
-CREATE POLICY "raw_images_storage_update_policy"
+CREATE POLICY "Raw Images Storage Update: Users can update their own raw images"
 ON storage.objects FOR UPDATE
 TO authenticated
 USING (bucket_id = 'raw-images' AND auth.uid() = owner);
 
-CREATE POLICY "raw_images_storage_delete_policy"
+CREATE POLICY "Raw Images Storage Delete: Users can delete their own raw images"
 ON storage.objects FOR DELETE
 TO authenticated
 USING (bucket_id = 'raw-images' AND auth.uid() = owner);
 
-CREATE POLICY "raw_images_storage_select_policy"
-ON storage.objects FOR SELECT
-TO authenticated
+CREATE POLICY "Raw Images Storage Select: Users can access their own images"
+ON storage.objects FOR SELECT 
+TO authenticated 
 USING (bucket_id = 'raw-images' AND auth.uid() = owner);
 
 -- Storage Bucket Policies for 'raw-thumbnails' bucket
-CREATE POLICY "raw_thumbnails_storage_insert_policy"
+CREATE POLICY "Raw Thumbnails Storage Insert: Users can upload raw thumbnails as themselves"
 ON storage.objects FOR INSERT
 TO authenticated
 WITH CHECK (bucket_id = 'raw-thumbnails' AND auth.uid() = owner);
 
-CREATE POLICY "raw_thumbnails_storage_update_policy"
+CREATE POLICY "Raw Thumbnails Storage Update: Users can update their own raw thumbnails"
 ON storage.objects FOR UPDATE
 TO authenticated
 USING (bucket_id = 'raw-thumbnails' AND auth.uid() = owner);
 
-CREATE POLICY "raw_thumbnails_storage_delete_policy"
+CREATE POLICY "Raw Thumbnails Storage Delete: Users can delete their own raw thumbnails"
 ON storage.objects FOR DELETE
 TO authenticated
 USING (bucket_id = 'raw-thumbnails' AND auth.uid() = owner);
 
-CREATE POLICY "raw_thumbnails_storage_select_policy"
-ON storage.objects FOR SELECT
-TO authenticated
+CREATE POLICY "Raw Thumbnails Storage Select: Users can access their own raw thumbnails"
+ON storage.objects FOR SELECT 
+TO authenticated 
 USING (bucket_id = 'raw-thumbnails' AND auth.uid() = owner);
 
 -- Storage Bucket Policies for 'panorama-thumbnails' bucket
-CREATE POLICY "panorama_thumbnails_storage_insert_policy"
+CREATE POLICY "Panorama Thumbnails Storage Insert: Users can upload thumbnails as themselves"
 ON storage.objects FOR INSERT
 TO authenticated
 WITH CHECK (bucket_id = 'panorama-thumbnails' AND auth.uid() = owner);
 
-CREATE POLICY "panorama_thumbnails_storage_update_policy"
+CREATE POLICY "Panorama Thumbnails Storage Update: Users can update their own thumbnails"
 ON storage.objects FOR UPDATE
 TO authenticated
 USING (bucket_id = 'panorama-thumbnails' AND auth.uid() = owner);
 
-CREATE POLICY "panorama_thumbnails_storage_delete_policy"
+CREATE POLICY "Panorama Thumbnails Storage Delete: Users can delete their own thumbnails"
 ON storage.objects FOR DELETE
 TO authenticated
 USING (bucket_id = 'panorama-thumbnails' AND auth.uid() = owner);
 
-CREATE POLICY "panorama_thumbnails_storage_select_policy"
+CREATE POLICY "Panorama Thumbnails Storage Select: Users can access their own thumbnails"
 ON storage.objects FOR SELECT
 TO authenticated
-USING (
-  bucket_id = 'panorama-thumbnails'
-  AND (
-    -- User owns the file
-    auth.uid() = owner
-    -- OR file belongs to a panorama in a public project
-    OR EXISTS (
-      SELECT 1 FROM panoramas
-      JOIN projects ON projects.id = panoramas.project_id
-      WHERE 
-        -- Match thumbnails to panoramas (with a naming convention like 'thumb_' + panorama_storage_path)
-        storage.objects.name LIKE 'thumb_%' AND
-        SUBSTRING(storage.objects.name FROM 7) = panoramas.storage_path AND
-        projects.is_public = TRUE
-    )
-    -- OR user belongs to the same organization as the project
-    OR EXISTS (
-      SELECT 1 FROM panoramas
-      JOIN projects ON projects.id = panoramas.project_id
-      JOIN organizations ON organizations.id = projects.organization_id
-      WHERE 
-        -- Match thumbnails to panoramas (with a naming convention like 'thumb_' + panorama_storage_path)
-        storage.objects.name LIKE 'thumb_%' AND
-        SUBSTRING(storage.objects.name FROM 7) = panoramas.storage_path AND
-        organizations.domain_restriction IS NOT NULL AND
-        auth.email() LIKE '%@' || organizations.domain_restriction
-    )
-  )
-);
+USING (bucket_id = 'panorama-thumbnails' AND auth.uid() = owner);
 
-CREATE POLICY "panorama_thumbnails_storage_select_anon_policy"
+CREATE POLICY "Panorama Thumbnails Storage Select: Anyone can view public panorama thumbnails"
 ON storage.objects FOR SELECT
-TO anon
+TO authenticated, anon
 USING (
   bucket_id = 'panorama-thumbnails'
   AND EXISTS (
     SELECT 1 FROM panoramas
     JOIN projects ON projects.id = panoramas.project_id
     WHERE 
-      -- Match thumbnails to panoramas (with a naming convention like 'thumb_' + panorama_storage_path)
       storage.objects.name LIKE 'thumb_%' AND
       SUBSTRING(storage.objects.name FROM 7) = panoramas.storage_path AND
       projects.is_public = TRUE
+  )
+);
+
+CREATE POLICY "Panorama Thumbnails Storage Select: Users can view panorama thumbnails in their organizations"
+ON storage.objects FOR SELECT
+TO authenticated
+USING (
+  bucket_id = 'panorama-thumbnails'
+  AND EXISTS (
+    SELECT 1 FROM panoramas
+    JOIN projects ON projects.id = panoramas.project_id
+    JOIN organizations ON organizations.id = projects.organization_id
+    WHERE 
+      storage.objects.name LIKE 'thumb_%' AND
+      SUBSTRING(storage.objects.name FROM 7) = panoramas.storage_path AND
+      organizations.domain_restriction IS NOT NULL AND
+      auth.email() LIKE '%@' || organizations.domain_restriction
   )
 );
