@@ -10,7 +10,7 @@ import dynamic from "next/dynamic";
 
 // the URL of the default 360° image to display on the homepage
 const HOMEPAGE_360_URL =
-  "https://ymfbqixkknwxtriytkun.supabase.co/storage/v1/object/public/panoramas//Pano360_Room_Pachon_Hotel1-CC.jpg";
+  "https://bahareuzhrlwdxwlovoa.supabase.co/storage/v1/object/public/panoramas//Homepage.jpg";
 
 // Dynamically import ReactPhotoSphereViewer to avoid SSR issues
 const ReactPhotoSphereViewer = dynamic(
