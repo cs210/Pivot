@@ -62,16 +62,43 @@ export default function PanoramaViewerPage({
     updatePanorama,
   } = usePanoramas(projectId);
 
-  // State variables
+  // State variables - ALL HOOKS MUST BE INSIDE THE COMPONENT FUNCTION
   const [currentPanorama, setCurrentPanorama] = useState<Panorama | null>(null);
   const [editingMarker, setEditingMarker] = useState<string | null>(null);
   const [markerInput, setMarkerInput] = useState<string>("");
   const [showHelpModal, setShowHelpModal] = useState<boolean>(false);
+  const [isFullscreen, setIsFullscreen] = useState(false);  // MOVE THIS INSIDE
 
   // Refs
   const viewerRef = useRef<HTMLDivElement>(null);
   const photoViewerRef = useRef<any>(null);
   const markersPluginRef = useRef<any>(null);
+
+  // ALL EFFECTS MUST BE INSIDE THE COMPONENT FUNCTION
+  useEffect(() => {
+    const handleFullscreenChange = () => {
+      const isCurrentlyFullscreen = !!(
+        document.fullscreenElement ||
+        document.webkitFullscreenElement ||
+        document.mozFullScreenElement ||
+        document.msFullscreenElement
+      );
+      setIsFullscreen(isCurrentlyFullscreen);
+      console.log("Fullscreen status changed:", isCurrentlyFullscreen);
+    };
+
+    document.addEventListener("fullscreenchange", handleFullscreenChange);
+    document.addEventListener("webkitfullscreenchange", handleFullscreenChange);
+    document.addEventListener("mozfullscreenchange", handleFullscreenChange);
+    document.addEventListener("MSFullscreenChange", handleFullscreenChange);
+
+    return () => {
+      document.removeEventListener("fullscreenchange", handleFullscreenChange);
+      document.removeEventListener("webkitfullscreenchange", handleFullscreenChange);
+      document.removeEventListener("mozfullscreenchange", handleFullscreenChange);
+      document.removeEventListener("MSFullscreenChange", handleFullscreenChange);
+    };
+  }, []);
 
   // Cleanup viewer when component unmounts
   useEffect(() => {
@@ -273,10 +300,50 @@ export default function PanoramaViewerPage({
       }
 
       // For shared view, allow viewing marker info but not editing
-      markersPluginRef.current.addEventListener("select-marker", (event) => {
-        console.log("Marker selected:", event.marker);
+      markersPluginRef.current.addEventListener("select-marker", (e) => {
+        console.log("Marker select event:", e);
+        console.log("Marker data keys:", Object.keys(e));
+        
         if (!isSharedView) {
-          handleMarkerClick(event.marker);
+          // Different ways the marker data might be structured
+          let markerId;
+          let marker;
+          
+          // If e has a marker property
+          if (e.marker) {
+            marker = e.marker;
+            markerId = marker.id;
+          }
+          // If e has an id property directly
+          else if (e.id) {
+            markerId = e.id;
+            marker = e;
+          }
+          // If e has a data property
+          else if (e.data && e.data.id) {
+            markerId = e.data.id;
+            marker = e.data;
+          }
+          
+          console.log("Found marker ID:", markerId);
+          console.log("Marker object:", marker);
+          
+          if (markerId) {
+            // Find the actual marker object from our annotations
+            const actualMarker = currentPanorama?.metadata?.annotations?.find(
+              (anno) => anno.id === markerId
+            );
+            
+            if (actualMarker) {
+              console.log("Using actual marker from annotations:", actualMarker);
+              handleMarkerClick(actualMarker);
+            } else if (marker) {
+              console.log("Using marker from event:", marker);
+              handleMarkerClick(marker);
+            } else {
+              console.warn("No marker data found");
+            }
+          }
         }
       });
     } catch (error) {
@@ -286,18 +353,35 @@ export default function PanoramaViewerPage({
 
   const handleMarkerClick = (marker: Marker) => {
     if (isSharedView) return; // Don't allow editing in shared view
-
+    
+    // Safety check for marker object
+    if (!marker || !marker.id) {
+      console.error("Invalid marker object:", marker);
+      return;
+    }
+  
     console.log("handleMarkerClick called for", marker);
+    console.log("Raw marker object:", marker); // Debug log
     setEditingMarker(marker.id);
-
+  
     // Extract content from tooltip
     let content = "";
-    if (typeof marker.tooltip === "string") {
-      content = marker.tooltip;
-    } else if (marker.tooltip && typeof marker.tooltip === "object") {
-      content = marker.tooltip.content || "";
+    
+    // Check if tooltip exists and process it
+    if (marker.tooltip) {
+      if (typeof marker.tooltip === "string") {
+        content = marker.tooltip;
+      } else if (typeof marker.tooltip === "object" && marker.tooltip.content) {
+        content = marker.tooltip.content;
+      } else if (typeof marker.tooltip === "object") {
+        content = "";
+        console.warn("Unexpected tooltip format:", marker.tooltip);
+      }
+    } else if (marker.content) {
+      content = marker.content;
     }
-
+  
+    console.log("Extracted content:", content); // Debug log
     setMarkerInput(content);
   };
 
@@ -315,9 +399,10 @@ export default function PanoramaViewerPage({
       console.log("Updating marker with ID:", editingMarker);
 
       // Update the marker in the viewer with the new tooltip text
+      const tooltipData = markerInput ? { content: markerInput } : { content: "" };
       markersPluginRef.current.updateMarker({
         id: editingMarker,
-        tooltip: { content: markerInput },
+        tooltip: tooltipData,
       });
 
       // Always work with the latest state from currentPanorama
@@ -328,7 +413,7 @@ export default function PanoramaViewerPage({
         if (marker.id === editingMarker) {
           return {
             ...marker,
-            tooltip: { content: markerInput },
+            tooltip: markerInput ? { content: markerInput } : { content: "" },
           };
         }
         return marker;
@@ -468,8 +553,8 @@ export default function PanoramaViewerPage({
             </div>
           )}
 
-          {editingMarker && !isSharedView && (
-            <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 bg-white border border-gray-300 p-4 rounded shadow-lg z-50 text-white">
+            {editingMarker && !isSharedView && (
+              <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 bg-white border border-gray-300 p-4 rounded shadow-lg z-50 text-white">
               <h3 className="font-bold mb-2">Edit Marker Annotation</h3>
               <textarea
                 className="w-64 h-32 bg-gray-100 border border-gray-300 p-2 mb-3 !text-black !placeholder-gray-500"
