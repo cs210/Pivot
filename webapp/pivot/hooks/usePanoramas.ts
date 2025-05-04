@@ -282,17 +282,17 @@ export function usePanoramas(projectId: string) {
   ) => {
     const files = event.target.files;
     if (!files || files.length === 0) return;
-
+  
     setUploading(true);
-
+  
     try {
       for (let i = 0; i < files.length; i++) {
         const file = files[i];
         const fileName = file.name;
         const filePath = `${projectId}/${fileName}`;
-
+  
         console.log(`Uploading panorama: ${fileName} to path: ${filePath}`);
-
+  
         // Upload to storage
         const { data: uploadData, error: uploadError } = await supabase.storage
           .from("panoramas")
@@ -300,30 +300,25 @@ export function usePanoramas(projectId: string) {
             cacheControl: "3600",
             upsert: true,
           });
-
+  
         if (uploadError) {
           console.error("Storage upload error:", uploadError);
           throw uploadError;
         }
-
+  
         console.log("Panorama uploaded successfully:", uploadData?.path);
-
-        // Get signed URL for private access
+  
+        // Get signed URL
         const { data: urlData } = await supabase.storage
           .from("panoramas")
-          .createSignedUrl(uploadData.path, 3600); // 1 hour expiration
-
-        if (!urlData || !urlData.signedUrl) {
-          console.error(
-            "Failed to get signed URL for panorama:",
-            uploadData?.path
-          );
+          .createSignedUrl(uploadData.path, 3600);
+  
+        if (!urlData?.signedUrl) {
+          console.error("Failed to get signed URL for panorama:", uploadData?.path);
           throw new Error("Failed to get signed URL");
         }
-
-        console.log("Signed URL generated for panorama:", urlData.signedUrl);
-
-        // Save to database
+  
+        // Insert into database
         const { data, error } = await supabase
           .from("panoramas")
           .insert([
@@ -334,34 +329,34 @@ export function usePanoramas(projectId: string) {
               content_type: file.type,
               size_bytes: file.size,
               metadata: {},
-              is_public: false, // Change to false to make it private
-              user_id: (await supabase.auth.getUser()).data.user?.id, 
+              is_public: false,
+              user_id: (await supabase.auth.getUser()).data.user?.id,
             },
           ])
           .select();
-
+  
         if (error) {
           console.error("Database insert error:", error);
           throw error;
         }
-
-        console.log("Panorama record created in database:", data);
-
-        // Add to local state with URL
+  
         if (data && data.length > 0) {
           const newPanorama = {
             ...data[0],
             url: urlData.signedUrl,
             is_processing: false
           };
-          
-          setPanoramas((prev) => [...prev, newPanorama]);
-          
-          // Add to cache
+  
+          // ✅ Prevent duplicate appends
+          setPanoramas(prev => {
+            if (prev.some(p => p.id === newPanorama.id)) return prev;
+            return [...prev, newPanorama];
+          });
+  
           addPanoramaToCache(projectId, newPanorama);
         }
       }
-
+  
       alert("360 images uploaded successfully");
     } catch (error) {
       console.error("Error uploading 360 images:", error);
@@ -369,12 +364,12 @@ export function usePanoramas(projectId: string) {
       alert(`Failed to upload 360 images: ${errorMessage}`);
     } finally {
       setUploading(false);
-      // Reset the file input
       if (panoramaFileInputRef.current) {
         panoramaFileInputRef.current.value = "";
       }
     }
   };
+  
 
   const getProjectPanoramas = () => {
     return panoramas;
