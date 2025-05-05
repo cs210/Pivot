@@ -50,6 +50,7 @@ CREATE TABLE panoramas (
     size_bytes INTEGER NOT NULL,
     metadata JSONB,
     project_id UUID NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+    is_public BOOLEAN DEFAULT FALSE,
     user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
@@ -224,6 +225,47 @@ CREATE TRIGGER check_grid_node_project_id_matches_grid
 BEFORE INSERT OR UPDATE ON grid_nodes
 FOR EACH ROW
 EXECUTE FUNCTION enforce_grid_node_project_matches_grid();
+
+-- Step 1: Create the trigger function
+CREATE OR REPLACE FUNCTION sync_panorama_is_public()
+RETURNS TRIGGER AS $$
+BEGIN
+    -- Set the is_public field to match the related project
+    SELECT is_public INTO NEW.is_public
+    FROM projects
+    WHERE id = NEW.project_id;
+
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+-- Step 2: Attach the trigger to the panoramas table
+CREATE TRIGGER trg_sync_panorama_is_public
+BEFORE INSERT OR UPDATE ON panoramas
+FOR EACH ROW
+EXECUTE FUNCTION sync_panorama_is_public();
+
+-- Step 1: Create the trigger function
+CREATE OR REPLACE FUNCTION update_panorama_is_public()
+RETURNS TRIGGER AS $$
+BEGIN
+    -- Only act if is_public actually changed
+    IF NEW.is_public IS DISTINCT FROM OLD.is_public THEN
+        UPDATE panoramas
+        SET is_public = NEW.is_public,
+            updated_at = CURRENT_TIMESTAMP
+        WHERE project_id = NEW.id;
+    END IF;
+
+    RETURN NULL; -- AFTER triggers must return NULL
+END;
+$$ LANGUAGE plpgsql;
+
+-- Step 2: Create the trigger on the projects table
+CREATE TRIGGER trg_update_panorama_is_public
+AFTER UPDATE ON projects
+FOR EACH ROW
+EXECUTE FUNCTION update_panorama_is_public();
 
 -- Create indexes for performance
 CREATE INDEX idx_projects_user_id ON projects(user_id);
