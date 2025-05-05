@@ -27,33 +27,44 @@ const ProfileScreen = () => {
   };
 
   return (
-    <LinearGradient colors={GRADIENTS.cyber} style={styles.container}>
-      <Ionicons
-        name="person-circle"
-        size={160}
-        color={COLORS.primaryForeground}
-        style={styles.icon}
-      />
-      <Text style={styles.header}>Profile</Text>
-      {user ? (
-        <>
-          <Text style={styles.info}>Email: {user.email}</Text>
-          <TouchableOpacity
-            style={[styles.button, styles.logoutButton]}
-            onPress={handleLogout}
-          >
-            <Text style={styles.buttonText}>Logout</Text>
-          </TouchableOpacity>
-        </>
-      ) : (
-        <Text style={styles.loading}>Loading...</Text>
-      )}
+    <LinearGradient colors={GRADIENTS.cyber} style={styles.gradientBackground}>
+      {/* Back Button */}
+      <TouchableOpacity
+        style={styles.topLeftBackButton}
+        onPress={() => navigation.goBack()}
+      >
+        <Ionicons name="arrow-back" size={28} color={COLORS.primary} />
+      </TouchableOpacity>
+      {/* Main Content */}
+      <View style={styles.contentContainer}>
+        <Ionicons
+          name="person-circle"
+          size={160}
+          color={COLORS.primaryForeground}
+          style={styles.icon}
+        />
+        <Text style={styles.header}>Profile</Text>
+        {user ? (
+          <>
+            <Text style={styles.info}>Email: {user.email}</Text>
+            <TouchableOpacity
+              style={[styles.button, styles.logoutButton]}
+              onPress={handleLogout}
+            >
+              <Text style={styles.buttonText}>Logout</Text>
+            </TouchableOpacity>
+          </>
+        ) : (
+          <Text style={styles.loading}>Loading...</Text>
+        )}
+      </View>
     </LinearGradient>
   );
 };
 
 const styles = StyleSheet.create({
-  container: { flex: 1, justifyContent: "center", alignItems: "center" },
+  gradientBackground: { flex: 1 },
+  contentContainer: { flex: 1, justifyContent: "center", alignItems: "center" },
   icon: { marginBottom: 20 },
   header: {
     fontSize: 32,
@@ -86,6 +97,14 @@ const styles = StyleSheet.create({
     color: COLORS.primaryForeground,
     fontSize: 16,
     fontFamily: FONT.bold,
+  },
+  // Style for the back button
+  topLeftBackButton: {
+    position: "absolute",
+    top: 60, // Adjust as needed for status bar height
+    left: 20,
+    zIndex: 1,
+    padding: 10, // Increase touch target
   },
 });
 
