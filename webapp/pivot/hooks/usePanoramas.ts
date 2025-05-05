@@ -1,12 +1,12 @@
 import { useState, useEffect, useRef } from "react";
 import { createClient } from "@/utils/supabase/client";
 import { RawImage } from "./useRawImages";
+import { generateThumbnail } from "@/utils/generate-thumbnail";
 import {
   getCachedPanoramas,
-  cachePanoramas,
   addPanoramaToCache,
+  updatePanoramaInCache,
   removePanoramaFromCache,
-  updatePanoramaInCache
 } from "./cache-service";
 
 export interface Panorama {
@@ -15,13 +15,31 @@ export interface Panorama {
   storage_path: string;
   content_type: string;
   size_bytes: number;
-  metadata: Record<string, any>;
+  metadata: {
+    status?: 'processing' | 'completed' | 'failed';
+    error?: string;
+    annotations?: Array<{
+      id: string;
+      position: {
+        yaw: number;
+        pitch: number;
+      };
+      tooltip?: {
+        content: string;
+      };
+      data?: {
+        type?: string;
+        targetPanoramaId?: string | null;
+      };
+    }>;
+  };
   project_id: string;
   is_public: boolean;
   user_id: string;
   created_at: string;
   updated_at: string;
   url?: string | null; // Client-side property for display
+  thumbnail_url?: string | null; // Client-side property for thumbnail display
   is_processing?: boolean; // Client-side property for UI state
 }
 
@@ -56,15 +74,15 @@ export function usePanoramas(projectId: string) {
   }, [projectId]);
 
   const fetchPanoramas = async (forceRefresh = false) => {
-    setLoading(true);
+    console.log("Starting fetchPanoramas for project:", projectId);
     
     try {
       // Check if we have cached panoramas
-      const cachedData = getCachedPanoramas(projectId);
+      const cachedPanoramas = getCachedPanoramas(projectId);
       
-      if (cachedData && !forceRefresh) {
+      if (cachedPanoramas && !forceRefresh) {
         console.log("Using cached panoramas");
-        setPanoramas(cachedData);
+        setPanoramas(cachedPanoramas);
         setLoading(false);
         return;
       }
@@ -73,44 +91,55 @@ export function usePanoramas(projectId: string) {
       const { data, error } = await supabase
         .from("panoramas")
         .select("*")
-        .eq("project_id", projectId)
-        .order("name", { ascending: true });
-
-      if (error) throw error;
-
-      // Transform data to add client-side properties with proper URLs
+        .eq("project_id", projectId);
+  
+      if (error) {
+        throw error;
+      }
+  
+      // Add signed URLs to panoramas
       const transformedData = await Promise.all((data || []).map(async (item) => {
         let url;
-
+        let thumbnailUrl;
+  
         if (item.is_public) {
           // For public panoramas, use the public URL
           url = supabase.storage
             .from("panoramas")
             .getPublicUrl(item.storage_path).data.publicUrl;
+          
+          // Get thumbnail URL from thumbnails bucket
+          thumbnailUrl = supabase.storage
+            .from("thumbnails")
+            .getPublicUrl(item.storage_path).data.publicUrl;
         } else {
-          // For private panoramas, generate a signed URL
+          // For private panoramas, generate signed URLs
           const { data: urlData } = await supabase.storage
             .from("panoramas")
             .createSignedUrl(item.storage_path, 3600); // 1 hour expiration
-
+  
+          const { data: thumbUrlData } = await supabase.storage
+            .from("thumbnails")
+            .createSignedUrl(item.storage_path, 3600); // 1 hour expiration
+  
           url = urlData?.signedUrl || null;
+          thumbnailUrl = thumbUrlData?.signedUrl || null;
         }
-
+  
         return {
           ...item,
           url,
+          thumbnail_url: thumbnailUrl,
           is_processing: item.metadata?.status === 'processing'
         };
       }));
-
-      // Update the cache
-      cachePanoramas(projectId, transformedData);
-      
-      // Update state
+  
+      // Update state and cache
       setPanoramas(transformedData);
+      transformedData.forEach(panorama => addPanoramaToCache(projectId, panorama));
     } catch (error) {
       console.error("Error fetching panoramas:", error);
-      setPanoramas([]);
+      alert("Error loading panoramas. Please try again later.");
     } finally {
       setLoading(false);
     }
@@ -242,8 +271,14 @@ export function usePanoramas(projectId: string) {
       // Delete from storage
       try {
         if (panoramaToDelete.storage_path) {
+          // Delete the full panorama
           await supabase.storage
             .from("panoramas")
+            .remove([panoramaToDelete.storage_path]);
+            
+          // Delete the thumbnail
+          await supabase.storage
+            .from("thumbnails")
             .remove([panoramaToDelete.storage_path]);
         }
       } catch (storageError) {
@@ -293,7 +328,7 @@ export function usePanoramas(projectId: string) {
   
         console.log(`Uploading panorama: ${fileName} to path: ${filePath}`);
   
-        // Upload to storage
+        // Upload full panorama to storage
         const { data: uploadData, error: uploadError } = await supabase.storage
           .from("panoramas")
           .upload(filePath, file, {
@@ -307,13 +342,39 @@ export function usePanoramas(projectId: string) {
         }
   
         console.log("Panorama uploaded successfully:", uploadData?.path);
+
+        // Generate and upload thumbnail
+        const thumbnailBlob = await generateThumbnail(file, {
+          maxDimension: 800,
+          quality: 0.95,
+          format: 'image/jpeg',
+          filename: `thumb_${fileName}`
+        });
+
+        const { data: thumbnailData, error: thumbnailError } = await supabase.storage
+          .from("thumbnails")
+          .upload(filePath, thumbnailBlob, {
+            cacheControl: "3600",
+            upsert: true,
+          });
+
+        if (thumbnailError) {
+          console.error("Thumbnail upload error:", thumbnailError);
+          throw thumbnailError;
+        }
+
+        console.log("Thumbnail uploaded successfully:", thumbnailData?.path);
   
-        // Get signed URL
-        const { data: urlData } = await supabase.storage
+        // Get signed URLs for both panorama and thumbnail
+        const { data: panoramaUrlData } = await supabase.storage
           .from("panoramas")
           .createSignedUrl(uploadData.path, 3600);
+
+        const { data: thumbnailUrlData } = await supabase.storage
+          .from("thumbnails")
+          .createSignedUrl(thumbnailData.path, 3600);
   
-        if (!urlData?.signedUrl) {
+        if (!panoramaUrlData?.signedUrl) {
           console.error("Failed to get signed URL for panorama:", uploadData?.path);
           throw new Error("Failed to get signed URL");
         }
@@ -343,7 +404,8 @@ export function usePanoramas(projectId: string) {
         if (data && data.length > 0) {
           const newPanorama = {
             ...data[0],
-            url: urlData.signedUrl,
+            url: panoramaUrlData.signedUrl,
+            thumbnail_url: thumbnailUrlData?.signedUrl || null,
             is_processing: false
           };
   
