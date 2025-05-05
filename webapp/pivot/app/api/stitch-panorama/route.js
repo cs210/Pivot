@@ -31,7 +31,7 @@ export async function POST(request) {
     log('Received panorama stitching request');
     
     // Parse the request body instead of form data
-    const { panoramaId, sourceImages, sourceFolder, projectId } = await request.json();
+    const { panoramaId, sourceImages, sourceFolder, projectId, isPublic } = await request.json();
     
     log(`Processing request for panorama ${panoramaId} with ${sourceImages?.length || 0} source images`);
     
@@ -331,18 +331,20 @@ export async function POST(request) {
       
       // Generate a storage path
       const storagePath = `${projectId}/${panoramaId}_${Date.now()}.jpg`;
+      const storageBucket = isPublic ? 'panoramas-public' : 'panoramas-private';
       
+
       // Upload to Supabase storage
       const { data: uploadData, error: uploadError } = await supabase.storage
-        .from("panoramas")
+        .from(storageBucket)
         .upload(storagePath, fileBuffer, {
           contentType: "image/jpeg",
           cacheControl: "3600",
           upsert: true,
         });
-        
+
       if (uploadError) {
-        log(`Error uploading panorama to Supabase: ${uploadError.message}`);
+        log(`Error uploading panorama to Supabase (public=${isPublic}): ${uploadError.message}`);
         throw uploadError;
       }
       

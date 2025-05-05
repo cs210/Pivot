@@ -10,7 +10,6 @@ import { ProjectCard } from '@/components/project-card';
 import { useHousingFilters } from '@/hooks/useHousingFilters';
 import { Header } from '@/components/header';
 import { useProjects } from '@/hooks/useProjects';
-import { PlusCircle } from "lucide-react";
 
 export default function ExplorePage() {
   const router = useRouter();

@@ -112,10 +112,11 @@ export function useProject(projectId: string, router: any) {
       }
       
       setIsEditing(false);
-      alert("Project updated successfully");
+      
+      return true;
     } catch (error) {
       console.error("Error updating project:", error);
-      alert("Failed to update project");
+      throw error;
     }
   };
   

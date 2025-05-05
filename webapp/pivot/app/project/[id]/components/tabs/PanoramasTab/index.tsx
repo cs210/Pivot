@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from "react";
+import { useEffect } from "react";
 import { createClient } from "@/utils/supabase/client";
 import { useFolders } from "../../../../../../hooks/useFolders";
 import { useRawImages } from "../../../../../../hooks/useRawImages";
@@ -89,7 +89,6 @@ export default function PanoramasTab({ projectId }: PanoramasTabProps) {
               status: 'processing',
               source_images: imagesToConvert.map(img => img.id),
             },
-            is_public: false,
             user_id: (await supabase.auth.getUser()).data.user?.id,
           },
         ])
@@ -102,6 +101,7 @@ export default function PanoramasTab({ projectId }: PanoramasTabProps) {
 
       // Get the ID of the created panorama
       const panoramaId = panoramaData?.[0]?.id;
+      const isPublic = panoramaData?.[0]?.is_public;
       
       if (!panoramaId) {
         throw new Error("Failed to create panorama record");
@@ -123,7 +123,8 @@ export default function PanoramasTab({ projectId }: PanoramasTabProps) {
             panoramaId: panoramaId,
             sourceImages: imagesToConvert.map(img => img.id),
             sourceFolder: null,
-            projectId: projectId
+            projectId: projectId,
+            isPublic: isPublic,
           }),
         });
         
@@ -192,7 +193,6 @@ export default function PanoramasTab({ projectId }: PanoramasTabProps) {
                 source_images: folderImages.map(img => img.id),
                 source_folder: folderId,
               },
-              is_public: false,
               user_id: (await supabase.auth.getUser()).data.user?.id,
             },
           ])
@@ -205,6 +205,7 @@ export default function PanoramasTab({ projectId }: PanoramasTabProps) {
         
         // Get the ID of the created panorama
         const panoramaId = panoramaData?.[0]?.id;
+        const isPublic = panoramaData?.[0]?.is_public;
         
         if (!panoramaId) {
           throw new Error("Failed to create panorama record");
@@ -226,7 +227,8 @@ export default function PanoramasTab({ projectId }: PanoramasTabProps) {
               panoramaId: panoramaData[0].id,
               sourceImages: folderImages.map(img => img.id),
               sourceFolder: folderId,
-              projectId: projectId
+              projectId: projectId,
+              isPublic: isPublic,
             }),
           });
 

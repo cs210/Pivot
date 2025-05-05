@@ -110,12 +110,39 @@ export function useProjects(router: any) {
     }
   };
 
+  const updateProjectName = async (id: string, name: string) => {
+    try {
+      if (!name.trim()) {
+        throw new Error("Project name cannot be empty");
+      }
+
+      const { error } = await supabase
+        .from("projects")
+        .update({ name: name.trim() })
+        .eq("id", id);
+
+      if (error) throw error;
+
+      // Update local state with the new name
+      setProjects(projects.map(p => 
+        p.id === id ? { ...p, name: name.trim() } : p
+      ));
+      
+      return true;
+    } catch (error) {
+      console.error("Error updating project:", error);
+      throw error;
+    }
+  };
+
   return {
     projects,
     loading,
     user,
     createProject,
     deleteProject,
+    updateProjectName,
+    setProjects,
     refreshProjects: () => user && fetchProjects(user.id)
   };
 }

@@ -36,15 +36,18 @@ import {
 } from "lucide-react";
 import { Header } from "@/components/header";
 import { useProjects } from "@/hooks/useProjects";
+import ShareButton from "@/components/share-button";
+import ShareDialog from "@/components/share-dialog";
 
 export default function Dashboard() {
   const router = useRouter();
   const { 
     projects, 
-    loading, 
-    user, 
+    loading,
     createProject, 
-    deleteProject 
+    deleteProject,
+    updateProjectName,
+    setProjects
   } = useProjects(router);
   
   const [newProjectName, setNewProjectName] = useState("");
@@ -57,11 +60,6 @@ export default function Dashboard() {
   const [copied, setCopied] = useState(false);
 
   const handleCreateProject = async () => {
-    if (!newProjectName.trim()) {
-      alert("Please enter a project name");
-      return;
-    }
-
     try {
       const newProject = await createProject(newProjectName.trim());
       
@@ -79,29 +77,11 @@ export default function Dashboard() {
     }
   };
 
-  const handleUpdateProject = async () => {
-    if (!editProjectName.trim() || !currentProject) {
-      alert("Please enter a project name");
-      return;
-    }
-
+  const handleUpdateProjectName = async () => {
     try {
-      // We need to keep this logic since it's not in the useProjects hook
-      const supabase = createClient();
-      const { error } = await supabase
-        .from("projects")
-        .update({ name: editProjectName.trim() })
-        .eq("id", currentProject.id);
-
-      if (error) throw error;
-
-      // Update local state - in a real implementation, you might want to add 
-      // an updateProject method to useProjects hook
-      const updatedProjects = projects.map((p) =>
-        p.id === currentProject.id
-          ? { ...p, name: editProjectName.trim() }
-          : p
-      );
+      if (!currentProject) return;
+      
+      await updateProjectName(currentProject.id, editProjectName);
       
       setEditDialogOpen(false);
       setCurrentProject(null);
@@ -125,42 +105,6 @@ export default function Dashboard() {
     }
   };
 
-  const handleTogglePublic = async (project: any) => {
-    try {
-      // We need to keep this logic since it's not in the useProjects hook
-      const supabase = createClient();
-      const newPublicState = !project.is_public;
-
-      const { error } = await supabase
-        .from("projects")
-        .update({ is_public: newPublicState })
-        .eq("id", project.id);
-
-      if (error) throw error;
-
-      if (newPublicState) {
-        // Generate and show the share link
-        setCurrentProject(project);
-        const baseUrl = window.location.origin;
-        const link = `${baseUrl}/shared/${project.id}`;
-        setShareLink(link);
-        setShareDialogOpen(true);
-      }
-      
-      // Force a refresh to get updated data
-      router.refresh();
-    } catch (error) {
-      console.error("Error updating project visibility:", error);
-      alert("Failed to update project visibility");
-    }
-  };
-
-  const openEditDialog = (project: any) => {
-    setCurrentProject(project);
-    setEditProjectName(project.name);
-    setEditDialogOpen(true);
-  };
-
   const openShareDialog = (project: any) => {
     setCurrentProject(project);
     const baseUrl = window.location.origin;
@@ -169,14 +113,10 @@ export default function Dashboard() {
     setShareDialogOpen(true);
   };
 
-  const copyToClipboard = async () => {
-    try {
-      await navigator.clipboard.writeText(shareLink);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-    } catch (err) {
-      console.error("Failed to copy: ", err);
-    }
+  const openEditDialog = (project: any) => {
+    setCurrentProject(project);
+    setEditProjectName(project.name);
+    setEditDialogOpen(true);
   };
 
   const navigateToProject = (projectId: string) => {
@@ -354,14 +294,14 @@ export default function Dashboard() {
                         <Share2 className="h-4 w-4" />
                       </Button>
                     ) : (
-                      <Button
-                        onClick={() => handleTogglePublic(project)}
-                        variant="outline"
-                        size="icon"
-                        className="h-10 w-10 cyber-border"
-                      >
-                        <Share2 className="h-4 w-4" />
-                      </Button>
+                      <ShareButton
+                        project={project}
+                        projects={projects}
+                        setProjects={setProjects}
+                        setCurrentProject={setCurrentProject}
+                        setShareLink={setShareLink}
+                        setShareDialogOpen={setShareDialogOpen}
+                      />
                     )}
                   </CardFooter>
                 </Card>
@@ -397,7 +337,7 @@ export default function Dashboard() {
               <DialogFooter>
                 <Button
                   type="submit"
-                  onClick={handleUpdateProject}
+                  onClick={handleUpdateProjectName}
                   className="text-white bg-cyber-gradient hover:opacity-90"
                 >
                   Save Changes
@@ -406,57 +346,15 @@ export default function Dashboard() {
             </DialogContent>
           </Dialog>
 
-          {/* Share Link Dialog */}
-          <Dialog open={shareDialogOpen} onOpenChange={setShareDialogOpen}>
-            <DialogContent className="sm:max-w-[425px] bg-background text-white">
-              <DialogHeader>
-                <DialogTitle className="text-white">Share Project</DialogTitle>
-                <DialogDescription className="text-white/70">
-                  Anyone with this link can view your project without logging
-                  in.
-                </DialogDescription>
-              </DialogHeader>
-              <div className="flex items-center space-x-2 bg-muted/30 p-3 rounded-md">
-                <input
-                  type="text"
-                  readOnly
-                  value={shareLink}
-                  className="flex-1 bg-transparent border-none focus:outline-none text-sm text-white"
-                />
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  onClick={copyToClipboard}
-                  className="h-8"
-                >
-                  {copied ? (
-                    <CheckCircle2 className="h-4 w-4 text-green-500" />
-                  ) : (
-                    <Copy className="h-4 w-4" />
-                  )}
-                </Button>
-              </div>
-              <div className="mt-4 flex justify-between">
-                <Button
-                  variant="outline"
-                  onClick={() =>
-                    currentProject && handleTogglePublic(currentProject)
-                  }
-                  className="border-destructive/40 text-destructive hover:bg-destructive/10"
-                >
-                  Make Private
-                </Button>
-                <Button
-                  onClick={() => {
-                    window.open(shareLink, "_blank");
-                  }}
-                  className="text-white bg-cyber-gradient hover:opacity-90"
-                >
-                  Open Shared View
-                </Button>
-              </div>
-            </DialogContent>
-          </Dialog>
+          {/* Share Link Dialog - Replace with ShareDialog component */}
+          <ShareDialog
+            open={shareDialogOpen}
+            onOpenChange={setShareDialogOpen}
+            shareLink={shareLink}
+            currentProject={currentProject}
+            projects={projects}
+            setProjects={setProjects}
+          />
         </div>
       </main>
       <footer className="border-t border-border/40 bg-background">
