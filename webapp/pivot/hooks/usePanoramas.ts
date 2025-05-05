@@ -21,7 +21,7 @@ export interface Panorama {
   user_id: string;
   created_at: string;
   updated_at: string;
-  url?: string | null; // Client-side property for display (to thumbnail)
+  url?: string | null; // Client-side property for display (no thumbnails used here)
   is_processing?: boolean; // Client-side property for UI state
 }
 
@@ -85,12 +85,12 @@ export function usePanoramas(projectId: string) {
         if (item.is_public) {
           // For public panoramas, use the public URL
           url = supabase.storage
-            .from("panoramas")
+            .from("panoramas-public")
             .getPublicUrl(item.storage_path).data.publicUrl;
         } else {
           // For private panoramas, generate a signed URL
           const { data: urlData } = await supabase.storage
-            .from("panoramas")
+            .from("panoramas-private")
             .createSignedUrl(item.storage_path, 3600); // 1 hour expiration
 
           url = urlData?.signedUrl || null;
@@ -161,12 +161,12 @@ export function usePanoramas(projectId: string) {
       if (panorama.is_public) {
         // For public panoramas, use the public URL
         url = supabase.storage
-          .from("panoramas")
+          .from("panoramas-public")
           .getPublicUrl(panorama.storage_path).data.publicUrl;
       } else {
         // For private panoramas, generate a signed URL
         const { data: urlData } = await supabase.storage
-          .from("panoramas")
+          .from("panoramas-private")
           .createSignedUrl(panorama.storage_path, 3600); // 1 hour expiration
 
         url = urlData?.signedUrl || null;
@@ -242,9 +242,15 @@ export function usePanoramas(projectId: string) {
       // Delete from storage
       try {
         if (panoramaToDelete.storage_path) {
-          await supabase.storage
-            .from("panoramas")
-            .remove([panoramaToDelete.storage_path]);
+          if (panoramaToDelete.is_public) {
+            await supabase.storage
+              .from("panoramas-public")
+              .remove([panoramaToDelete.storage_path]);
+          } else {
+            await supabase.storage
+              .from("panoramas-private")
+              .remove([panoramaToDelete.storage_path]);
+          }
         }
       } catch (storageError) {
         console.warn("Could not delete from storage:", storageError);
@@ -289,13 +295,47 @@ export function usePanoramas(projectId: string) {
       for (let i = 0; i < files.length; i++) {
         const file = files[i];
         const fileName = file.name;
-        const filePath = `${projectId}/${fileName}`;
-  
-        console.log(`Uploading panorama: ${fileName} to path: ${filePath}`);
-  
-        // Upload to storage
-        const { data: uploadData, error: uploadError } = await supabase.storage
+        
+        // First, create database entry to get the ID
+        const { data: dbData, error: dbError } = await supabase
           .from("panoramas")
+          .insert([
+            {
+              name: fileName,
+              project_id: projectId,
+              storage_path: null, // Will update this after storage upload
+              content_type: file.type,
+              size_bytes: file.size,
+              metadata: {},
+              user_id: (await supabase.auth.getUser()).data.user?.id,
+            },
+          ])
+          .select();
+  
+        if (dbError) {
+          console.error("Database insert error:", dbError);
+          throw dbError;
+        }
+  
+        if (!dbData || dbData.length === 0) {
+          throw new Error("Failed to create database entry");
+        }
+  
+        // Extract the unique ID from the database entry
+        const panoramaId = dbData[0].id;
+        const isPublic = dbData[0].is_public;
+        
+        // Use the unique ID in the filepath
+        const filePath = `${projectId}/${panoramaId}`;
+  
+        console.log(`Uploading panorama (public=${isPublic}): ${fileName} with ID: ${panoramaId} to path: ${filePath}`);
+        
+        // Choose the appropriate storage bucket based on public/private status
+        const storageBucket = isPublic ? "panoramas-public" : "panoramas-private";
+        
+        // Upload to storage with ID-based path
+        const { data: uploadData, error: uploadError } = await supabase.storage
+          .from(storageBucket)
           .upload(filePath, file, {
             cacheControl: "3600",
             upsert: true,
@@ -308,53 +348,58 @@ export function usePanoramas(projectId: string) {
   
         console.log("Panorama uploaded successfully:", uploadData?.path);
   
-        // Get signed URL
-        const { data: urlData } = await supabase.storage
+        // Update the database entry with the storage path
+        const { error: updateError } = await supabase
           .from("panoramas")
-          .createSignedUrl(uploadData.path, 3600);
+          .update({ storage_path: uploadData.path })
+          .eq("id", panoramaId);
   
-        if (!urlData?.signedUrl) {
-          console.error("Failed to get signed URL for panorama:", uploadData?.path);
-          throw new Error("Failed to get signed URL");
+        if (updateError) {
+          console.error("Failed to update storage path:", updateError);
+          // Continue anyway since we have the file uploaded
         }
   
-        // Insert into database
-        const { data, error } = await supabase
-          .from("panoramas")
-          .insert([
-            {
-              name: fileName,
-              project_id: projectId,
-              storage_path: uploadData.path,
-              content_type: file.type,
-              size_bytes: file.size,
-              metadata: {},
-              is_public: false,
-              user_id: (await supabase.auth.getUser()).data.user?.id,
-            },
-          ])
-          .select();
+        // Get URL from the appropriate bucket
+        let url;
+        if (isPublic) {
+          // For public panoramas, use the public URL
+          const { data: urlData } = supabase.storage
+            .from(storageBucket)
+            .getPublicUrl(uploadData.path);
+          
+          if (!urlData?.publicUrl) {
+            console.error("Failed to get public URL for panorama:", uploadData?.path);
+            throw new Error("Failed to get public URL");
+          }
+          url = urlData.publicUrl;
+        } else {
+          const { data: urlData } = await supabase.storage
+            .from(storageBucket)
+            .createSignedUrl(uploadData.path, 3600);
   
-        if (error) {
-          console.error("Database insert error:", error);
-          throw error;
+          if (!urlData?.signedUrl) {
+            console.error("Failed to get signed URL for panorama:", uploadData?.path);
+            throw new Error("Failed to get signed URL");
+          }
+          // Update the panorama object with the signed URL
+          url = urlData.signedUrl;
         }
   
-        if (data && data.length > 0) {
-          const newPanorama = {
-            ...data[0],
-            url: urlData.signedUrl,
-            is_processing: false
-          };
+        // Create the final panorama object
+        const newPanorama = {
+          ...dbData[0],
+          url: url,
+          storage_path: uploadData.path,
+          is_processing: false
+        };
   
-          // ✅ Prevent duplicate appends
-          setPanoramas(prev => {
-            if (prev.some(p => p.id === newPanorama.id)) return prev;
-            return [...prev, newPanorama];
-          });
+        // ✅ Prevent duplicate appends
+        setPanoramas(prev => {
+          if (prev.some(p => p.id === newPanorama.id)) return prev;
+          return [...prev, newPanorama];
+        });
   
-          addPanoramaToCache(projectId, newPanorama);
-        }
+        addPanoramaToCache(projectId, newPanorama);
       }
   
       alert("360 images uploaded successfully");
