@@ -112,7 +112,6 @@ export function useGrids(projectId: string) {
         setCurrentGrid(cachedGrid);
         setRows(cachedGrid.rows);
         setCols(cachedGrid.cols);
-        setIsPublic(cachedGrid.is_public);
         setGridNodes(cachedGridNodes);
         
         // Set the panoramas
@@ -167,7 +166,6 @@ export function useGrids(projectId: string) {
       setCurrentGrid(grid);
       setRows(grid.rows);
       setCols(grid.cols);
-      setIsPublic(grid.is_public);
 
       // 2. Fetch all panoramas for this project
       let panoramasWithUrls: Panorama[] = [];
