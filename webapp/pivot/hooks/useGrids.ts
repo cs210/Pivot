@@ -50,9 +50,6 @@ export function useGrids(projectId: string) {
   const [rows, setRows] = useState<number>(3);
   const [cols, setCols] = useState<number>(3);
   
-  // Public visibility
-  const [isPublic, setIsPublic] = useState<boolean>(false);
-  
   // All panoramas for this project
   const [allPanoramas, setAllPanoramas] = useState<Panorama[]>([]);
   
@@ -195,12 +192,12 @@ export function useGrids(projectId: string) {
             if (pano.is_public) {
               // For public panoramas, use the public URL
               url = supabase.storage
-                .from("panoramas")
+                .from("panoramas-public")
                 .getPublicUrl(pano.storage_path).data.publicUrl;
             } else {
               // For private panoramas, generate a signed URL
               const { data: urlData } = await supabase.storage
-                .from("panoramas")
+                .from("panoramas-private")
                 .createSignedUrl(pano.storage_path, 3600); // 1 hour expiration
               url = urlData?.signedUrl || null;
             }
@@ -397,7 +394,6 @@ export function useGrids(projectId: string) {
         .update({
           rows: rows,
           cols: cols,
-          is_public: isPublic,
           updated_at: new Date().toISOString()
         })
         .eq("id", currentGrid.id);
@@ -409,7 +405,6 @@ export function useGrids(projectId: string) {
         ...currentGrid,
         rows,
         cols,
-        is_public: isPublic,
         updated_at: new Date().toISOString()
       };
       
@@ -419,7 +414,6 @@ export function useGrids(projectId: string) {
       updateGridInCache(projectId, currentGrid.id, {
         rows,
         cols,
-        is_public: isPublic,
         updated_at: new Date().toISOString()
       });
       
@@ -509,7 +503,6 @@ export function useGrids(projectId: string) {
     currentGrid,
     rows,
     cols,
-    isPublic,
     gridNodes,
     allPanoramas,
     unassignedPanoramas,
@@ -531,7 +524,6 @@ export function useGrids(projectId: string) {
     decreaseRows,
     increaseCols,
     decreaseCols,
-    setOpenDropdownCell,
-    setIsPublic
+    setOpenDropdownCell
   };
 }
