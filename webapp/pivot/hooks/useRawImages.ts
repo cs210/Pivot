@@ -22,8 +22,7 @@ export interface RawImage {
   user_id: string;
   uploaded_at: string;
   updated_at: string;
-  url?: string; // URL for displaying the image in the UI
-  thumbnail_url?: string; // URL for displaying the thumbnail
+  url?: string; // URL for displaying the image in the UI (to thumbnail)
 }
 
 export function useRawImages(projectId: string) {
@@ -319,11 +318,6 @@ export function useRawImages(projectId: string) {
           // Continue anyway since we have the file uploaded
         }
 
-        // Get signed URL for raw image
-        const { data: urlData } = await supabase.storage
-          .from("raw_images")
-          .createSignedUrl(uploadData.path, 3600); // 1 hour expiration
-
         // Get signed URL for thumbnail if available
         let thumbnailUrl = null;
         if (thumbnailData) {
@@ -337,8 +331,7 @@ export function useRawImages(projectId: string) {
         // Create the final image object with URL
         const newImage = {
           ...dbData[0],
-          url: urlData?.signedUrl,
-          thumbnail_url: thumbnailUrl,
+          url: thumbnailUrl,
           storage_path: uploadData.path
         };
         

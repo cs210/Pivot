@@ -21,7 +21,7 @@ export interface Panorama {
   user_id: string;
   created_at: string;
   updated_at: string;
-  url?: string | null; // Client-side property for display
+  url?: string | null; // Client-side property for display (to thumbnail)
   is_processing?: boolean; // Client-side property for UI state
 }
 
