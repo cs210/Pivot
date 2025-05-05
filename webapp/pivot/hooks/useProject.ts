@@ -12,7 +12,7 @@ export interface Project {
   name: string;
   created_at: string;
   user_id: string;
-  is_public: boolean;
+  is_public: boolean; 
   organization_id: string;
   metadata: {
     housing_type?: string;
@@ -85,7 +85,7 @@ export function useProject(projectId: string, router: any) {
     }
   };
 
-  const handleUpdateProject = async () => {
+  const handleUpdateProjectName = async () => {
     if (!projectName.trim()) {
       alert("Please enter a project name");
       return;
@@ -135,7 +135,7 @@ export function useProject(projectId: string, router: any) {
     setProjectName,
     isEditing,
     setIsEditing,
-    handleUpdateProject,
+    handleUpdateProjectName,
     user,
     clearCache,
     fetchProjectDetails

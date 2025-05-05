@@ -80,6 +80,7 @@ CREATE TABLE grids (
     rows INTEGER NOT NULL DEFAULT 2,
     cols INTEGER NOT NULL DEFAULT 2,
     is_default BOOLEAN DEFAULT TRUE,
+    is_public BOOLEAN DEFAULT FALSE,
     user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
@@ -266,6 +267,47 @@ CREATE TRIGGER trg_update_panorama_is_public
 AFTER UPDATE ON projects
 FOR EACH ROW
 EXECUTE FUNCTION update_panorama_is_public();
+
+-- Step 1: Create the trigger function for syncing grid.is_public to match its project's value
+CREATE OR REPLACE FUNCTION sync_grid_is_public()
+RETURNS TRIGGER AS $$
+BEGIN
+    -- Set the is_public field to match the related project
+    SELECT is_public INTO NEW.is_public
+    FROM projects
+    WHERE id = NEW.project_id;
+
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+-- Step 2: Attach the trigger to the grids table
+CREATE TRIGGER trg_sync_grid_is_public
+BEFORE INSERT OR UPDATE ON grids
+FOR EACH ROW
+EXECUTE FUNCTION sync_grid_is_public();
+
+-- Step 3: Create the trigger function for updating all grids when a project's is_public changes
+CREATE OR REPLACE FUNCTION update_grid_is_public()
+RETURNS TRIGGER AS $$
+BEGIN
+    -- Only act if is_public actually changed
+    IF NEW.is_public IS DISTINCT FROM OLD.is_public THEN
+        UPDATE grids
+        SET is_public = NEW.is_public,
+            updated_at = CURRENT_TIMESTAMP
+        WHERE project_id = NEW.id;
+    END IF;
+
+    RETURN NULL; -- AFTER triggers must return NULL
+END;
+$$ LANGUAGE plpgsql;
+
+-- Step 4: Attach the trigger to the projects table
+CREATE TRIGGER trg_update_grid_is_public
+AFTER UPDATE ON projects
+FOR EACH ROW
+EXECUTE FUNCTION update_grid_is_public();
 
 -- Create indexes for performance
 CREATE INDEX idx_projects_user_id ON projects(user_id);

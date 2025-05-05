@@ -73,14 +73,12 @@ export function useProjects(router: any) {
             rows: 1,
             cols: 1,
             is_default: true,
-            is_public: false,
             user_id: userId,
           },
         ])
         .select();
       if (gridError) throw gridError;
       console.log("Grid created:", gridData);
-
 
       if (projectData && projectData.length > 0) {
         // Add the new project to the local state
