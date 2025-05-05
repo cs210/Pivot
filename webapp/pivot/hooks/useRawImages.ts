@@ -247,9 +247,10 @@ export function useRawImages(projectId: string) {
       for (let i = 0; i < files.length; i++) {
         const file = files[i];
         
-        // Check if file is an image
-        if (!file.type.startsWith('image/')) {
-          console.log(`Skipping non-image file: ${file.name}`);
+        // Check if file is a JPG image
+        if (file.type !== 'image/jpeg' && file.type !== 'image/jpg') {
+          console.log(`Skipping non-JPG file: ${file.name}`);
+          alert(`Only JPG images are supported. Skipping file: ${file.name}`);
           continue;
         }
         
@@ -283,8 +284,8 @@ export function useRawImages(projectId: string) {
         // Extract the unique ID from the database entry
         const imageId = dbData[0].id;
         
-        // Use the unique ID in the filepath
-        const filePath = `${projectId}/${imageId}`;
+        // Use the unique ID in the filepath and add .jpg extension
+        const filePath = `${projectId}/${imageId}.jpg`;
 
         console.log(`Uploading image: ${file.name} with ID: ${imageId} to path: ${filePath}${folder_id ? ` in folder: ${folder_id}` : ''}`);
 
@@ -294,6 +295,7 @@ export function useRawImages(projectId: string) {
           .upload(filePath, file, {
             cacheControl: "3600",
             upsert: true,
+            contentType: "image/jpeg" // Explicitly set content type to image/jpeg
           });
 
         if (uploadError) {
@@ -319,12 +321,13 @@ export function useRawImages(projectId: string) {
             throw new Error("Thumbnail generation failed");
           }
           
-          // Upload the thumbnail
+          // Upload the thumbnail with the same path as the main image
           const { data: thumbnailData, error: thumbnailError } = await supabase.storage
             .from("thumbnails-private")
             .upload(filePath, thumbnailFile, {
               cacheControl: "3600",
               upsert: true,
+              contentType: "image/jpeg"
             });
     
           if (thumbnailError) {

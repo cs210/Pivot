@@ -227,7 +227,7 @@ export default function EnhancedImageGrid({
                                 {panorama ? (
                                   <>
                                     <img
-                                      src={panorama.url}
+                                      src={panorama.url ?? ""}
                                       alt={panorama.name}
                                       className="w-full h-full object-cover rounded-full"
                                     />
@@ -285,7 +285,7 @@ export default function EnhancedImageGrid({
                                         >
                                           <div className="w-12 h-12 mr-2 rounded overflow-hidden flex-shrink-0">
                                             <img
-                                              src={pano.url}
+                                              src={pano.url ?? ""}
                                               alt={pano.name}
                                               className="w-full h-full object-cover"
                                             />

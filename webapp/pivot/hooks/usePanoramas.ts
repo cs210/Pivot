@@ -296,6 +296,13 @@ export function usePanoramas(projectId: string) {
         const file = files[i];
         const fileName = file.name;
         
+        // Check if file is a JPG image
+        if (file.type !== 'image/jpeg' && file.type !== 'image/jpg') {
+          console.log(`Skipping non-JPG file: ${fileName}`);
+          alert(`Only JPG images are supported. Skipping file: ${fileName}`);
+          continue;
+        }
+        
         // First, create database entry to get the ID
         const { data: dbData, error: dbError } = await supabase
           .from("panoramas")
@@ -304,7 +311,7 @@ export function usePanoramas(projectId: string) {
               name: fileName,
               project_id: projectId,
               storage_path: null, // Will update this after storage upload
-              content_type: file.type,
+              content_type: "image/jpeg", // Always set to image/jpeg
               size_bytes: file.size,
               metadata: {},
               user_id: (await supabase.auth.getUser()).data.user?.id,
@@ -325,8 +332,8 @@ export function usePanoramas(projectId: string) {
         const panoramaId = dbData[0].id;
         const isPublic = dbData[0].is_public;
         
-        // Use the unique ID in the filepath
-        const filePath = `${projectId}/${panoramaId}`;
+        // Use the unique ID in the filepath with .jpg extension
+        const filePath = `${projectId}/${panoramaId}.jpg`;
   
         console.log(`Uploading panorama (public=${isPublic}): ${fileName} with ID: ${panoramaId} to path: ${filePath}`);
         
@@ -339,6 +346,7 @@ export function usePanoramas(projectId: string) {
           .upload(filePath, file, {
             cacheControl: "3600",
             upsert: true,
+            contentType: "image/jpeg" // Explicitly set content type to image/jpeg
           });
   
         if (uploadError) {
