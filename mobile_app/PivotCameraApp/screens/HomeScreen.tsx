@@ -108,9 +108,32 @@ const HomeScreen = () => {
       console.log("Received project IDs:", projectIds);
       fetchProjectDetails(projectIds);
     } else {
-      // Handle case where no project IDs are passed (e.g., user not logged in or no projects)
-      setUserProjects([]); // Clear projects if none are passed
-      console.log("No project IDs received.");
+      // No project IDs passed: fetch for current user on initial mount
+      (async () => {
+        try {
+          const { data: userData, error: userErr } =
+            await supabase.auth.getUser();
+          if (userErr || !userData.user) {
+            setUserProjects([]);
+            return;
+          }
+          const userId = userData.user.id;
+          const { data: projectsData, error: projectsErr } = await supabase
+            .from("projects")
+            .select("id")
+            .eq("user_id", userId);
+          if (projectsErr || !projectsData) {
+            setUserProjects([]);
+            return;
+          }
+          const fetchedIds = projectsData.map((p: any) => p.id);
+          console.log("Fetched project IDs on mount:", fetchedIds);
+          fetchProjectDetails(fetchedIds);
+        } catch (err) {
+          console.error("Error fetching initial project IDs:", err);
+          setUserProjects([]);
+        }
+      })();
     }
   }, [route.params?.projectIds]); // Re-run when projectIds change
 
@@ -147,6 +170,49 @@ const HomeScreen = () => {
       setProjectsLoading(false);
     }
   };
+
+  // Function to fetch and refresh user's projects
+  const loadUserProjects = async () => {
+    if (!currentUser) return;
+    setProjectsLoading(true);
+    try {
+      const { data, error } = await supabase
+        .from("projects")
+        .select("id, name")
+        .eq("user_id", currentUser.id);
+      if (error) throw error;
+      setUserProjects(data as Project[]);
+    } catch (err) {
+      console.error("Error loading user projects:", err);
+    } finally {
+      setProjectsLoading(false);
+    }
+  };
+
+  // Subscribe to new project insertions for real-time refresh
+  useEffect(() => {
+    if (!currentUser) return;
+    loadUserProjects();
+    const channel = supabase
+      .channel("projects_changes")
+      .on(
+        "postgres_changes",
+        {
+          event: "INSERT",
+          schema: "public",
+          table: "projects",
+          filter: `user_id=eq.${currentUser.id}`,
+        },
+        () => {
+          console.log("Realtime subscription: detected new project insertion");
+          loadUserProjects();
+        }
+      )
+      .subscribe();
+    return () => {
+      channel.unsubscribe();
+    };
+  }, [currentUser]);
 
   const loadImages = async () => {
     try {

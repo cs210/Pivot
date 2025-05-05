@@ -62,6 +62,10 @@ const GroupDetailScreen = () => {
     null
   );
 
+  // replace direct 'projects' param with local state
+  const initialProjects = projects || [];
+  const [projectsList, setProjectsList] = useState<Project[]>(initialProjects);
+
   const IMAGE_SIZE = (Dimensions.get("window").width - 40) / 3;
 
   useEffect(() => {
@@ -178,8 +182,26 @@ const GroupDetailScreen = () => {
     }
   };
 
-  const handlePublishToWeb = () => {
-    // Open the modal to select a project
+  // helper to load current user projects from Supabase
+  const loadUserProjects = async () => {
+    try {
+      const { data: userData, error: userErr } = await supabase.auth.getUser();
+      if (userErr || !userData.user) return;
+      const userId = userData.user.id;
+      const { data: projData, error: projErr } = await supabase
+        .from("projects")
+        .select("id,name")
+        .eq("user_id", userId);
+      if (projErr || !projData) return;
+      setProjectsList(projData as Project[]);
+    } catch (e) {
+      console.error("Error loading projects:", e);
+    }
+  };
+
+  // update publish handler to refresh projects first
+  const handlePublishToWeb = async () => {
+    await loadUserProjects();
     setPublishModalVisible(true);
   };
 
@@ -205,7 +227,9 @@ const GroupDetailScreen = () => {
       setLoading(true);
 
       // Get the selected project
-      const selectedProject = projects?.find((p) => p.id === selectedProjectId);
+      const selectedProject = projectsList.find(
+        (p) => p.id === selectedProjectId
+      );
 
       // Check if the user is authenticated
       const { data: userData, error: userError } =
@@ -452,12 +476,12 @@ const GroupDetailScreen = () => {
       ) : null}
 
       {/* Projects Section - Display when available */}
-      {projects && projects.length > 0 && (
+      {projectsList && projectsList.length > 0 && (
         <View style={styles.projectsContainer}>
           <Text style={styles.projectsTitle}>Available Projects:</Text>
           <FlatList
             horizontal
-            data={projects}
+            data={projectsList}
             keyExtractor={(item) => item.id}
             showsHorizontalScrollIndicator={false}
             contentContainerStyle={styles.projectsListContent}
@@ -696,7 +720,7 @@ const GroupDetailScreen = () => {
                 Select a project to publish images from "{group.name}"
               </Text>
 
-              {!projects || projects.length === 0 ? (
+              {!projectsList.length ? (
                 <View style={styles.emptyGallery}>
                   <Ionicons
                     name="folder-outline"
@@ -707,7 +731,7 @@ const GroupDetailScreen = () => {
                 </View>
               ) : (
                 <FlatList
-                  data={projects}
+                  data={projectsList}
                   keyExtractor={(item) => item.id}
                   contentContainerStyle={styles.projectsListVertical}
                   renderItem={({ item }) => (
@@ -757,7 +781,7 @@ const GroupDetailScreen = () => {
                 />
               )}
 
-              {projects && projects.length > 0 && (
+              {projectsList && projectsList.length > 0 && (
                 <TouchableOpacity
                   style={[
                     styles.publishConfirmButton,
