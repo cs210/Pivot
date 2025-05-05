@@ -1,9 +1,11 @@
 import React, { useState, useEffect } from "react";
+import { User } from "@supabase/supabase-js";
 import {
   useNavigation,
   useIsFocused,
   useRoute,
   RouteProp,
+  NavigationProp,
 } from "@react-navigation/native"; // Added useRoute, RouteProp
 import {
   StyleSheet,
@@ -43,7 +45,8 @@ interface Project {
 }
 
 const HomeScreen = () => {
-  const navigation = useNavigation();
+  const navigation = useNavigation<NavigationProp<RootStackParamList>>();
+  const [currentUser, setCurrentUser] = useState<User | null>(null);
   const isFocused = useIsFocused();
   const route = useRoute<HomeScreenRouteProp>(); // Get route object
   const [images, setImages] = useState<string[]>([]);
@@ -69,6 +72,23 @@ const HomeScreen = () => {
   // State for fetched projects
   const [userProjects, setUserProjects] = useState<Project[]>([]);
   const [projectsLoading, setProjectsLoading] = useState(false); // Loading state for projects
+
+  // track auth state
+  useEffect(() => {
+    const fetchUser = async () => {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      setCurrentUser(user);
+    };
+    fetchUser();
+    const { data: listener } = supabase.auth.onAuthStateChange(
+      (_event, session) => {
+        setCurrentUser(session?.user ?? null);
+      }
+    );
+    return () => listener?.subscription.unsubscribe();
+  }, []);
 
   // Load content based on active tab
   useEffect(() => {
@@ -367,17 +387,7 @@ const HomeScreen = () => {
       <TouchableOpacity
         style={styles.profileButton}
         onPress={() => {
-          // Check if user is likely logged in (has projects or projectIds passed)
-          // This is a basic check, you might have a more robust auth state check
-          if (
-            userProjects.length > 0 ||
-            (route.params?.projectIds && route.params.projectIds.length > 0)
-          ) {
-            // Navigate to a Profile screen or show logout option
-            Alert.alert("Profile", "Profile/Logout functionality to be added.");
-          } else {
-            navigation.navigate("AuthScreen" as never); // Navigate to AuthScreen if not logged in
-          }
+          navigation.navigate(currentUser ? "Profile" : ("Auth" as never));
         }}
       >
         <Ionicons

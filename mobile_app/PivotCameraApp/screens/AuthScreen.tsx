@@ -91,14 +91,6 @@ const AuthScreen = () => {
 
   return (
     <LinearGradient colors={GRADIENTS.cyber} style={styles.container}>
-      {/* Back button top-left */}
-      <TouchableOpacity
-        style={styles.topLeftBackButton}
-        onPress={() => navigation.goBack()} // Use goBack for standard pop animation
-      >
-        <Ionicons name="arrow-back" size={30} color={COLORS.primary} />
-      </TouchableOpacity>
-
       <KeyboardAvoidingView
         behavior={Platform.OS === "ios" ? "padding" : "height"}
         style={styles.keyboardAvoidingView}
