@@ -8,6 +8,7 @@ import {
   removeRawImageFromCache,
   updateRawImageInCache
 } from "./cache-service";
+import { generateThumbnail } from "@/utils/generate-thumbnail";
 
 export interface RawImage {
   id: string;
@@ -232,9 +233,10 @@ export function useRawImages(projectId: string) {
     }
   };
 
-  // Function to handle image upload
+  // Enhanced function to handle image upload with optional folder ID
   const handleImageUpload = async (
-    event: React.ChangeEvent<HTMLInputElement>
+    event: React.ChangeEvent<HTMLInputElement>,
+    folder_id: string | null = null
   ) => {
     const files = event.target.files;
     if (!files || files.length === 0) return;
@@ -244,6 +246,12 @@ export function useRawImages(projectId: string) {
     try {
       for (let i = 0; i < files.length; i++) {
         const file = files[i];
+        
+        // Check if file is an image
+        if (!file.type.startsWith('image/')) {
+          console.log(`Skipping non-image file: ${file.name}`);
+          continue;
+        }
         
         // First, create database entry to get the ID
         const { data: dbData, error: dbError } = await supabase
@@ -256,7 +264,7 @@ export function useRawImages(projectId: string) {
               content_type: file.type,
               size_bytes: file.size,
               metadata: {},
-              folder_id: null,
+              folder_id: folder_id, // Use the passed folder ID
               panorama_id: null,
               user_id: (await supabase.auth.getUser()).data.user?.id,
             },
@@ -278,7 +286,7 @@ export function useRawImages(projectId: string) {
         // Use the unique ID in the filepath
         const filePath = `${projectId}/${imageId}`;
 
-        console.log(`Uploading image: ${file.name} with ID: ${imageId} to path: ${filePath}`);
+        console.log(`Uploading image: ${file.name} with ID: ${imageId} to path: ${filePath}${folder_id ? ` in folder: ${folder_id}` : ''}`);
 
         // Upload to storage with ID-based path
         const { data: uploadData, error: uploadError } = await supabase.storage
@@ -293,18 +301,39 @@ export function useRawImages(projectId: string) {
           throw uploadError;
         }
 
-        // Create thumbnail and upload with the same ID-based path
-        const { data: thumbnailData, error: thumbnailError } = await supabase.storage
-          .from("thumbnails-private")
-          .upload(filePath, file, {
-            cacheControl: "3600",
-            upsert: true,
-            // You might want to add transformation options for actual thumbnails
+        // Create and upload actual thumbnail
+        console.log(`Creating thumbnail for: ${file.name}`);
+        
+        try {
+          // Generate a proper thumbnail using the utility
+          const thumbnailFile = await generateThumbnail(file, {
+            maxDimension: 200,
+            quality: 0.7,
+            format: 'image/jpeg',
+            filename: `thumb_${file.name}`
           });
-
-        if (thumbnailError) {
-          console.error("Thumbnail upload error:", thumbnailError);
-          // Continue without thumbnail if there's an error
+          
+          // Validate thumbnail
+          if (!(thumbnailFile instanceof File)) {
+            console.error("Thumbnail generation failed: Not a valid File object");
+            throw new Error("Thumbnail generation failed");
+          }
+          
+          // Upload the thumbnail
+          const { data: thumbnailData, error: thumbnailError } = await supabase.storage
+            .from("thumbnails-private")
+            .upload(filePath, thumbnailFile, {
+              cacheControl: "3600",
+              upsert: true,
+            });
+    
+          if (thumbnailError) {
+            console.error("Thumbnail upload error:", thumbnailError);
+            // Continue without thumbnail if there's an error
+          }
+        } catch (thumbError) {
+          console.error("Error generating thumbnail:", thumbError);
+          // Continue without thumbnail, we'll use the original instead
         }
 
         // Update the database entry with the storage path
@@ -318,20 +347,17 @@ export function useRawImages(projectId: string) {
           // Continue anyway since we have the file uploaded
         }
 
-        // Get signed URL for thumbnail if available
-        let thumbnailUrl = null;
-        if (thumbnailData) {
-          const { data: thumbUrlData } = await supabase.storage
-            .from("thumbnails-private")
-            .createSignedUrl(thumbnailData.path, 3600);
-          
-          thumbnailUrl = thumbUrlData?.signedUrl || null;
-        }
+        // Get signed URL for thumbnail
+        const { data: thumbUrlData } = await supabase.storage
+          .from("thumbnails-private")
+          .createSignedUrl(filePath, 3600);
+        
+        const thumbnailUrl = thumbUrlData?.signedUrl;
 
         // Create the final image object with URL
         const newImage = {
           ...dbData[0],
-          url: thumbnailUrl,
+          url: thumbnailUrl || null,
           storage_path: uploadData.path
         };
         
@@ -354,6 +380,8 @@ export function useRawImages(projectId: string) {
         fileInputRef.current.value = "";
       }
     }
+    
+    return true;
   };
 
   // Helper function to toggle image selection
