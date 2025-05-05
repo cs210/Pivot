@@ -45,7 +45,7 @@ CREATE TABLE folders (
 CREATE TABLE panoramas (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     name TEXT NOT NULL,
-    storage_path TEXT NOT NULL,
+    storage_path TEXT,
     content_type TEXT NOT NULL,
     size_bytes INTEGER NOT NULL,
     metadata JSONB,
@@ -59,7 +59,7 @@ CREATE TABLE panoramas (
 CREATE TABLE raw_images (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     name TEXT NOT NULL,
-    storage_path TEXT NOT NULL,
+    storage_path TEXT,
     content_type TEXT NOT NULL,
     size_bytes INTEGER NOT NULL,
     metadata JSONB,

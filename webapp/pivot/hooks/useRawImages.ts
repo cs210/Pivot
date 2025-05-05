@@ -11,7 +11,7 @@ import {
 
 export interface RawImage {
   id: string;
-  filename: string;
+  name: string;
   storage_path: string;
   content_type: string;
   size_bytes: number;
@@ -68,7 +68,7 @@ export function useRawImages(projectId: string) {
         .from("raw_images")
         .select("*")
         .eq("project_id", projectId)
-        .order("filename", { ascending: true });
+        .order("name", { ascending: true });
 
       if (error) throw error;
       
@@ -76,7 +76,7 @@ export function useRawImages(projectId: string) {
       const imagesWithUrls = await Promise.all((data || []).map(async (img) => {
         // Get a URL for the image from storage. Signed URL for private bucket.
         const { data: urlData } = await supabase.storage
-          .from("thumbnails")
+          .from("thumbnails-private")
           .createSignedUrl(img.storage_path, 3600); // 1 hour expiration
 
         return {
@@ -107,14 +107,14 @@ export function useRawImages(projectId: string) {
     try {
       const { error } = await supabase
         .from("raw_images")
-        .update({ filename: newImageName.trim() })
+        .update({ name: newImageName.trim() })
         .eq("id", imageToRename.id);
 
       if (error) throw error;
 
       const updatedImages = rawImages.map((img) =>
         img.id === imageToRename.id
-          ? { ...img, filename: newImageName.trim() }
+          ? { ...img, name: newImageName.trim() }
           : img
       );
       
@@ -122,7 +122,7 @@ export function useRawImages(projectId: string) {
       setRawImages(updatedImages);
       
       // Update cache
-      updateRawImageInCache(projectId, imageToRename.id, { filename: newImageName.trim() });
+      updateRawImageInCache(projectId, imageToRename.id, { name: newImageName.trim() });
 
       setRenameImageDialogOpen(false);
       setImageToRename(null);
@@ -136,50 +136,56 @@ export function useRawImages(projectId: string) {
 
   const handleDeleteImage = async (imageId: string, showAlert = true) => {
     try {
-      // First get the image to get the file path
+      // First get the image to get the storage path
       const imageToDelete = rawImages.find((img) => img.id === imageId);
-
-      if (!imageToDelete) return;
-
-      // Delete from storage (assuming the URL contains the path)
-      if (!imageToDelete.url) {
-        throw new Error("Image URL is undefined");
+  
+      if (!imageToDelete) {
+        console.error(`Image with ID ${imageId} not found`);
+        return;
       }
-
-      const url = new URL(imageToDelete.url);
-      const storagePath = url.pathname.split("/").slice(2).join("/");
-
-      if (storagePath) {
+  
+      // Delete from storage using the storage_path directly
+      if (imageToDelete.storage_path) {
+        // Delete original from raw_images bucket
         const { error: storageError } = await supabase.storage
           .from("raw_images")
-          .remove([storagePath]);
-
-        if (storageError) throw storageError;
+          .remove([imageToDelete.storage_path]);
+  
+        if (storageError) {
+          console.error("Error removing from raw_images storage:", storageError);
+          // Continue with deletion process even if storage removal fails
+        }
+  
+        // Delete thumbnail from thumbnails-private bucket
+        const { error: thumbnailError } = await supabase.storage
+          .from("thumbnails-private")
+          .remove([imageToDelete.storage_path]);
+  
+        if (thumbnailError) {
+          console.error("Error removing from thumbnails-private storage:", thumbnailError);
+          // Continue with deletion process even if thumbnail removal fails
+        }
+      } else {
+        console.warn(`No storage path found for image ${imageId}`);
       }
-      
-      if (storagePath) {
-        const { error: storageError } = await supabase.storage
-          .from("thumbnails")
-          .remove([storagePath]);
-
-        if (storageError) throw storageError;
-      }
-
+  
       // Delete from database
       const { error: dbError } = await supabase
         .from("raw_images")
         .delete()
         .eq("id", imageId);
-
-      if (dbError) throw dbError;
-
+  
+      if (dbError) {
+        throw dbError;
+      }
+  
       // Update local state
       setRawImages(rawImages.filter((img) => img.id !== imageId));
       setSelectedImages(selectedImages.filter((id) => id !== imageId));
       
       // Update cache
       removeRawImageFromCache(projectId, imageId);
-
+  
       if (showAlert) {
         alert("Image deleted successfully");
       }
@@ -239,12 +245,43 @@ export function useRawImages(projectId: string) {
     try {
       for (let i = 0; i < files.length; i++) {
         const file = files[i];
-        const fileName = file.name;
-        const filePath = `${projectId}/${fileName}`;
+        
+        // First, create database entry to get the ID
+        const { data: dbData, error: dbError } = await supabase
+          .from("raw_images")
+          .insert([
+            {
+              name: file.name,
+              project_id: projectId,
+              storage_path: null, // Will update this after storage upload
+              content_type: file.type,
+              size_bytes: file.size,
+              metadata: {},
+              folder_id: null,
+              panorama_id: null,
+              user_id: (await supabase.auth.getUser()).data.user?.id,
+            },
+          ])
+          .select();
 
-        console.log(`Uploading image: ${fileName} to path: ${filePath}`);
+        if (dbError) {
+          console.error("Database insert error:", dbError);
+          throw dbError;
+        }
 
-        // Upload to storage
+        if (!dbData || dbData.length === 0) {
+          throw new Error("Failed to create database entry");
+        }
+
+        // Extract the unique ID from the database entry
+        const imageId = dbData[0].id;
+        
+        // Use the unique ID in the filepath
+        const filePath = `${projectId}/${imageId}`;
+
+        console.log(`Uploading image: ${file.name} with ID: ${imageId} to path: ${filePath}`);
+
+        // Upload to storage with ID-based path
         const { data: uploadData, error: uploadError } = await supabase.storage
           .from("raw_images")
           .upload(filePath, file, {
@@ -253,13 +290,13 @@ export function useRawImages(projectId: string) {
           });
 
         if (uploadError) {
-          console.error("Storage upload error:", uploadError);
+          console.error("Raw image upload error:", uploadError);
           throw uploadError;
         }
 
-        // Create thumbnail and upload
+        // Create thumbnail and upload with the same ID-based path
         const { data: thumbnailData, error: thumbnailError } = await supabase.storage
-          .from("thumbnails")
+          .from("thumbnails-private")
           .upload(filePath, file, {
             cacheControl: "3600",
             upsert: true,
@@ -271,6 +308,17 @@ export function useRawImages(projectId: string) {
           // Continue without thumbnail if there's an error
         }
 
+        // Update the database entry with the storage path
+        const { error: updateError } = await supabase
+          .from("raw_images")
+          .update({ storage_path: uploadData.path })
+          .eq("id", imageId);
+
+        if (updateError) {
+          console.error("Failed to update storage path:", updateError);
+          // Continue anyway since we have the file uploaded
+        }
+
         // Get signed URL for raw image
         const { data: urlData } = await supabase.storage
           .from("raw_images")
@@ -280,49 +328,25 @@ export function useRawImages(projectId: string) {
         let thumbnailUrl = null;
         if (thumbnailData) {
           const { data: thumbUrlData } = await supabase.storage
-            .from("thumbnails")
+            .from("thumbnails-private")
             .createSignedUrl(thumbnailData.path, 3600);
           
           thumbnailUrl = thumbUrlData?.signedUrl || null;
         }
 
-        // Save to database
-        const { data, error } = await supabase
-          .from("raw_images")
-          .insert([
-            {
-              filename: fileName,
-              project_id: projectId,
-              storage_path: uploadData.path,
-              content_type: file.type,
-              size_bytes: file.size,
-              metadata: {},
-              folder_id: null, // Can be updated later when moving
-              panorama_id: null,
-              user_id: (await supabase.auth.getUser()).data.user?.id,
-            },
-          ])
-          .select();
-
-        if (error) {
-          console.error("Database insert error:", error);
-          throw error;
-        }
-
-        // Add to local state with URL
-        if (data && data.length > 0) {
-          const newImage = {
-            ...data[0],
-            url: urlData?.signedUrl,
-            thumbnail_url: thumbnailUrl
-          };
-          
-          // Update state
-          setRawImages((prev) => [...prev, newImage]);
-          
-          // Update cache
-          addRawImageToCache(projectId, newImage);
-        }
+        // Create the final image object with URL
+        const newImage = {
+          ...dbData[0],
+          url: urlData?.signedUrl,
+          thumbnail_url: thumbnailUrl,
+          storage_path: uploadData.path
+        };
+        
+        // Update state
+        setRawImages((prev) => [...prev, newImage]);
+        
+        // Update cache
+        addRawImageToCache(projectId, newImage);
       }
 
       alert("Images uploaded successfully");
