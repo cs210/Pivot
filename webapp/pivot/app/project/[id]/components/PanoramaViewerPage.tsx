@@ -4,7 +4,7 @@ import React, { useEffect, useState, useRef, useCallback } from "react";
 import dynamic from "next/dynamic";
 import { createClient } from "@/utils/supabase/client";
 import { MarkersPlugin } from "@photo-sphere-viewer/markers-plugin";
-import { useGrids, GridNode } from "../../../../hooks/useGrids";
+import { useGrids } from "../../../../hooks/useGrids";
 import { usePanoramas, Panorama } from "../../../../hooks/usePanoramas";
 
 // Dynamically import ReactPhotoSphereViewer to avoid SSR issues
@@ -29,8 +29,8 @@ interface Marker {
     | {
         content: string;
         position?: string;
-      };
-  content?: string;
+      }
+    | HTMLElement;
   image?: string;
   size?: {
     width: number;
@@ -38,6 +38,10 @@ interface Marker {
   };
   anchor?: string;
   html?: string;
+  data?: {
+    type?: string;
+    targetPanoramaId?: string | null;
+  };
 }
 
 interface PanoramaViewerPageProps {
@@ -52,415 +56,439 @@ export default function PanoramaViewerPage({
   const supabase = createClient();
   const USE_HTML_MARKER = true;
 
-  // Use our custom hooks
-  const { currentGrid, rows, cols, gridNodes, fetchData, getNodeAtPosition } =
-    useGrids(projectId);
+  /* ------------------------------------------------------------------
+   * Grid / panorama data hooks
+   * ----------------------------------------------------------------*/
+  const { rows, cols, fetchData, getNodeAtPosition } = useGrids(projectId);
+  const { panoramas, updatePanorama } = usePanoramas(projectId);
 
-  const {
-    panoramas,
-    loading: panoramasLoading,
-    updatePanorama,
-  } = usePanoramas(projectId);
-
-  // State variables
+  /* ------------------------------------------------------------------
+   * State
+   * ----------------------------------------------------------------*/
   const [currentPanorama, setCurrentPanorama] = useState<Panorama | null>(null);
   const [editingMarker, setEditingMarker] = useState<string | null>(null);
   const [markerInput, setMarkerInput] = useState<string>("");
-  const [showHelpModal, setShowHelpModal] = useState<boolean>(false);
+  const [showHelpModal, setShowHelpModal] = useState(false);
+  const [creationMode, setCreationMode] = useState<'annotation' | 'navigation'>(
+    'annotation'
+  );
+  const [viewerMode, setViewerMode] = useState<'view' | 'edit'>('view');
 
-  // Refs
-  const viewerRef = useRef<HTMLDivElement>(null);
+  /* ------------------------------------------------------------------
+   * Refs (to have latest values in listener callbacks)
+   * ----------------------------------------------------------------*/
+  const creationModeRef = useRef(creationMode);
+  const viewerModeRef = useRef(viewerMode);
+  useEffect(() => { creationModeRef.current = creationMode; }, [creationMode]);
+  useEffect(() => { viewerModeRef.current = viewerMode; }, [viewerMode]);
+
+  /* ------------------------------------------------------------------
+   * DOM / plugin refs
+   * ----------------------------------------------------------------*/
   const photoViewerRef = useRef<any>(null);
   const markersPluginRef = useRef<any>(null);
 
-  // Cleanup viewer when component unmounts
+  /* ------------------------------------------------------------------
+   * Fetch grid data once
+   * ----------------------------------------------------------------*/
+  useEffect(() => { fetchData(); }, [projectId]);
+
+  /* ------------------------------------------------------------------
+   * Auto‑select (0,0) panorama when possible
+   * ----------------------------------------------------------------*/
   useEffect(() => {
-    return () => {
-      if (photoViewerRef.current?.viewer) {
-        try {
-          console.log("Cleaning up viewer instance");
-          photoViewerRef.current.viewer.destroy();
-        } catch (error) {
-          console.error("Error cleaning up viewer:", error);
-        }
+    if (rows && cols && panoramas.length && !currentPanorama) {
+      const node = getNodeAtPosition(0, 0);
+      if (node?.panorama_id) {
+        const pano = panoramas.find((p) => p.id === node.panorama_id);
+        if (pano) setCurrentPanorama(pano);
       }
-    };
-  }, []);
-
-  // Initial data fetch
-  useEffect(() => {
-    const loadData = async () => {
-      await fetchData();
-    };
-
-    loadData();
-  }, [projectId]);
-
-  // Add this effect after your initial data fetch effect:
-  useEffect(() => {
-    // Automatically select the node at position (0,0) if it exists
-    const autoSelectFirstNode = () => {
-      if (rows > 0 && cols > 0) {
-        const originNode = getNodeAtPosition(0, 0);
-        if (originNode && originNode.panorama_id) {
-          // Find the panorama that belongs to this node
-          const pano = panoramas.find((p) => p.id === originNode.panorama_id);
-          if (pano) {
-            console.log("Auto-selecting origin panorama at (0,0):", pano.id);
-            setCurrentPanorama(pano);
-          }
-        }
-      }
-    };
-
-    // Only attempt to select a node if we have grid data and panoramas,
-    // and no panorama is currently selected
-    if (rows > 0 && cols > 0 && panoramas.length > 0 && !currentPanorama) {
-      autoSelectFirstNode();
     }
   }, [rows, cols, panoramas, currentPanorama, getNodeAtPosition]);
 
+  /* ------------------------------------------------------------------
+   * Grid cell click -> change panorama
+   * ----------------------------------------------------------------*/
   const handleCellClick = (x: number, y: number) => {
     const node = getNodeAtPosition(x, y);
-    if (!node || !node.panorama_id) return;
+    if (!node?.panorama_id) return;
 
     const pano = panoramas.find((p) => p.id === node.panorama_id);
-    if (pano) {
-      console.log("Selected panorama:", pano.id);
-      console.log(
-        "Panorama has markers:",
-        pano.metadata?.annotations
-          ? `Yes (${pano.metadata.annotations.length})`
-          : "No"
-      );
-      setEditingMarker(null);
-      setMarkerInput("");
+    if (!pano) return;
 
-      if (photoViewerRef.current?.viewer) {
+    if (photoViewerRef.current?.viewer) {
+      try {
+        markersPluginRef.current = null;
+        photoViewerRef.current.viewer.destroy();
+      } catch {}
+    }
+
+    setEditingMarker(null);
+    setMarkerInput('');
+    setCurrentPanorama(pano);
+  };
+
+  /* ------------------------------------------------------------------
+   * Utility: remove marker completely (plugin + metadata, no DB)
+   * ----------------------------------------------------------------*/
+  const removeMarkerLocal = (markerId: string) => {
+    markersPluginRef.current?.removeMarker(markerId);
+    setCurrentPanorama((prev) => {
+      if (!prev) return prev;
+      const remaining = (prev.metadata?.annotations || []).filter((m) => m.id !== markerId);
+      return { ...prev, metadata: { ...(prev.metadata || {}), annotations: remaining } } as Panorama;
+    });
+  };
+
+  /* ------------------------------------------------------------------
+   * Viewer initialisation
+   * ----------------------------------------------------------------*/
+  const initializeViewer = useCallback(
+    (viewer: any) => {
+      if (!viewer || !currentPanorama) return;
+      markersPluginRef.current = viewer.getPlugin(MarkersPlugin);
+      if (!markersPluginRef.current) return;
+
+      /* ---------- Render existing markers ---------- */
+      const anns = currentPanorama.metadata?.annotations || [];
+      markersPluginRef.current.clearMarkers();
+      anns.forEach((m: Marker) => {
         try {
-          console.log("Cleaning up existing viewer");
-          markersPluginRef.current = null;
-          photoViewerRef.current.viewer.destroy();
-        } catch (error) {
-          console.error("Error cleaning up viewer:", error);
-        }
-      }
-
-      setCurrentPanorama(pano);
-    } else {
-      console.warn("No panorama found for ID:", node.panorama_id);
-    }
-  };
-
-  const initializeViewer = (instance) => {
-    if (!instance || !currentPanorama) return;
-
-    console.log("Initializing viewer with instance:", instance);
-
-    try {
-      markersPluginRef.current = instance.getPlugin(MarkersPlugin);
-
-      if (!markersPluginRef.current) {
-        console.error("Could not get MarkersPlugin!");
-        return;
-      }
-
-      console.log(
-        "MarkersPlugin initialized successfully:",
-        markersPluginRef.current
-      );
-
-      const annotations = currentPanorama.metadata?.annotations || [];
-      console.log("Current annotations in metadata:", annotations);
-
-      if (annotations.length > 0) {
-        try {
-          markersPluginRef.current.clearMarkers();
-        } catch (e) {
-          console.error("Error clearing markers:", e);
-        }
-
-        const markersToAdd = annotations
-          .map((anno) => {
-            // Ensure we have all the marker properties needed for display
-            if (anno.html) {
-              return {
-                ...anno,
-                html:
-                  anno.html ||
-                  '<div style="width: 20px; height: 20px; border-radius: 50%; background-color: red; border: 2px solid white;"></div>',
-                anchor: anno.anchor || "center center",
-              };
-            } else {
-              return {
-                ...anno,
-                image: anno.image || "/assets/pin-red.png",
-                size: anno.size || { width: 32, height: 32 },
-                anchor: anno.anchor || "bottom center",
-              };
-            }
-          })
-          .filter(Boolean);
-
-        console.log("Adding processed markers to viewer:", markersToAdd);
-
-        markersToAdd.forEach((marker) => {
-          try {
-            markersPluginRef.current.addMarker(marker);
-          } catch (e) {
-            console.error("Error adding marker:", e, marker);
-          }
-        });
-      }
-
-      // Only add click handlers if not in shared (read-only) view
-      if (!isSharedView) {
-        instance.addEventListener("click", (e) => {
-          if (!e.data.rightClick) {
-            console.log("Click detected at:", e.data);
-            const timestamp = Date.now();
-            const markerId = `marker-${timestamp}`;
-
-            // Create a full marker object with correct position
-            const markerData = {
-              id: markerId,
-              position: {
-                yaw: e.data.yaw,
-                pitch: e.data.pitch,
-              },
-              tooltip: { content: "" },
-            };
-
-            if (USE_HTML_MARKER) {
-              markerData.html =
-                '<div style="width: 20px; height: 20px; border-radius: 50%; background-color: red; border: 2px solid white;"></div>';
-              markerData.anchor = "center center";
-            } else {
-              markerData.image = "/assets/pin-red.png";
-              markerData.size = { width: 32, height: 32 };
-              markerData.anchor = "bottom center";
-            }
-
-            // Add the marker to the viewer
-            markersPluginRef.current.addMarker(markerData);
-
-            // Use a function update form to ensure we have the latest state
-            setCurrentPanorama((prevPanorama) => {
-              if (!prevPanorama) return prevPanorama;
-
-              // Get the latest annotations from the current state
-              const latestAnnotations =
-                prevPanorama.metadata?.annotations || [];
-
-              // Create updated metadata with the new marker added to existing annotations
-              const updatedMetadata = {
-                ...(prevPanorama.metadata || {}),
-                annotations: [...latestAnnotations, markerData],
-              };
-
-              // Return updated panorama object
-              return {
-                ...prevPanorama,
-                metadata: updatedMetadata,
-              };
-            });
-
-            // Set editing state
-            setEditingMarker(markerId);
-            setMarkerInput("");
-          }
-        });
-      }
-
-      // For shared view, allow viewing marker info but not editing
-      markersPluginRef.current.addEventListener("select-marker", (event) => {
-        console.log("Marker selected:", event.marker);
-        if (!isSharedView) {
-          handleMarkerClick(event.marker);
-        }
-      });
-    } catch (error) {
-      console.error("Error in initializeViewer:", error);
-    }
-  };
-
-  const handleMarkerClick = (marker: Marker) => {
-    if (isSharedView) return; // Don't allow editing in shared view
-
-    console.log("handleMarkerClick called for", marker);
-    setEditingMarker(marker.id);
-
-    // Extract content from tooltip
-    let content = "";
-    if (typeof marker.tooltip === "string") {
-      content = marker.tooltip;
-    } else if (marker.tooltip && typeof marker.tooltip === "object") {
-      content = marker.tooltip.content || "";
-    }
-
-    setMarkerInput(content);
-  };
-
-  // Save marker annotation
-  const handleSaveMarkerAnnotation = async () => {
-    if (
-      isSharedView ||
-      !currentPanorama ||
-      !editingMarker ||
-      !markersPluginRef.current
-    )
-      return;
-
-    try {
-      console.log("Updating marker with ID:", editingMarker);
-
-      // Update the marker in the viewer with the new tooltip text
-      markersPluginRef.current.updateMarker({
-        id: editingMarker,
-        tooltip: { content: markerInput },
-      });
-
-      // Always work with the latest state from currentPanorama
-      const existingAnnotations = currentPanorama.metadata?.annotations || [];
-
-      // Update the specific marker's tooltip
-      const updatedAnnotations = existingAnnotations.map((marker) => {
-        if (marker.id === editingMarker) {
-          return {
-            ...marker,
-            tooltip: { content: markerInput },
+          // Update marker HTML based on type
+          const updatedMarker = {
+            ...m,
+            html: m.data?.type === 'navigation' 
+              ? `
+                <div class="navigation-marker">
+                  <div class="navigation-marker-inner"></div>
+                </div>
+              `
+              : `
+                <div class="annotation-marker">
+                  <div class="annotation-marker-inner"></div>
+                </div>
+              `,
+            anchor: "center center"
           };
+          markersPluginRef.current.addMarker(updatedMarker);
+        } catch {}
+      });
+
+      /* ---------- Click: add marker (edit mode only) ---------- */
+      viewer.addEventListener('click', (e: any) => {
+        if (isSharedView || viewerModeRef.current !== 'edit' || e.data.rightClick) return;
+
+        const id = `marker-${Date.now()}`;
+        const base: Partial<Marker> = {
+          id,
+          position: { yaw: e.data.yaw, pitch: e.data.pitch },
+        };
+
+        if (creationModeRef.current === 'annotation') {
+          const markerData = {
+            id: id,
+            position: {
+              yaw: e.data.yaw,
+              pitch: e.data.pitch,
+            },
+            tooltip: { content: "" },
+            html: `
+              <div class="annotation-marker">
+                <div class="annotation-marker-inner"></div>
+              </div>
+            `,
+            anchor: "center center"
+          };
+
+          markersPluginRef.current.addMarker(markerData);
+          setCurrentPanorama((prevPanorama) => {
+            if (!prevPanorama) return prevPanorama;
+            const latestAnnotations = prevPanorama.metadata?.annotations || [];
+            const updatedMetadata = {
+              ...(prevPanorama.metadata || {}),
+              annotations: [...latestAnnotations, markerData],
+            };
+            return {
+              ...prevPanorama,
+              metadata: updatedMetadata,
+            };
+          });
+        } else if (creationModeRef.current === 'navigation') {
+          const markerData = {
+            id: id,
+            position: {
+              yaw: e.data.yaw,
+              pitch: e.data.pitch,
+            },
+            html: `
+              <div class="navigation-marker">
+                <div class="navigation-marker-inner"></div>
+              </div>
+            `,
+            anchor: "center center",
+            data: {
+              type: "navigation",
+              targetPanoramaId: null
+            }
+          };
+
+          markersPluginRef.current.addMarker(markerData);
+          setCurrentPanorama((prevPanorama) => {
+            if (!prevPanorama) return prevPanorama;
+            const latestAnnotations = prevPanorama.metadata?.annotations || [];
+            const updatedMetadata = {
+              ...(prevPanorama.metadata || {}),
+              annotations: [...latestAnnotations, markerData],
+            };
+            return {
+              ...prevPanorama,
+              metadata: updatedMetadata,
+            };
+          });
         }
-        return marker;
+
+        setEditingMarker(id);
+        setMarkerInput('');
       });
 
-      console.log(
-        "About to save annotations:",
-        JSON.stringify(updatedAnnotations, null, 2)
-      );
-      console.log("Total annotations count:", updatedAnnotations.length);
+      /* ---------- Select‑marker ---------- */
+      markersPluginRef.current.addEventListener('select-marker', (ev: any) => {
+        const viewerMarker: Marker = ev.marker;
 
-      // Prepare updated metadata
-      const updatedMetadata = {
-        ...(currentPanorama.metadata || {}),
-        annotations: updatedAnnotations,
-      };
+        // (a) VIEW‑MODE → navigate through nav pins
+        if (viewerModeRef.current === 'view') {
+          if (viewerMarker.data?.type === 'navigation' && viewerMarker.data.targetPanoramaId) {
+            const dest = panoramas.find((p) => p.id === viewerMarker.data.targetPanoramaId);
+            if (dest) setCurrentPanorama(dest);
+          }
+          return;
+        }
 
-      console.log(
-        "Full metadata being saved:",
-        JSON.stringify(updatedMetadata, null, 2)
-      );
+        // (b) EDIT‑MODE → open only if it matches current creation mode
+        if (
+          (creationModeRef.current === 'navigation' && viewerMarker.data?.type !== 'navigation') ||
+          (creationModeRef.current === 'annotation' && viewerMarker.data?.type === 'navigation')
+        )
+          return;
 
-      // Save to database
-      await updatePanorama(currentPanorama.id, {
-        metadata: updatedMetadata,
+        // 👉 try to get the pristine marker kept in metadata
+        const pristine = currentPanorama?.metadata?.annotations?.find((m) => m.id === viewerMarker.id);
+
+        openMarkerEditor(pristine ?? viewerMarker);
       });
+    },
+    [currentPanorama, panoramas, isSharedView]
+  );
 
-      // Update local state
-      setCurrentPanorama({
-        ...currentPanorama,
-        metadata: updatedMetadata,
-      });
+  /* ------------------------------------------------------------------
+   * Open marker editor modal
+   * ----------------------------------------------------------------*/
+/* ------------------------------------------------------------------
+ * Open marker editor modal  ✅ NEW VERSION
+ * ----------------------------------------------------------------*/
+const openMarkerEditor = (mk: Marker) => {
+  setEditingMarker(mk.id);
 
-      setEditingMarker(null);
-      setMarkerInput("");
-      console.log("Marker updated successfully");
-    } catch (err) {
-      console.error("Error saving marker:", err);
+  let txt = '';
+
+  /* 1️⃣ Navigation markers hold their value in data.targetPanoramaId */
+  if (mk.data?.type === 'navigation') {
+    txt = mk.data.targetPanoramaId || '';
+  }
+
+  /* 2️⃣ Normal annotation markers that correctly store tooltip.content */
+  else if (
+    mk.tooltip &&
+    typeof mk.tooltip === 'object' &&
+    'content' in mk.tooltip &&
+    typeof (mk.tooltip as any).content === 'string'
+  ) {
+    txt = (mk.tooltip as any).content;
+  }
+
+  /* 3️⃣ Legacy markers: try to read plain text out of the raw HTML string */
+  else if (typeof mk.html === 'string') {
+    const tmp = document.createElement('div');
+    tmp.innerHTML = mk.html;
+    txt = tmp.textContent?.trim() || '';
+  }
+
+  /* 4️⃣ Fallback when tooltip has become an actual HTMLElement */
+  else if (
+    mk.tooltip &&
+    typeof mk.tooltip === 'object' &&
+    (mk.tooltip as HTMLElement).textContent
+  ) {
+    const raw = (mk.tooltip as HTMLElement).textContent!.trim();
+    txt = raw.startsWith('[object') ? '' : raw;
+  }
+
+  setMarkerInput(txt);
+};
+
+  
+
+  /* ------------------------------------------------------------------
+   * Save marker changes
+   * ----------------------------------------------------------------*/
+  const handleSaveMarker = async () => {
+    if (!currentPanorama || !editingMarker || !markersPluginRef.current) return;
+
+    const list = currentPanorama.metadata?.annotations || [];
+    const target = list.find((m) => m.id === editingMarker);
+    if (!target) return;
+    const isNav = target.data?.type === 'navigation';
+
+    if (isNav) {
+      markersPluginRef.current.updateMarker({ id: editingMarker, data: { type: 'navigation', targetPanoramaId: markerInput } });
+      target.data = { type: 'navigation', targetPanoramaId: markerInput };
+    } else {
+      markersPluginRef.current.updateMarker({ id: editingMarker, tooltip: { content: markerInput } });
+      target.tooltip = { content: markerInput };
     }
+
+    const meta = { ...(currentPanorama.metadata || {}), annotations: list };
+    await updatePanorama(currentPanorama.id, { metadata: meta });
+    setCurrentPanorama({ ...currentPanorama, metadata: meta });
+    setEditingMarker(null);
+    setMarkerInput('');
   };
 
-  // Handle marker removal
-  const handleRemoveMarker = async () => {
-    if (
-      isSharedView ||
-      !currentPanorama ||
-      !editingMarker ||
-      !markersPluginRef.current
-    )
-      return;
+  /* ------------------------------------------------------------------
+   * Cancel editing → if marker is new & empty remove it
+   * ----------------------------------------------------------------*/
+  const handleCancelEdit = () => {
+    if (!editingMarker) return;
 
-    try {
-      console.log("Removing marker with ID:", editingMarker);
+    const ann = currentPanorama?.metadata?.annotations?.find((m) => m.id === editingMarker);
+    const isEmptyNav = ann?.data?.type === 'navigation' && !ann.data.targetPanoramaId;
+    const isEmptyAnno = !ann?.data?.type && (!ann?.tooltip || (typeof ann.tooltip === 'object' && 'content' in ann.tooltip && !(ann.tooltip as any).content));
 
-      // Remove from viewer
-      markersPluginRef.current.removeMarker(editingMarker);
-
-      // Get existing annotations and filter out the one to remove
-      const existingAnnotations = currentPanorama.metadata?.annotations || [];
-      const updatedAnnotations = existingAnnotations.filter(
-        (marker) => marker.id !== editingMarker
-      );
-
-      // Prepare updated metadata
-      const updatedMetadata = {
-        ...(currentPanorama.metadata || {}),
-        annotations: updatedAnnotations,
-      };
-
-      // Save to database
-      await updatePanorama(currentPanorama.id, {
-        metadata: updatedMetadata,
-      });
-
-      // Update local state
-      setCurrentPanorama({
-        ...currentPanorama,
-        metadata: updatedMetadata,
-      });
-
-      setEditingMarker(null);
-      setMarkerInput("");
-      console.log("Marker removed successfully");
-    } catch (err) {
-      console.error("Error removing marker:", err);
+    if (isEmptyNav || isEmptyAnno) {
+      removeMarkerLocal(editingMarker);
     }
+
+    setEditingMarker(null);
+    setMarkerInput('');
   };
 
+  /* ------------------------------------------------------------------
+   * Delete marker completely (DB + local)
+   * ----------------------------------------------------------------*/
+  const handleDeleteMarker = async () => {
+    if (!currentPanorama || !editingMarker || !markersPluginRef.current) return;
+
+    removeMarkerLocal(editingMarker);
+
+    const meta = { ...(currentPanorama.metadata || {}), annotations: currentPanorama.metadata?.annotations?.filter((m) => m.id !== editingMarker) || [] };
+    await updatePanorama(currentPanorama.id, { metadata: meta });
+    setCurrentPanorama({ ...currentPanorama, metadata: meta });
+
+    setEditingMarker(null);
+    setMarkerInput('');
+  };
+
+  /* ------------------------------------------------------------------
+   * JSX
+   * ----------------------------------------------------------------*/
   return (
     <>
       <style jsx global>{`
-        .psv-tooltip,
-        .psv-tooltip * {
-          color: #fff !important;
+        .psv-tooltip, .psv-tooltip * { color: #fff !important; }
+
+        /* Annotation marker styles */
+        .annotation-marker {
+          width: 24px;
+          height: 24px;
+          position: relative;
+          transition: transform 0.2s ease;
+        }
+        .annotation-marker:hover {
+          transform: scale(1.2);
+        }
+        .annotation-marker-inner {
+          width: 100%;
+          height: 100%;
+          border-radius: 50%;
+          background: #ef4444;
+          border: 2px solid white;
+          box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+        }
+
+        /* Navigation marker styles */
+        .navigation-marker {
+          width: 48px;
+          height: 48px;
+          position: relative;
+          transition: all 0.2s ease;
+        }
+        .navigation-marker:hover {
+          transform: scale(1.1);
+        }
+        .navigation-marker-inner {
+          width: 100%;
+          height: 100%;
+          border-radius: 50%;
+          background: transparent;
+          border: 8px solid rgba(209, 213, 219, 0.6);
+          box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+          transform: perspective(200px) rotateX(20deg) scaleY(0.5);
+        }
+        .navigation-marker:hover .navigation-marker-inner {
+          border-color: rgba(209, 213, 219, 0.8);
         }
       `}</style>
       <div className="flex flex-col h-screen">
-        {/* TOP: Panorama Viewer */}
-        <div ref={viewerRef} className="flex-1 p-4 relative bg-gray-50">
-          {/* Only show help button in editable mode */}
-          {!isSharedView && (
-            <div className="absolute top-2 right-2 z-10 flex space-x-2">
+        {/* ---------------- Viewer Section ----------------*/}
+      <div className="flex-1 relative bg-gray-50">
+      {!isSharedView && (
+    <div className="absolute top-4 left-4 right-4 z-10 flex w-[calc(100%-2rem)] justify-between items-center">
+              {/* Left: Mode toggle */}
               <button
-                className="bg-cyber-gradient text-white hover:opacity-90 px-3 py-1 rounded"
-                onClick={() => setShowHelpModal(true)}
+                className={`px-3 py-1 rounded ${viewerMode === 'edit' ? 'bg-cyber-gradient text-white' : 'bg-cyber-gradient'}`}
+                onClick={() => setViewerMode((m) => (m === 'view' ? 'edit' : 'view'))}
               >
-                How to Annotate
+                {viewerMode === 'view' ? 'Switch to Edit' : 'Switch to View'}
               </button>
+
+              {/* Right: Annotation controls */}
+              <div className="flex items-center space-x-2">
+                {viewerMode === 'edit' && (
+                  <>
+                    <button
+                      className={`px-3 py-1 rounded ${creationMode === 'annotation' ? 'bg-cyber-gradient text-white' : 'bg-gray-200'}`}
+                      onClick={() => setCreationMode('annotation')}
+                    >
+                      Edit Annotation
+                    </button>
+                    <button
+                      className={`px-3 py-1 rounded ${creationMode === 'navigation' ? 'bg-cyber-gradient text-white' : 'bg-gray-200'}`}
+                      onClick={() => setCreationMode('navigation')}
+                    >
+                      Edit Navigation
+                    </button>
+                  </>
+                )}
+                <button
+                  className="w-8 h-8 rounded-full border border-gray-300 bg-white text-lg font-bold text-gray-700 hover:bg-gray-100"
+                  onClick={() => setShowHelpModal(true)}
+                  title="How to Annotate"
+                >
+                  ?
+                </button>
+              </div>
             </div>
           )}
 
+          {/* Help Modal */}
           {showHelpModal && (
             <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
               <div className="bg-white p-6 rounded-lg shadow-lg max-w-md">
                 <h2 className="text-xl font-bold mb-4">How to Annotate</h2>
-                <p className="mb-4">
-                  Click anywhere on the image to drop a pin at that location. A
-                  pop-up will let you add a text label for each pin, allowing
-                  you to annotate specific parts of the image.
-                </p>
-                <p className="mb-4">
-                  Hover over any existing pin to see its text label.
-                </p>
-                <p className="mb-4">
-                  Click on any existing pin to edit the text label or delete the
-                  pin.
-                </p>
+                <p className="mb-4"><strong>Annotation Mode:</strong> Click anywhere to place a pin, then enter a text label.</p>
+                <p className="mb-4"><strong>Navigation Mode:</strong> Place a navigation pin and select the destination panorama.</p>
                 <div className="flex justify-end">
-                  <button
-                    className="bg-cyber-gradient hover:bg-blue-600 text-white px-4 py-2 rounded"
-                    onClick={() => setShowHelpModal(false)}
-                  >
+                  <button className="bg-cyber-gradient text-white px-4 py-2 rounded" onClick={() => setShowHelpModal(false)}>
                     Got it
                   </button>
                 </div>
@@ -468,191 +496,110 @@ export default function PanoramaViewerPage({
             </div>
           )}
 
+          {/* Marker editor */}
           {editingMarker && !isSharedView && (
             <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 bg-white border border-gray-300 p-4 rounded shadow-lg z-50 text-white">
-              <h3 className="font-bold mb-2">Edit Marker Annotation</h3>
-              <textarea
-                className="w-64 h-32 bg-gray-100 border border-gray-300 p-2 mb-3 !text-black !placeholder-gray-500"
-                value={markerInput}
-                onChange={(e) => setMarkerInput(e.target.value)}
-                placeholder="Enter annotation text..."
-              />
+              <h3 className="font-bold mb-2">
+                {currentPanorama?.metadata?.annotations?.find((m) => m.id === editingMarker)?.data?.type === 'navigation'
+                  ? 'Edit Navigation Marker'
+                  : 'Edit Marker Annotation'}
+              </h3>
+              {currentPanorama?.metadata?.annotations?.find((m) => m.id === editingMarker)?.data?.type === 'navigation' ? (
+                <div className="mb-3">
+                  <label className="block mb-1">Select Target Panorama:</label>
+                  <select
+                    className="w-full p-2 bg-gray-100 border border-gray-300 !text-black"
+                    value={markerInput}
+                    onChange={(e) => setMarkerInput(e.target.value)}
+                  >
+                    <option value="">Select a panorama</option>
+                    {panoramas.filter((p) => p.id !== currentPanorama?.id).map((p) => (
+                      <option key={p.id} value={p.id}>{p.name || `Panorama ${p.id.slice(0,4)}`}</option>
+                    ))}
+                  </select>
+                </div>
+              ) : (
+                <textarea
+                  className="w-64 h-32 bg-gray-100 border border-gray-300 p-2 mb-3 !text-black"
+                  value={markerInput}
+                  onChange={(e) => setMarkerInput(e.target.value)}
+                  placeholder="Enter annotation text..."
+                />
+              )}
               <div className="flex justify-between">
-                <button
-                  className="px-3 py-1 bg-[#bd7581] !text-white rounded"
-                  onClick={handleRemoveMarker}
-                >
-                  Delete
-                </button>
+                <button className="px-3 py-1 bg-[#bd7581] text-white rounded" onClick={handleDeleteMarker}>Delete</button>
                 <div>
-                  <button
-                    className="mr-2 px-3 py-1 bg-gray-300 hover:opacity-90 rounded"
-                    onClick={() => {
-                      // Check if this is a new marker that was just added
-                      const isNewMarker =
-                        editingMarker &&
-                        editingMarker.startsWith("marker-") &&
-                        !currentPanorama?.metadata?.annotations?.some(
-                          (m) => m.id === editingMarker && m.tooltip?.content
-                        );
-
-                      if (isNewMarker) {
-                        // If it's a new marker, remove it from the viewer
-                        if (markersPluginRef.current) {
-                          try {
-                            markersPluginRef.current.removeMarker(
-                              editingMarker
-                            );
-                          } catch (e) {
-                            console.error(
-                              "Error removing marker on cancel:",
-                              e
-                            );
-                          }
-                        }
-
-                        // Also remove it from the panorama metadata
-                        setCurrentPanorama((prevPanorama) => {
-                          if (!prevPanorama) return prevPanorama;
-
-                          const existingAnnotations =
-                            prevPanorama.metadata?.annotations || [];
-                          const updatedAnnotations = existingAnnotations.filter(
-                            (marker) => marker.id !== editingMarker
-                          );
-
-                          return {
-                            ...prevPanorama,
-                            metadata: {
-                              ...(prevPanorama.metadata || {}),
-                              annotations: updatedAnnotations,
-                            },
-                          };
-                        });
-                      }
-
-                      // Clear the editing state regardless
-                      setEditingMarker(null);
-                      setMarkerInput("");
-                    }}
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    className="px-3 py-1 bg-cyber-gradient hover:opacity-90 text-white rounded"
-                    onClick={handleSaveMarkerAnnotation}
-                  >
-                    Save
-                  </button>
+                  <button className="mr-2 px-3 py-1 bg-gray-300 rounded" onClick={handleCancelEdit}>Cancel</button>
+                  <button className="px-3 py-1 bg-cyber-gradient text-white rounded" onClick={handleSaveMarker}>Save</button>
                 </div>
               </div>
             </div>
           )}
 
+          {/* Photo Sphere */}
           {currentPanorama ? (
-            <div
-              key={`panorama-${currentPanorama.id}`}
-              className="w-full h-full text-w"
-            >
-              <ReactPhotoSphereViewer
-                ref={photoViewerRef}
-                src={currentPanorama.url}
-                height="100%"
-                width="100%"
-                plugins={[
-                  [
-                    MarkersPlugin,
-                    { markers: currentPanorama.metadata?.annotations || [] },
-                  ],
-                ]}
-                navbar={["zoom", "fullscreen"]}
-                minFov={30}
-                maxFov={90}
-                onReady={(instance) => {
-                  console.log("Panorama viewer is ready!");
-                  initializeViewer(instance);
-                }}
-              />
-            </div>
+            <ReactPhotoSphereViewer
+              key={currentPanorama.id}
+              ref={photoViewerRef}
+              src={currentPanorama.url}
+              height="100%"
+              width="100%"
+              plugins={[[MarkersPlugin, { markers: currentPanorama.metadata?.annotations || [] }]]}
+              navbar={["zoom", "fullscreen"]}
+              minFov={30}
+              maxFov={90}
+              onReady={initializeViewer}
+            />
           ) : (
             <div className="flex items-center justify-center w-full h-full text-gray-500">
-              {isSharedView
-                ? "Loading panorama view..."
-                : "Select a grid location to view its panorama"}
+              {isSharedView ? 'Loading panorama...' : 'Select a grid location to view its panorama'}
             </div>
           )}
         </div>
 
-        {/* BOTTOM: Grid - Show simpler version in shared view */}
+        {/* ---------------- Grid ----------------*/}
         <div className="p-4 border-t border-gray-300 overflow-y-auto">
-          <h2 className="text-lg font-semibold mb-4">
-            {isSharedView ? "Navigation Map" : "Locations Grid"}
-          </h2>
-          {rows > 0 && cols > 0 ? (
+          <h2 className="text-lg font-semibold mb-4">{isSharedView ? 'Navigation Map' : 'Locations Grid'}</h2>
+          {rows && cols ? (
             <div
               className="grid gap-3 place-items-center w-max mx-auto"
-              style={{
-                gridTemplateRows: `repeat(${rows}, 120px)`,
-                gridTemplateColumns: `repeat(${cols}, 120px)`,
-              }}
+              style={{ gridTemplateRows: `repeat(${rows},120px)`, gridTemplateColumns: `repeat(${cols},120px)` }}
             >
-              {Array.from({ length: rows }).map(
-                (_, y) =>
-                  Array.from({ length: cols })
-                    .map((_, x) => {
-                      const node = getNodeAtPosition(x, y);
-                      const isAssigned = Boolean(node?.panorama_id);
-                      const assignedPano = isAssigned
-                        ? panoramas.find((p) => p.id === node?.panorama_id)
-                        : null;
-
-                      // In shared view, only show assigned panoramas
-                      if (isSharedView && !isAssigned) {
-                        return null; // Don't render unassigned cells in shared view
-                      }
-
-                      return (
-                        <div
-                          key={`${x}-${y}`}
-                          onClick={() => isAssigned && handleCellClick(x, y)}
-                          className={`relative w-24 h-24 rounded-full border-2 flex items-center justify-center transition-all 
-          ${
-            isAssigned
-              ? "border-blue-500 bg-blue-100 hover:bg-blue-200 cursor-pointer"
-              : "border-dashed border-gray-300 bg-gray-200 cursor-not-allowed opacity-60"
-          }`}
-                        >
-                          {assignedPano ? (
-                            <>
-                              <img
-                                src={assignedPano.url}
-                                alt={`Panorama at (${x},${y})`}
-                                className="w-full h-full object-cover rounded-full"
-                              />
-                              {assignedPano.metadata?.annotations?.length >
-                                0 && (
-                                <div className="absolute -top-2 -right-2 bg-[#bd7581] !text-white text-xs rounded-full w-5 h-5 flex items-center justify-center">
-                                  {assignedPano.metadata.annotations.length}
-                                </div>
-                              )}
-                            </>
-                          ) : (
-                            <span className="text-sm text-gray-500">
-                              Unassigned
-                            </span>
+              {Array.from({ length: rows }).flatMap((_, y) =>
+                Array.from({ length: cols }).map((_, x) => {
+                  const node = getNodeAtPosition(x, y);
+                  const assigned = !!node?.panorama_id;
+                  const pano = assigned ? panoramas.find((p) => p.id === node?.panorama_id) : null;
+                  if (isSharedView && !assigned) return null;
+                  return (
+                    <div
+                      key={`${x}-${y}`}
+                      onClick={() => assigned && handleCellClick(x, y)}
+                      className={`relative w-24 h-24 rounded-full border-2 flex items-center justify-center transition-all ${
+                        assigned
+                          ? 'border-blue-500 bg-blue-100 hover:bg-blue-200 cursor-pointer'
+                          : 'border-dashed border-gray-300 bg-gray-200 cursor-not-allowed opacity-60'
+                      }`}
+                    >
+                      {pano ? (
+                        <>
+                          <img src={pano.url} alt="thumb" className="w-full h-full object-cover rounded-full" />
+                          {!!pano.metadata?.annotations?.length && (
+                            <div className="absolute -top-2 -right-2 bg-[#bd7581] text-xs text-white rounded-full w-5 h-5 flex items-center justify-center">
+                              {pano.metadata.annotations.length}
+                            </div>
                           )}
-                        </div>
-                      );
-                    })
-                    .filter(Boolean) // Filter out null values for shared view
+                        </>
+                      ) : (
+                        <span className="text-sm text-gray-500">Unassigned</span>
+                      )}
+                    </div>
+                  );
+                })
               )}
             </div>
           ) : (
-            <p className="text-gray-500">
-              {isSharedView
-                ? "Navigation map is not available."
-                : "No grid data found. Check if panorama_grid is set up for this project."}
-            </p>
+            <p className="text-gray-500">{isSharedView ? 'Navigation map is unavailable.' : 'No grid data.'}</p>
           )}
         </div>
       </div>
