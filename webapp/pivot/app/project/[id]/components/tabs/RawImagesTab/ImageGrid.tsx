@@ -135,22 +135,26 @@ export default function ImageGrid({
               <Button
                 className="bg-cyber-gradient hover:opacity-90"
                 disabled={uploading}
+                onClick={() => {
+                  if (folderInputRef.current && !uploading) {
+                    folderInputRef.current.click();
+                  }
+                }}
               >
                 <FolderPlus className="mr-2 h-4 w-4" />
-                <label className="cursor-pointer">
-                  Upload Folders
-                  <input
-                    ref={folderInputRef}
-                    type="file"
-                    className="hidden"
-                    {...{ webkitdirectory: "", directory: "" } as any}
-                    multiple
-                    accept="image/*"
-                    onChange={handleFolderUpload}
-                    disabled={uploading}
-                  />
-                </label>
+                Upload Folders
               </Button>
+              <input
+                ref={folderInputRef}
+                type="file"
+                className="hidden"
+                webkitdirectory=""
+                directory=""
+                multiple
+                accept="image/*"
+                onChange={handleFolderUpload}
+                disabled={uploading}
+              />
             </div>
           </div>
         </CardHeader>
