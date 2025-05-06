@@ -331,6 +331,9 @@ export function useGrids(projectId: string) {
         return filtered;
       });
       
+      // Mark that changes have been made that need to be saved
+      setHasChanges(true);
+      
       setOpenDropdownCell(null);
     } catch (error) {
       console.error("Error assigning panorama:", error);
@@ -373,6 +376,9 @@ export function useGrids(projectId: string) {
       if (unassignedPanorama) {
         setUnassignedPanoramas(prev => [...prev, unassignedPanorama]);
       }
+      
+      // Mark that changes have been made that need to be saved
+      setHasChanges(true);
     } catch (error) {
       console.error("Error unassigning panorama:", error);
       alert("Failed to remove panorama from grid position");

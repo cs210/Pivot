@@ -48,7 +48,7 @@ export default function ProjectPage() {
     setProjectName,
     isEditing,
     setIsEditing,
-    handleUpdateProject,
+    handleUpdateProjectName,
   } = useProject(projectId, router);
 
   useEffect(() => {
@@ -137,7 +137,7 @@ export default function ProjectPage() {
               setProjectName={setProjectName}
               isEditing={isEditing}
               setIsEditing={setIsEditing}
-              handleUpdateProject={handleUpdateProject}
+              handleUpdateProjectName={handleUpdateProjectName}
               router={router}
             />
 
@@ -221,9 +221,10 @@ export default function ProjectPage() {
                 projectId={projectId}
                 projectName={projectName}
                 setProjectName={setProjectName}
-                handleUpdateProject={handleUpdateProject}
+                handleUpdateProjectName={handleUpdateProjectName}
                 isPublic={isPublic}
-                handleShareProject={handleTogglePublic}
+                projects={[]}  // Provide an empty array or fetch projects if needed
+                setProjects={() => {}}  // Provide a no-op function or proper state updater
               />
             </TabsContent>
           </Tabs>

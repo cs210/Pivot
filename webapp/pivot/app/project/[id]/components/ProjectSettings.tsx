@@ -13,7 +13,7 @@ interface ProjectSettingsProps {
   projectId: string;
   projectName: string;
   setProjectName: (name: string) => void;
-  handleUpdateProject: () => void;
+  handleUpdateProjectName: () => void;
   isPublic: boolean;
   projects: any[];
   setProjects: (projects: any[]) => void;
@@ -26,7 +26,7 @@ export default function ProjectSettings({
   projectId,
   projectName,
   setProjectName,
-  handleUpdateProject,
+  handleUpdateProjectName,
   isPublic = false,
   projects = [],
   setProjects,
@@ -137,7 +137,7 @@ export default function ProjectSettings({
                   />
                 </div>
                 <Button
-                  onClick={handleUpdateProject}
+                  onClick={handleUpdateProjectName}
                   className="bg-cyber-gradient hover:opacity-90"
                 >
                   <Save className="mr-2 h-4 w-4" />
