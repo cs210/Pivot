@@ -40,6 +40,15 @@ export interface GridNode {
   updated_at: string;
 }
 
+// Interface to track pending changes to grid nodes
+interface PendingChange {
+  type: 'assign' | 'unassign';
+  x: number;
+  y: number;
+  panoramaId?: string;
+  existingNode: GridNode | null;
+}
+
 export function useGrids(projectId: string) {
   const supabase = createClient();
   
@@ -67,6 +76,9 @@ export function useGrids(projectId: string) {
   
   // Changes made but not saved
   const [hasChanges, setHasChanges] = useState(false);
+
+  // Pending changes to be committed on save
+  const [pendingChanges, setPendingChanges] = useState<PendingChange[]>([]);
 
   // Get position key for lookup
   const getPosKey = (x: number, y: number) => `${x},${y}`;
@@ -259,7 +271,7 @@ export function useGrids(projectId: string) {
     fetchData();
   }, [projectId]);
 
-  // Assign a panorama to a grid position
+  // Assign a panorama to a grid position (staged until save)
   const handleAssignPanorama = async (x: number, y: number, panoramaId: string) => {
     if (!currentGrid) return;
     
@@ -267,53 +279,52 @@ export function useGrids(projectId: string) {
     const existingNode = gridNodes[posKey];
     
     try {
+      // Create a temporary node if none exists
+      let tempNode: GridNode;
       if (existingNode) {
-        // Update existing node
-        const { error } = await supabase
-          .from("grid_nodes")
-          .update({ panorama_id: panoramaId })
-          .eq("id", existingNode.id);
-          
-        if (error) throw error;
-        
-        // Update local state
-        const updatedNode = { ...existingNode, panorama_id: panoramaId };
-        setGridNodes(prev => ({
-          ...prev,
-          [posKey]: updatedNode
-        }));
-        
-        // Update cache
-        updateGridNodeInCache(projectId, posKey, updatedNode);
+        // Update existing node temporarily
+        tempNode = { 
+          ...existingNode, 
+          panorama_id: panoramaId,
+          updated_at: new Date().toISOString()
+        };
       } else {
-        // Create new node
-        const { data, error } = await supabase
-          .from("grid_nodes")
-          .insert({
-            grid_id: currentGrid.id,
-            project_id: projectId,
-            grid_x: x,
-            grid_y: y,
-            panorama_id: panoramaId,
-            rotation_degrees: 0,
-            scale_factor: 1
-          })
-          .select()
-          .single();
-          
-        if (error) throw error;
-        
-        // Update local state
-        setGridNodes(prev => ({
-          ...prev,
-          [posKey]: data
-        }));
-        
-        // Update cache
-        updateGridNodeInCache(projectId, posKey, data);
+        // Create a temporary new node
+        tempNode = {
+          id: `temp-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`,
+          grid_id: currentGrid.id,
+          project_id: projectId,
+          grid_x: x,
+          grid_y: y,
+          panorama_id: panoramaId,
+          rotation_degrees: 0,
+          scale_factor: 1,
+          name: null,
+          description: null,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString()
+        };
       }
       
-      // Update unassigned panoramas list
+      // Update local state
+      setGridNodes(prev => ({
+        ...prev,
+        [posKey]: tempNode
+      }));
+      
+      // Add to pending changes
+      setPendingChanges(prev => [
+        ...prev.filter(change => !(change.x === x && change.y === y)), // Remove any previous change for this cell
+        {
+          type: 'assign',
+          x,
+          y,
+          panoramaId,
+          existingNode
+        }
+      ]);
+      
+      // Update unassigned panoramas list (visual only until saved)
       const oldPanoramaId = existingNode?.panorama_id;
       
       setUnassignedPanoramas(prev => {
@@ -336,7 +347,7 @@ export function useGrids(projectId: string) {
       
       setOpenDropdownCell(null);
     } catch (error) {
-      console.error("Error assigning panorama:", error);
+      console.error("Error staging panorama assignment:", error);
       alert("Failed to assign panorama to grid position");
     }
   };
@@ -513,6 +524,7 @@ export function useGrids(projectId: string) {
     openDropdownCell,
     loading,
     hasChanges,
+    pendingChanges,
     
     // Functions
     fetchData,
