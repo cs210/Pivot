@@ -4,16 +4,22 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
-import { Save, Share2, AlertCircle } from "lucide-react";
+import { Save, Share2, AlertCircle, Loader2 } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { toggleProjectPublic, updatePanoramasPublicStatus } from "@/services/panorama-service";
+import { useRouter } from 'next/navigation';
 
 interface ProjectSettingsProps {
   projectId: string;
   projectName: string;
   setProjectName: (name: string) => void;
   handleUpdateProject: () => void;
-  isPublic?: boolean;
-  handleShareProject?: () => void;
+  isPublic: boolean;
+  projects: any[];
+  setProjects: (projects: any[]) => void;
+  setShareDialogOpen?: (open: boolean) => void;
+  setShareLink?: (link: string) => void;
+  setCurrentProject?: (project: any) => void;
 }
 
 export default function ProjectSettings({
@@ -22,9 +28,50 @@ export default function ProjectSettings({
   setProjectName,
   handleUpdateProject,
   isPublic = false,
-  handleShareProject,
+  projects = [],
+  setProjects,
+  setShareDialogOpen,
+  setShareLink,
+  setCurrentProject,
 }: ProjectSettingsProps) {
   const [activeSection, setActiveSection] = useState("general");
+  const [isTogglingPublic, setIsTogglingPublic] = useState(false);
+  const router = useRouter();
+
+  const handleToggleProjectPublic = async () => {
+    setIsTogglingPublic(true);
+    
+    try {
+      const result = await toggleProjectPublic(projectId, projects, setProjects);
+      
+      if (!result.success) {
+        console.error(result.error || "Failed to update project visibility");
+        alert(result.error || "Failed to update project visibility");
+        setIsTogglingPublic(false);
+        return;
+      }
+      
+      // Also update the panoramas' public status to match the project
+      await updatePanoramasPublicStatus(projectId, result.isNowPublic || false);
+      
+      // If the project is now public and the share dialog should be opened
+      if (result.isNowPublic && setShareDialogOpen && setShareLink && setCurrentProject) {
+        setCurrentProject(result.project);
+        const baseUrl = window.location.origin;
+        const link = `${baseUrl}/shared/${projectId}`;
+        setShareLink(link);
+        setShareDialogOpen(true);
+      }
+      
+      // Force a refresh to get updated data
+      router.refresh();
+    } catch (error) {
+      console.error("Error updating project visibility:", error);
+      alert("Failed to update project visibility");
+    } finally {
+      setIsTogglingPublic(false);
+    }
+  };
 
   return (
     <div className="grid grid-cols-1 gap-6 md:grid-cols-12">
@@ -118,7 +165,8 @@ export default function ProjectSettings({
                   </div>
                   <Switch
                     checked={isPublic}
-                    onCheckedChange={handleShareProject}
+                    onCheckedChange={handleToggleProjectPublic}
+                    disabled={isTogglingPublic}
                     className="data-[state=checked]:bg-primary"
                   />
                 </div>
@@ -135,16 +183,26 @@ export default function ProjectSettings({
                 )}
 
                 <Button
-                  onClick={handleShareProject}
+                  onClick={handleToggleProjectPublic}
                   variant={isPublic ? "default" : "outline"}
                   className={`w-full ${
                     isPublic
                       ? "bg-cyber-gradient hover:opacity-90"
                       : "cyber-border"
                   }`}
+                  disabled={isTogglingPublic}
                 >
-                  <Share2 className="mr-2 h-4 w-4" />
-                  {isPublic ? "Manage Sharing" : "Share Project"}
+                  {isTogglingPublic ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      {isPublic ? "Making Private..." : "Making Public..."}
+                    </>
+                  ) : (
+                    <>
+                      <Share2 className="mr-2 h-4 w-4" />
+                      {isPublic ? "Manage Sharing" : "Share Project"}
+                    </>
+                  )}
                 </Button>
               </div>
             </CardContent>

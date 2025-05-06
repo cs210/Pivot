@@ -135,7 +135,7 @@ export default function PanoramaViewerPage({
     markersPluginRef.current?.removeMarker(markerId);
     setCurrentPanorama((prev) => {
       if (!prev) return prev;
-      const remaining = (prev.metadata?.annotations || []).filter((m) => m.id !== markerId);
+      const remaining = (prev.metadata?.annotations || []).filter((m: Marker) => m.id !== markerId);
       return { ...prev, metadata: { ...(prev.metadata || {}), annotations: remaining } } as Panorama;
     });
   };
@@ -360,7 +360,7 @@ const openMarkerEditor = (mk: Marker) => {
   const handleCancelEdit = () => {
     if (!editingMarker) return;
 
-    const ann = currentPanorama?.metadata?.annotations?.find((m) => m.id === editingMarker);
+    const ann = currentPanorama?.metadata?.annotations?.find((m: Marker) => m.id === editingMarker);
     const isEmptyNav = ann?.data?.type === 'navigation' && !ann.data.targetPanoramaId;
     const isEmptyAnno = !ann?.data?.type && (!ann?.tooltip || (typeof ann.tooltip === 'object' && 'content' in ann.tooltip && !(ann.tooltip as any).content));
 
@@ -380,7 +380,7 @@ const openMarkerEditor = (mk: Marker) => {
 
     removeMarkerLocal(editingMarker);
 
-    const meta = { ...(currentPanorama.metadata || {}), annotations: currentPanorama.metadata?.annotations?.filter((m) => m.id !== editingMarker) || [] };
+    const meta = { ...(currentPanorama.metadata || {}), annotations: currentPanorama.metadata?.annotations?.filter((m: Marker) => m.id !== editingMarker) || [] };
     await updatePanorama(currentPanorama.id, { metadata: meta });
     setCurrentPanorama({ ...currentPanorama, metadata: meta });
 
@@ -583,7 +583,7 @@ const openMarkerEditor = (mk: Marker) => {
                     >
                       {pano ? (
                         <>
-                          <img src={pano.url} alt="thumb" className="w-full h-full object-cover rounded-full" />
+                          <img src={pano.url ?? ""} alt="thumb" className="w-full h-full object-cover rounded-full" />
                           {!!pano.metadata?.annotations?.length && (
                             <div className="absolute -top-2 -right-2 bg-[#bd7581] text-xs text-white rounded-full w-5 h-5 flex items-center justify-center">
                               {pano.metadata.annotations.length}

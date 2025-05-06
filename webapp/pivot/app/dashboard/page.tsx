@@ -36,8 +36,8 @@ import {
 } from "lucide-react";
 import { Header } from "@/components/header";
 import { useProjects } from "@/hooks/useProjects";
-import ShareButton from "@/components/share-button";
-import ShareDialog from "@/components/share-dialog";
+import ShareButton from "@/app/project/[id]/components/ShareButton";
+import ShareDialog from "@/app/project/[id]/components/ShareDialog";
 
 export default function Dashboard() {
   const router = useRouter();

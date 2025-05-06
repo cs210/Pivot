@@ -7,11 +7,11 @@ import {
   DialogHeader, 
   DialogTitle, 
   DialogDescription 
-} from "./ui/dialog";
-import { Button } from "./ui/button";
-import { toggleProjectPublic, updatePanoramasPublicStatus } from '../services/panorama-service';
+} from "../../../../components/ui/dialog";
+import { Button } from "../../../../components/ui/button";
+import { toggleProjectPublic, updatePanoramasPublicStatus } from '../../../../services/panorama-service';
 import { useRouter } from 'next/navigation';
-import { Project } from "../hooks/useProject";
+import { Project } from "../../../../hooks/useProject";
 
 interface ShareDialogProps {
   open: boolean;

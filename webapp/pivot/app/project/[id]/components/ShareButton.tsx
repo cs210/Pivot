@@ -1,9 +1,9 @@
 import { useState } from "react";
 import { Share2, Loader2 } from "lucide-react";
-import { Button } from "./ui/button";
-import { toggleProjectPublic, updatePanoramasPublicStatus } from '../services/panorama-service';
+import { Button } from "../../../../components/ui/button";
+import { toggleProjectPublic, updatePanoramasPublicStatus } from '../../../../services/panorama-service';
 import { useRouter } from 'next/navigation';
-import { Project } from "../hooks/useProject";
+import { Project } from "../../../../hooks/useProject";
 
 interface ShareButtonProps {
   project: Project;
