@@ -1,4 +1,3 @@
-import { useState, useEffect, useMemo } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
@@ -20,6 +19,7 @@ import {
 } from "lucide-react";
 import { RawImage } from "../../../../../../hooks/useRawImages";
 import { Folder } from "../../../../../../hooks/useFolders";
+import { useState, useEffect } from "react";
 
 interface ImageGridProps {
   rawImages: RawImage[];
@@ -64,25 +64,28 @@ export default function ImageGrid({
   getCurrentFolderImages,
   getRootImages,
 }: ImageGridProps) {
-  // Use useMemo for imagesToShow to prevent recalculations on every render
-  const imagesToShow = useMemo(() => 
-    currentFolder ? getCurrentFolderImages() : getRootImages(),
-    [currentFolder, getCurrentFolderImages, getRootImages]
-  );
-  
-  // Use useMemo for the unique images array to prevent infinite re-renders
-  const uniqueImageArray = useMemo(() => {
+  // Determine which images to show based on currentFolder
+  const imagesToShow = currentFolder ? getCurrentFolderImages() : getRootImages();
+
+  // Create a map to track unique images by ID to ensure no duplicates
+  const [uniqueImages, setUniqueImages] = useState<Map<string, RawImage>>(new Map());
+
+  // Update unique images when imagesToShow changes
+  useEffect(() => {
     const imageMap = new Map<string, RawImage>();
-    
+
     // Add each image to the map, ensuring no duplicates
     imagesToShow.forEach((image) => {
       if (!imageMap.has(image.id)) {
         imageMap.set(image.id, image);
       }
     });
-    
-    return Array.from(imageMap.values());
+
+    setUniqueImages(imageMap);
   }, [imagesToShow]);
+
+  // Convert the Map back to an array for rendering
+  const uniqueImageArray = Array.from(uniqueImages.values());
 
   return (
     <div className="md:col-span-9">
