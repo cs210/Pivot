@@ -40,7 +40,7 @@ interface ImageGridProps {
   setImagesToMove: (images: RawImage[]) => void;
   setMoveImageDialogOpen: (open: boolean) => void;
   getCurrentFolderImages: () => RawImage[];
-  getRootImages: () => RawImage[];
+  getAllImages: () => RawImage[];
 }
 
 export default function ImageGrid({
@@ -62,7 +62,7 @@ export default function ImageGrid({
   setImagesToMove,
   setMoveImageDialogOpen,
   getCurrentFolderImages,
-  getRootImages,
+  getAllImages,
 }: ImageGridProps) {
   // Use state to store the images to display
   const [uniqueImageArray, setUniqueImageArray] = useState<RawImage[]>([]);
@@ -70,7 +70,7 @@ export default function ImageGrid({
   // Update images when dependencies change
   useEffect(() => {
     // Determine which images to show based on currentFolder
-    const imagesToShow = currentFolder ? getCurrentFolderImages() : getRootImages();
+    const imagesToShow = currentFolder ? getCurrentFolderImages() : getAllImages();
     
     // Create a map to track unique images by ID to ensure no duplicates
     const imageMap = new Map<string, RawImage>();
@@ -84,7 +84,7 @@ export default function ImageGrid({
 
     // Convert the Map back to an array for rendering
     setUniqueImageArray(Array.from(imageMap.values()));
-  }, [rawImages, currentFolder, getCurrentFolderImages, getRootImages]);
+  }, [rawImages, currentFolder, getCurrentFolderImages, getAllImages]);
 
   return (
     <div className="md:col-span-9">

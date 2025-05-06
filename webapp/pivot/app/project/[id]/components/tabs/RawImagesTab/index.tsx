@@ -43,7 +43,7 @@ export default function RawImagesTab({ projectId }: RawImagesTabProps) {
     handleMoveImages,
     toggleImageSelection,
     getCurrentFolderImages,
-    getRootImages,
+    getAllImages,
     getImagesInFolder,
     handleImageUpload
   } = useRawImages(projectId);
@@ -332,7 +332,7 @@ export default function RawImagesTab({ projectId }: RawImagesTabProps) {
         setImagesToMove={setImagesToMove}
         setMoveImageDialogOpen={setMoveImageDialogOpen}
         getCurrentFolderImages={() => getCurrentFolderImages(currentFolder)}
-        getRootImages={getRootImages}
+        getAllImages={getAllImages}
       />
 
       {/* Dialogs */}

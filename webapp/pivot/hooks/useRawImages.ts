@@ -415,6 +415,11 @@ export function useRawImages(projectId: string) {
     return rawImages.filter((img) => img.folder_id === null);
   };
 
+  // Get ALL images for the project regardless of folder
+  const getAllImages = () => {
+    return rawImages;
+  };
+
   // Get images in a folder by folderId
   const getImagesInFolder = (folderId: string) => {
     return rawImages.filter((img) => img.folder_id === folderId);
@@ -460,6 +465,7 @@ export function useRawImages(projectId: string) {
     toggleImageSelection,
     getCurrentFolderImages,
     getRootImages,
+    getAllImages,
     getImagesInFolder
   };
 }
