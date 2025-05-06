@@ -9,7 +9,6 @@ import {
   DialogDescription 
 } from "../../../../components/ui/dialog";
 import { Button } from "../../../../components/ui/button";
-import { toggleProjectPublic } from '../../../../lib/toggle-project-public';
 import { useRouter } from 'next/navigation';
 import { Project } from "../../../../hooks/useProject";
 

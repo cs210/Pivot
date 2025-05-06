@@ -28,8 +28,6 @@ import {
   Globe,
   Link as LinkIcon,
 } from "lucide-react";
-import { toggleProjectPublic } from '../../../lib/toggle-project-public';
-import { usePanoramas } from "@/hooks/usePanoramas";
 
 export default function ProjectPage() {
   const router = useRouter();
@@ -37,71 +35,56 @@ export default function ProjectPage() {
   const projectId = params.id as string;
   const [activeTab, setActiveTab] = useState("raw-images");
   const [shareDialogOpen, setShareDialogOpen] = useState(false);
-  const [isPublic, setIsPublic] = useState(false);
   const [shareLink, setShareLink] = useState("");
   const [copied, setCopied] = useState(false);
 
   const {
     project,
-    setProject,
     loading,
     projectName,
+    inOrganization,
     setProjectName,
+    setInOrganization,
     isEditing,
     setIsEditing,
     handleUpdateProjectName,
+    handleToggleProjectOrg,
   } = useProject(projectId, router);
-
-  const {
-    getProjectPanoramas,
-  } = usePanoramas(projectId);
 
   useEffect(() => {
     if (project) {
-      setIsPublic(project.is_public || false);
-
       // Generate the share link when project loads
-      if (project.is_public) {
+      if (inOrganization) {
         const baseUrl = window.location.origin;
         const link = `${baseUrl}/shared/${projectId}`;
         setShareLink(link);
       }
     }
-  }, [project, projectId]);
+  }, [project, projectId, inOrganization]);
 
   const handleShareButtonClick = () => {
-    // If already public, simply show the share dialog with the link
-    if (isPublic) {
+    // If already shared, simply show the share dialog with the link
+    if (inOrganization) {
       setShareDialogOpen(true);
     } else {
-      // If not public, toggle to public first
-      handleTogglePublic();
+      // If not in organization, toggle to add to organization first
+      handleToggleOrg();
     }
   };
-
-  const handleTogglePublic = async () => {
+  
+  const handleToggleOrg = async () => {
     try {
-      // Update the project's public status
-      const result = await toggleProjectPublic(projectId, setProject);
+      await handleToggleProjectOrg();
 
-      if (!result.success) {
-        console.error(result.error || "Failed to update project visibility");
-        alert("Failed to update project visibility");
-        return;
-      }
-
-      setIsPublic(result.isNowPublic ?? false);
-
-      // If we're making it public, generate and show the share link
-      if (isPublic) {
+      if (inOrganization) {
+        // If the project is now shared with organization members, generate the share link
         const baseUrl = window.location.origin;
         const link = `${baseUrl}/shared/${projectId}`;
         setShareLink(link);
         setShareDialogOpen(true);
       }
     } catch (error) {
-      console.error("Error updating project visibility:", error);
-      alert("Failed to update project visibility");
+      console.error("Error toggling project organization:", error);
     }
   };
 
@@ -148,12 +131,12 @@ export default function ProjectPage() {
 
             <Button
               onClick={handleShareButtonClick}
-              variant={isPublic ? "default" : "outline"}
+              variant={inOrganization ? "default" : "outline"}
               className={
-                isPublic ? "bg-cyber-gradient hover:opacity-90" : "cyber-border"
+                inOrganization ? "bg-cyber-gradient hover:opacity-90" : "cyber-border"
               }
             >
-              {isPublic ? (
+              {inOrganization ? (
                 <>
                   <Globe className="mr-2 h-4 w-4" />
                   Shared
@@ -223,14 +206,13 @@ export default function ProjectPage() {
 
             <TabsContent value="settings">
               <ProjectSettings
-                projectId={projectId}
-                projectName={projectName}
-                setProjectName={setProjectName}
-                handleUpdateProjectName={handleUpdateProjectName}
-                isPublic={isPublic}
-                setProject={setProject}
-                projectPanoramas={getProjectPanoramas()}
-              />
+                  projectId={projectId}
+                  projectName={projectName}
+                  setProjectName={setProjectName}
+                  handleUpdateProject={handleUpdateProjectName}
+                  inOrganization={inOrganization}
+                  handleShareProject={handleToggleOrg}
+                />
             </TabsContent>
           </Tabs>
         </div>
@@ -271,7 +253,7 @@ export default function ProjectPage() {
           <div className="flex items-center bg-primary/10 rounded-md p-3 mb-3">
             <LinkIcon className="h-4 w-4 mr-2 text-primary" />
             <span className="text-sm">
-              {isPublic
+              {inOrganization
                 ? "This project is publicly accessible"
                 : "Share this project to generate a link"}
             </span>
@@ -299,10 +281,10 @@ export default function ProjectPage() {
           </div>
 
           <DialogFooter className="mt-4 flex justify-between">
-            {isPublic && (
+            {inOrganization && (
               <Button
                 variant="outline"
-                onClick={handleTogglePublic}
+                onClick={handleToggleOrg}
                 className="border-destructive/40 text-destructive hover:bg-destructive/10"
               >
                 Make Private
@@ -310,17 +292,17 @@ export default function ProjectPage() {
             )}
             <Button
               onClick={() => {
-                if (!isPublic) {
-                  handleTogglePublic();
+                if (!inOrganization) {
+                  handleToggleOrg();
                 } else {
                   setShareDialogOpen(false);
                 }
               }}
               className={`text-white ${
-                isPublic ? "bg-cyber-gradient hover:opacity-90" : "bg-primary"
+                inOrganization ? "bg-cyber-gradient hover:opacity-90" : "bg-primary"
               }`}
             >
-              {isPublic ? "Done" : "Share Project"}
+              {inOrganization ? "Done" : "Share Project"}
             </Button>
           </DialogFooter>
         </DialogContent>

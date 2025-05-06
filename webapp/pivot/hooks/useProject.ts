@@ -27,6 +27,7 @@ export function useProject(projectId: string, router: any) {
   const [loading, setLoading] = useState(true);
   const [project, setProject] = useState<Project | null>(null);
   const [projectName, setProjectName] = useState("");
+  const [inOrganization, setInOrganization] = useState(false);
   const [user, setUser] = useState<any>(null);
   const [isEditing, setIsEditing] = useState(false);
 
@@ -57,6 +58,7 @@ export function useProject(projectId: string, router: any) {
         console.log("Using cached project details");
         setProject(cachedProject);
         setProjectName(cachedProject.name);
+        setInOrganization(!!cachedProject.organization_id); // Convert to boolean
         setLoading(false);
         return;
       }
@@ -76,6 +78,7 @@ export function useProject(projectId: string, router: any) {
       // Update state
       setProject(data);
       setProjectName(data.name);
+      setInOrganization(!!data.organization_id); // Convert to boolean
     } catch (error) {
       console.error("Error fetching project:", error);
       // If project not found, redirect to dashboard
@@ -119,6 +122,59 @@ export function useProject(projectId: string, router: any) {
       throw error;
     }
   };
+
+  const handleToggleProjectOrg = async () => {
+    try {
+      let newOrgId = null; // Changed from empty string to null
+      
+      if (!inOrganization) {
+        // Find the organization ID that matches the user's email domain
+        const { data: orgs, error } = await supabase
+          .from("organizations")
+          .select("*")
+          .eq("domain_restriction", user.email.split("@")[1])
+          .single();
+        if (error) throw error;
+
+        if (orgs) {
+          console.log("Found organization");
+          newOrgId = orgs.id;
+          setInOrganization(true);
+        } else {
+          alert("No organization found for this email domain: " + user.email.split("@")[1]);
+          return;
+        }
+      } else {
+        // We're removing the organization, set to null
+        newOrgId = null;
+        setInOrganization(false);
+      }
+
+      const { error } = await supabase
+        .from("projects")
+        .update({ organization_id: newOrgId })
+        .eq("id", projectId);
+
+      if (error) throw error;
+
+      const updatedProject = project 
+        ? { ...project, organization_id: newOrgId } 
+        : null;
+
+      // Update state
+      setProject(updatedProject);
+
+      // Update cache
+      if (updatedProject) {
+        cacheProject(updatedProject);
+      }
+
+      return true;
+    } catch (error) {
+      console.error("Error updating project organization:", error);
+      throw error;
+    }
+  };
   
   // Function to clear cache for the current project
   const clearCache = (allProjects = false) => {
@@ -134,10 +190,13 @@ export function useProject(projectId: string, router: any) {
     setProject,
     loading,
     projectName,
+    inOrganization,
     setProjectName,
+    setInOrganization,
     isEditing,
     setIsEditing,
     handleUpdateProjectName,
+    handleToggleProjectOrg,
     user,
     clearCache,
     fetchProjectDetails

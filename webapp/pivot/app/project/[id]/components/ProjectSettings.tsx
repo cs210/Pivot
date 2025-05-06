@@ -4,88 +4,29 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
-import { Save, Share2, AlertCircle, Loader2 } from "lucide-react";
+import { Save, Share2, AlertCircle } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { useRouter } from 'next/navigation';
-import { usePanoramas } from "@/hooks/usePanoramas";
 
 interface ProjectSettingsProps {
   projectId: string;
   projectName: string;
   setProjectName: (name: string) => void;
-  handleUpdateProjectName: () => void;
-  isPublic: boolean;
-  setProject: (project: any) => void;
-  setShareDialogOpen?: (open: boolean) => void;
-  setShareLink?: (link: string) => void;
-  setCurrentProject?: (project: any) => void;
-  projectPanoramas?: any[];
+  handleUpdateProject: () => void;
+  inOrganization: boolean;
+  handleShareProject?: () => void;
 }
 
 export default function ProjectSettings({
   projectId,
   projectName,
   setProjectName,
-  handleUpdateProjectName,
-  isPublic = false,
-  setProject,
-  setShareDialogOpen,
-  setShareLink,
-  setCurrentProject,
-  projectPanoramas
+  handleUpdateProject,
+  inOrganization = false,
+  handleShareProject,
 }: ProjectSettingsProps) {
   const [activeSection, setActiveSection] = useState("general");
-  const [isTogglingPublic, setIsTogglingPublic] = useState(false);
-  const router = useRouter();
-  
-  const handleToggleProjectPublic = async () => {
-    setIsTogglingPublic(true);
-    console.log("project panoramas", projectPanoramas);
-    
-    // Create the panorama IDs array directly instead of using state
-    const panoramaIds = (projectPanoramas ?? []).map((p) => p.id);
-    console.log("Panorama IDs to move:", panoramaIds);
-    
-    try {
-      const response = await fetch("/api/move-panoramas", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ 
-          projectId: projectId,
-          panoramasToMove: panoramaIds, // Use the local variable instead of state
-          isNowPublic: !isPublic,
-        }),
-      });
-      const result = await response.json();      
-      
-      if (!result.success) {
-        console.error(result.error || "Failed to update project visibility");
-        alert(result.error || "Failed to update project visibility");
-        setIsTogglingPublic(false);
-        return;
-      }
-      
-      // // Also update the panoramas' public status to match the project
-      // await updatePanoramasPublicStatus(projectId, result.isNowPublic || false);
-      
-      // If the project is now public and the share dialog should be opened
-      if (result.isNowPublic && setShareDialogOpen && setShareLink && setCurrentProject) {
-        setCurrentProject(result.project);
-        const baseUrl = window.location.origin;
-        const link = `${baseUrl}/shared/${projectId}`;
-        setShareLink(link);
-        setShareDialogOpen(true);
-      }
-      
-      // Force a refresh to get updated data
-      router.refresh();
-    } catch (error) {
-      console.error("Error updating project visibility:", error);
-      alert("Failed to update project visibility");
-    } finally {
-      setIsTogglingPublic(false);
-    }
-  };
+  console.log("Org ID:", projectId);
+  console.log("Org id value:");
 
   return (
     <div className="grid grid-cols-1 gap-6 md:grid-cols-12">
@@ -151,7 +92,7 @@ export default function ProjectSettings({
                   />
                 </div>
                 <Button
-                  onClick={handleUpdateProjectName}
+                  onClick={handleUpdateProject}
                   className="bg-cyber-gradient hover:opacity-90"
                 >
                   <Save className="mr-2 h-4 w-4" />
@@ -171,21 +112,19 @@ export default function ProjectSettings({
               <div className="space-y-6">
                 <div className="flex items-center justify-between p-4 bg-muted/30 rounded-md">
                   <div className="space-y-1">
-                    <h3 className="font-medium">Public Access</h3>
+                    <h3 className="font-medium">Organization Access</h3>
                     <p className="text-sm text-muted-foreground">
-                      When enabled, anyone with the link can view this project
-                      without logging in
+                      When enabled, anyone in your organization with the link can view this project
                     </p>
                   </div>
                   <Switch
-                    checked={isPublic}
-                    onCheckedChange={handleToggleProjectPublic}
-                    disabled={isTogglingPublic}
+                    checked={inOrganization}
+                    onCheckedChange={handleShareProject}
                     className="data-[state=checked]:bg-primary"
                   />
                 </div>
 
-                {isPublic && (
+                {inOrganization && (
                   <Alert className="bg-primary/10 border-primary/30">
                     <AlertCircle className="h-4 w-4" />
                     <AlertTitle>This project is publicly accessible</AlertTitle>
@@ -197,26 +136,16 @@ export default function ProjectSettings({
                 )}
 
                 <Button
-                  onClick={handleToggleProjectPublic}
-                  variant={isPublic ? "default" : "outline"}
+                  onClick={handleShareProject}
+                  variant={inOrganization ? "default" : "outline"}
                   className={`w-full ${
-                    isPublic
+                    inOrganization
                       ? "bg-cyber-gradient hover:opacity-90"
                       : "cyber-border"
                   }`}
-                  disabled={isTogglingPublic}
                 >
-                  {isTogglingPublic ? (
-                    <>
-                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      {isPublic ? "Making Private..." : "Making Public..."}
-                    </>
-                  ) : (
-                    <>
-                      <Share2 className="mr-2 h-4 w-4" />
-                      {isPublic ? "Manage Sharing" : "Share Project"}
-                    </>
-                  )}
+                  <Share2 className="mr-2 h-4 w-4" />
+                  {inOrganization ? "Manage Sharing" : "Share Project"}
                 </Button>
               </div>
             </CardContent>
