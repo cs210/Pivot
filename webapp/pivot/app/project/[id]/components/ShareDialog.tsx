@@ -9,7 +9,7 @@ import {
   DialogDescription 
 } from "../../../../components/ui/dialog";
 import { Button } from "../../../../components/ui/button";
-import { toggleProjectPublic, updatePanoramasPublicStatus } from '../../../../services/panorama-service';
+import { toggleProjectPublic } from '../../../../lib/toggle-project-public';
 import { useRouter } from 'next/navigation';
 import { Project } from "../../../../hooks/useProject";
 
@@ -53,8 +53,8 @@ const ShareDialog: React.FC<ShareDialogProps> = ({
         return;
       }
       
-      // Update panoramas public status to match the project
-      await updatePanoramasPublicStatus(currentProject.id, false);
+      // // Update panoramas public status to match the project
+      // await updatePanoramasPublicStatus(currentProject.id, false);
       
       // Close the dialog since the project is now private
       onOpenChange(false);

@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Share2, Loader2 } from "lucide-react";
 import { Button } from "../../../../components/ui/button";
-import { toggleProjectPublic, updatePanoramasPublicStatus } from '../../../../services/panorama-service';
+import { toggleProjectPublic } from '../../../../lib/toggle-project-public';
 import { useRouter } from 'next/navigation';
 import { Project } from "../../../../hooks/useProject";
 
@@ -49,8 +49,8 @@ const ShareButton = ({
         return;
       }
       
-      // Also update the panoramas' public status to match the project
-      await updatePanoramasPublicStatus(project.id, result.isNowPublic || false);
+      // // Also update the panoramas' public status to match the project
+      // await updatePanoramasPublicStatus(project.id, result.isNowPublic || false);
       
       // Generate and show the share link
       setCurrentProject(result.project);

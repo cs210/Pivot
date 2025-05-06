@@ -29,7 +29,7 @@ import {
   Link as LinkIcon,
 } from "lucide-react";
 import { createClient } from "@/utils/supabase/client";
-import { toggleProjectPublic } from "@/services/panorama-service";
+import { toggleProjectPublic } from '../../../lib/toggle-project-public';
 
 export default function ProjectPage() {
   const router = useRouter();

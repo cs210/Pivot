@@ -6,8 +6,8 @@ import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Save, Share2, AlertCircle, Loader2 } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { toggleProjectPublic, updatePanoramasPublicStatus } from "@/services/panorama-service";
 import { useRouter } from 'next/navigation';
+import { toggleProjectPublic } from '../../../../lib/toggle-project-public';
 
 interface ProjectSettingsProps {
   projectId: string;
@@ -49,8 +49,8 @@ export default function ProjectSettings({
         return;
       }
       
-      // Also update the panoramas' public status to match the project
-      await updatePanoramasPublicStatus(projectId, result.isNowPublic || false);
+      // // Also update the panoramas' public status to match the project
+      // await updatePanoramasPublicStatus(projectId, result.isNowPublic || false);
       
       // If the project is now public and the share dialog should be opened
       if (result.isNowPublic && setShareDialogOpen && setShareLink && setCurrentProject) {
