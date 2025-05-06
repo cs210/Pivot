@@ -8,8 +8,8 @@ import {
   } from "@/components/ui/dialog";
   import { Button } from "@/components/ui/button";
   import { FolderOpen, Loader2 } from "lucide-react";
-  import { Folder } from "../../../../hooks/useFolders";
-  import { RawImage } from "../index";
+  import { Folder } from "../../../../../../../hooks/useFolders";
+  import { RawImage } from "../../../../../../../hooks/useRawImages";
   
   interface Generate360DialogProps {
     open: boolean;
@@ -58,7 +58,27 @@ import {
             </DialogDescription>
           </DialogHeader>
   
-          <div className="flex items-center justify-end mb-2">
+          <div className="flex items-center justify-between mb-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                if (!folderSelectionMode) {
+                  // If all images are already selected, deselect all
+                  if (imagesToConvert.length === rawImages.length) {
+                    setImagesToConvert([]);
+                  } else {
+                    // Otherwise select all images
+                    setImagesToConvert([...rawImages]);
+                  }
+                }
+              }}
+              disabled={folderSelectionMode || rawImages.length === 0}
+            >
+              {imagesToConvert.length === rawImages.length && !folderSelectionMode && rawImages.length > 0 
+                ? "Deselect All" 
+                : "Select All"}
+            </Button>
             <Button
               variant="outline"
               size="sm"
@@ -109,37 +129,37 @@ import {
                 )}
               </div>
             ) : (
-              <div className="space-y-2">
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
                 {rawImages.map((image) => (
                   <div
                     key={image.id}
-                    className={`flex items-center p-2 rounded border cursor-pointer ${
+                    className={`cursor-pointer rounded border overflow-hidden ${
                       imagesToConvert.some((img) => img.id === image.id)
-                        ? "border-primary bg-primary/10"
-                        : "border-border/50 hover:bg-muted/20"
+                        ? "border-2 border-primary"
+                        : "border-border/50 hover:border-primary/70"
                     }`}
                     onClick={() => {
-                      setImagesToConvert((prev) =>
-                        prev.some((img) => img.id === image.id)
-                          ? prev.filter((img) => img.id !== image.id)
-                          : [...prev, image]
-                      );
+                        setImagesToConvert(
+                        imagesToConvert.some((img) => img.id === image.id)
+                          ? imagesToConvert.filter((img) => img.id !== image.id)
+                          : [...imagesToConvert, image]
+                        );
                     }}
                   >
-                    <div className="h-10 w-10 mr-4 overflow-hidden rounded">
+                    <div className="aspect-square relative">
                       <img
                         src={image.url}
-                        alt={image.name}
+                        alt={image.filename}
                         className="object-cover w-full h-full"
                       />
-                    </div>
-                    <div className="flex-1 truncate">
-                      {image.name}
+                      <div className="absolute bottom-0 left-0 right-0 bg-background/70 p-1 text-xs truncate">
+                        {image.filename}
+                      </div>
                     </div>
                   </div>
                 ))}
                 {rawImages.length === 0 && (
-                  <div className="text-center p-4 text-muted-foreground">
+                  <div className="col-span-full text-center p-4 text-muted-foreground">
                     No images found. Upload some images to get started.
                   </div>
                 )}

@@ -1,11 +1,25 @@
 import { useState, useEffect } from "react";
 import { createClient } from "@/utils/supabase/client";
+import { 
+  getCachedProject, 
+  cacheProject, 
+  clearProjectCache,
+  clearAllCache 
+} from "./cache-service";
 
-interface Project {
+export interface Project {
   id: string;
   name: string;
   created_at: string;
   user_id: string;
+  is_public: boolean;
+  organization_id: string;
+  metadata: {
+    housing_type?: string;
+    residence_type?: string;
+    residence_name?: string;
+    room_type?: string;
+  };
 }
 
 export function useProject(projectId: string, router: any) {
@@ -32,9 +46,22 @@ export function useProject(projectId: string, router: any) {
     checkUser();
   }, [router, supabase, projectId]);
 
-  const fetchProjectDetails = async () => {
+  const fetchProjectDetails = async (forceRefresh = false) => {
     try {
       setLoading(true);
+      
+      // Check if the project is in cache
+      const cachedProject = getCachedProject(projectId);
+      
+      if (cachedProject && !forceRefresh) {
+        console.log("Using cached project details");
+        setProject(cachedProject);
+        setProjectName(cachedProject.name);
+        setLoading(false);
+        return;
+      }
+      
+      // If not in cache or force refresh, fetch from database
       const { data, error } = await supabase
         .from("projects")
         .select("*")
@@ -42,6 +69,11 @@ export function useProject(projectId: string, router: any) {
         .single();
 
       if (error) throw error;
+      
+      // Update cache
+      cacheProject(data);
+      
+      // Update state
       setProject(data);
       setProjectName(data.name);
     } catch (error) {
@@ -67,14 +99,32 @@ export function useProject(projectId: string, router: any) {
 
       if (error) throw error;
 
-      setProject((prev) =>
-        prev ? { ...prev, name: projectName.trim() } : null
-      );
+      const updatedProject = project 
+        ? { ...project, name: projectName.trim() } 
+        : null;
+        
+      // Update state
+      setProject(updatedProject);
+      
+      // Update cache
+      if (updatedProject) {
+        cacheProject(updatedProject);
+      }
+      
       setIsEditing(false);
       alert("Project updated successfully");
     } catch (error) {
       console.error("Error updating project:", error);
       alert("Failed to update project");
+    }
+  };
+  
+  // Function to clear cache for the current project
+  const clearCache = (allProjects = false) => {
+    if (allProjects) {
+      clearAllCache();
+    } else {
+      clearProjectCache(projectId);
     }
   };
 
@@ -86,6 +136,8 @@ export function useProject(projectId: string, router: any) {
     isEditing,
     setIsEditing,
     handleUpdateProject,
-    user
+    user,
+    clearCache,
+    fetchProjectDetails
   };
 }

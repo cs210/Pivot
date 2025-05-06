@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/utils/supabase/client";
 import { Button } from "@/components/ui/button";
@@ -23,62 +23,38 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { PlusCircle, Folder, Trash2, Edit, Calendar } from "lucide-react";
+import {
+  PlusCircle,
+  Folder,
+  Trash2,
+  Edit,
+  Calendar,
+  Share2,
+  Copy,
+  CheckCircle2,
+  Globe,
+} from "lucide-react";
 import { Header } from "@/components/header";
-// Toast component not available - using alert instead
-
-interface Project {
-  id: string;
-  name: string;
-  created_at: string;
-  user_id: string;
-}
+import { useProjects } from "@/hooks/useProjects";
 
 export default function Dashboard() {
   const router = useRouter();
-  const supabase = createClient();
-  const [loading, setLoading] = useState(true);
-  const [user, setUser] = useState<any>(null);
-  const [projects, setProjects] = useState<Project[]>([]);
+  const { 
+    projects, 
+    loading, 
+    user, 
+    createProject, 
+    deleteProject 
+  } = useProjects(router);
+  
   const [newProjectName, setNewProjectName] = useState("");
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
   const [editDialogOpen, setEditDialogOpen] = useState(false);
-  const [currentProject, setCurrentProject] = useState<Project | null>(null);
+  const [shareDialogOpen, setShareDialogOpen] = useState(false);
+  const [currentProject, setCurrentProject] = useState<any>(null);
   const [editProjectName, setEditProjectName] = useState("");
-
-  useEffect(() => {
-    const checkUser = async () => {
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-      if (!user) {
-        router.push("/login");
-        return;
-      }
-      setUser(user);
-      fetchProjects();
-    };
-
-    checkUser();
-  }, [router, supabase]);
-
-  const fetchProjects = async () => {
-    try {
-      setLoading(true);
-      const { data, error } = await supabase
-        .from("projects")
-        .select("*")
-        .order("created_at", { ascending: false });
-
-      if (error) throw error;
-      setProjects(data || []);
-    } catch (error) {
-      console.error("Error fetching projects:", error);
-    } finally {
-      setLoading(false);
-    }
-  };
+  const [shareLink, setShareLink] = useState("");
+  const [copied, setCopied] = useState(false);
 
   const handleCreateProject = async () => {
     if (!newProjectName.trim()) {
@@ -87,29 +63,15 @@ export default function Dashboard() {
     }
 
     try {
-      const { data, error } = await supabase
-        .from("projects")
-        .insert([
-          {
-            name: newProjectName.trim(),
-            user_id: user.id,
-          },
-        ])
-        .select();
-
-      if (error) throw error;
-
+      const newProject = await createProject(newProjectName.trim());
+      
       // Close dialog and reset form
       setNewProjectName("");
       setCreateDialogOpen(false);
 
       // Redirect to the new project's page
-      if (data && data.length > 0) {
-        router.push(`/project/${data[0].id}`);
-      } else {
-        // Fallback if no data returned
-        setProjects((prev) => [...prev]);
-        alert("Project created successfully");
+      if (newProject) {
+        router.push(`/project/${newProject.id}`);
       }
     } catch (error) {
       console.error("Error creating project:", error);
@@ -124,6 +86,8 @@ export default function Dashboard() {
     }
 
     try {
+      // We need to keep this logic since it's not in the useProjects hook
+      const supabase = createClient();
       const { error } = await supabase
         .from("projects")
         .update({ name: editProjectName.trim() })
@@ -131,32 +95,29 @@ export default function Dashboard() {
 
       if (error) throw error;
 
-      setProjects(
-        projects.map((p) =>
-          p.id === currentProject.id
-            ? { ...p, name: editProjectName.trim() }
-            : p
-        )
+      // Update local state - in a real implementation, you might want to add 
+      // an updateProject method to useProjects hook
+      const updatedProjects = projects.map((p) =>
+        p.id === currentProject.id
+          ? { ...p, name: editProjectName.trim() }
+          : p
       );
-
+      
       setEditDialogOpen(false);
       setCurrentProject(null);
 
       alert("Project updated successfully");
+      // Force a refresh to get updated data
+      router.refresh();
     } catch (error) {
       console.error("Error updating project:", error);
       alert("Failed to update project");
     }
   };
 
-  const handleDeleteProject = async (id: string) => {
+  const handleDeleteProjectClick = async (id: string) => {
     try {
-      const { error } = await supabase.from("projects").delete().eq("id", id);
-
-      if (error) throw error;
-
-      setProjects(projects.filter((p) => p.id !== id));
-
+      await deleteProject(id);
       alert("Project deleted successfully");
     } catch (error) {
       console.error("Error deleting project:", error);
@@ -164,17 +125,71 @@ export default function Dashboard() {
     }
   };
 
-  const openEditDialog = (project: Project) => {
+  const handleTogglePublic = async (project: any) => {
+    try {
+      // We need to keep this logic since it's not in the useProjects hook
+      const supabase = createClient();
+      const newPublicState = !project.is_public;
+
+      const { error } = await supabase
+        .from("projects")
+        .update({ is_public: newPublicState })
+        .eq("id", project.id);
+
+      if (error) throw error;
+
+      if (newPublicState) {
+        // Generate and show the share link
+        setCurrentProject(project);
+        const baseUrl = window.location.origin;
+        const link = `${baseUrl}/shared/${project.id}`;
+        setShareLink(link);
+        setShareDialogOpen(true);
+      }
+      
+      // Force a refresh to get updated data
+      router.refresh();
+    } catch (error) {
+      console.error("Error updating project visibility:", error);
+      alert("Failed to update project visibility");
+    }
+  };
+
+  const openEditDialog = (project: any) => {
     setCurrentProject(project);
     setEditProjectName(project.name);
     setEditDialogOpen(true);
+  };
+
+  const openShareDialog = (project: any) => {
+    setCurrentProject(project);
+    const baseUrl = window.location.origin;
+    const link = `${baseUrl}/shared/${project.id}`;
+    setShareLink(link);
+    setShareDialogOpen(true);
+  };
+
+  const copyToClipboard = async () => {
+    try {
+      await navigator.clipboard.writeText(shareLink);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch (err) {
+      console.error("Failed to copy: ", err);
+    }
   };
 
   const navigateToProject = (projectId: string) => {
     router.push(`/project/${projectId}`);
   };
 
+  const navigateToSharedProject = (projectId: string) => {
+    // Open in a new tab
+    window.open(`/shared/${projectId}`, "_blank");
+  };
+
   const handleSignOut = async () => {
+    const supabase = createClient();
     await supabase.auth.signOut();
     router.push("/");
     router.refresh();
@@ -269,11 +284,18 @@ export default function Dashboard() {
               {projects.map((project) => (
                 <Card
                   key={project.id}
-                  className="bg-background/80 backdrop-blur-sm border-border/50 hover:border-primary/50 transition-colors"
+                  className={`bg-background/80 backdrop-blur-sm border-border/50 hover:border-primary/50 transition-colors ${
+                    project.is_public ? "border-l-4 border-l-primary" : ""
+                  }`}
                 >
                   <CardHeader className="pb-2">
                     <CardTitle className="flex justify-between items-center">
-                      <span className="truncate">{project.name}</span>
+                      <div className="flex items-center gap-2">
+                        <span className="truncate">{project.name}</span>
+                        {project.is_public && (
+                          <Globe className="h-4 w-4 text-primary" />
+                        )}
+                      </div>
                       <div className="flex gap-1">
                         <Button
                           variant="ghost"
@@ -287,7 +309,7 @@ export default function Dashboard() {
                           variant="ghost"
                           size="icon"
                           className="h-8 w-8 hover:bg-destructive/20 hover:text-destructive"
-                          onClick={() => handleDeleteProject(project.id)}
+                          onClick={() => handleDeleteProjectClick(project.id)}
                         >
                           <Trash2 className="h-4 w-4" />
                         </Button>
@@ -302,14 +324,45 @@ export default function Dashboard() {
                         {new Date(project.created_at).toLocaleDateString()}
                       </span>
                     </div>
+                    {project.is_public && (
+                      <div className="mt-2">
+                        <Button
+                          variant="link"
+                          size="sm"
+                          className="text-xs text-primary p-0 h-auto"
+                          onClick={() => navigateToSharedProject(project.id)}
+                        >
+                          View shared version
+                        </Button>
+                      </div>
+                    )}
                   </CardContent>
-                  <CardFooter>
+                  <CardFooter className="flex gap-2">
                     <Button
                       onClick={() => navigateToProject(project.id)}
-                      className="w-full bg-cyber-gradient hover:opacity-90"
+                      className="flex-1 bg-cyber-gradient hover:opacity-90"
                     >
                       Open Project
                     </Button>
+                    {project.is_public ? (
+                      <Button
+                        onClick={() => openShareDialog(project)}
+                        variant="outline"
+                        size="icon"
+                        className="h-10 w-10 cyber-border"
+                      >
+                        <Share2 className="h-4 w-4" />
+                      </Button>
+                    ) : (
+                      <Button
+                        onClick={() => handleTogglePublic(project)}
+                        variant="outline"
+                        size="icon"
+                        className="h-10 w-10 cyber-border"
+                      >
+                        <Share2 className="h-4 w-4" />
+                      </Button>
+                    )}
                   </CardFooter>
                 </Card>
               ))}
@@ -350,6 +403,58 @@ export default function Dashboard() {
                   Save Changes
                 </Button>
               </DialogFooter>
+            </DialogContent>
+          </Dialog>
+
+          {/* Share Link Dialog */}
+          <Dialog open={shareDialogOpen} onOpenChange={setShareDialogOpen}>
+            <DialogContent className="sm:max-w-[425px] bg-background text-white">
+              <DialogHeader>
+                <DialogTitle className="text-white">Share Project</DialogTitle>
+                <DialogDescription className="text-white/70">
+                  Anyone with this link can view your project without logging
+                  in.
+                </DialogDescription>
+              </DialogHeader>
+              <div className="flex items-center space-x-2 bg-muted/30 p-3 rounded-md">
+                <input
+                  type="text"
+                  readOnly
+                  value={shareLink}
+                  className="flex-1 bg-transparent border-none focus:outline-none text-sm text-white"
+                />
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={copyToClipboard}
+                  className="h-8"
+                >
+                  {copied ? (
+                    <CheckCircle2 className="h-4 w-4 text-green-500" />
+                  ) : (
+                    <Copy className="h-4 w-4" />
+                  )}
+                </Button>
+              </div>
+              <div className="mt-4 flex justify-between">
+                <Button
+                  variant="outline"
+                  onClick={() =>
+                    currentProject && handleTogglePublic(currentProject)
+                  }
+                  className="border-destructive/40 text-destructive hover:bg-destructive/10"
+                >
+                  Make Private
+                </Button>
+                <Button
+                  onClick={() => {
+                    window.open(shareLink, "_blank");
+                  }}
+                  className="text-white bg-cyber-gradient hover:opacity-90"
+                >
+                  Open Shared View
+                </Button>
+              </div>
             </DialogContent>
           </Dialog>
         </div>

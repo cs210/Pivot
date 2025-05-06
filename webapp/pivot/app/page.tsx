@@ -10,7 +10,7 @@ import dynamic from "next/dynamic";
 
 // the URL of the default 360° image to display on the homepage
 const HOMEPAGE_360_URL =
-  "https://ymfbqixkknwxtriytkun.supabase.co/storage/v1/object/public/panoramas/8811827b-595d-4072-88c0-35d629d08adb/285F28B4-5B06-49ED-B248-BAA51E989F91.JPG";
+  "https://bahareuzhrlwdxwlovoa.supabase.co/storage/v1/object/public/panoramas//Homepage.jpg";
 
 // Dynamically import ReactPhotoSphereViewer to avoid SSR issues
 const ReactPhotoSphereViewer = dynamic(
@@ -56,6 +56,15 @@ export default function Home() {
                   </p>
                 </div>
                 <div className="flex flex-col gap-2 min-[400px]:flex-row">
+                <Link href={user ? "/explore" : "/register"}>
+                    <Button
+                      size="lg"
+                      className="bg-cyber-gradient hover:opacity-90 geometric-text"
+                    >
+                      Explore Spaces{" "}
+                      <ArrowRight className="h-4 w-4 ml-2" />
+                    </Button>
+                  </Link>
                   <Link href={user ? "/dashboard" : "/register"}>
                     <Button
                       size="lg"

@@ -13,7 +13,7 @@ import {
   Edit,
   Trash2,
 } from "lucide-react";
-import { Folder } from "../../../hooks/useFolders";
+import { Folder } from "../../../../../../hooks/useFolders";
 
 interface FolderSidebarProps {
   folders: Folder[];

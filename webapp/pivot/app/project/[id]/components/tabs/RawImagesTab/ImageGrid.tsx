@@ -17,8 +17,8 @@ import {
   List,
   FolderPlus,
 } from "lucide-react";
-import { RawImage } from "../../../hooks/useRawImages";
-import { Folder } from "../../../hooks/useFolders";
+import { RawImage } from "../../../../../../hooks/useRawImages";
+import { Folder } from "../../../../../../hooks/useFolders";
 
 interface ImageGridProps {
   rawImages: RawImage[];
@@ -135,22 +135,26 @@ export default function ImageGrid({
               <Button
                 className="bg-cyber-gradient hover:opacity-90"
                 disabled={uploading}
+                onClick={() => {
+                  if (folderInputRef.current && !uploading) {
+                    folderInputRef.current.click();
+                  }
+                }}
               >
                 <FolderPlus className="mr-2 h-4 w-4" />
-                <label className="cursor-pointer">
-                  Upload Folders
-                  <input
-                    ref={folderInputRef}
-                    type="file"
-                    className="hidden"
-                    {...{ webkitdirectory: "", directory: "" } as any}
-                    multiple
-                    accept="image/*"
-                    onChange={handleFolderUpload}
-                    disabled={uploading}
-                  />
-                </label>
+                Upload Folders
               </Button>
+              <input
+                ref={folderInputRef}
+                type="file"
+                className="hidden"
+                webkitdirectory=""
+                directory=""
+                multiple
+                accept="image/*"
+                onChange={handleFolderUpload}
+                disabled={uploading}
+              />
             </div>
           </div>
         </CardHeader>
@@ -160,7 +164,7 @@ export default function ImageGrid({
               <p className="text-muted-foreground mb-4">Uploading images...</p>
             </div>
           ) : viewMode === "grid" ? (
-            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 xl:grid-cols-8 gap-4">
               {imagesToShow.map((image) => (
                 <Card
                   key={image.id}
