@@ -1,6 +1,13 @@
 import { useState, useEffect, useRef } from "react";
 import { createClient } from "@/utils/supabase/client";
 import { Folder } from "./useFolders";
+import {
+  getCachedRawImages,
+  cacheRawImages,
+  addRawImageToCache,
+  removeRawImageFromCache,
+  updateRawImageInCache
+} from "./cache-service";
 
 export interface RawImage {
   id: string;
@@ -16,6 +23,7 @@ export interface RawImage {
   uploaded_at: string;
   updated_at: string;
   url?: string; // URL for displaying the image in the UI
+  thumbnail_url?: string; // URL for displaying the thumbnail
 }
 
 export function useRawImages(projectId: string) {
@@ -27,6 +35,7 @@ export function useRawImages(projectId: string) {
   const [selectedImages, setSelectedImages] = useState<string[]>([]);
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
   const [uploading, setUploading] = useState(false);
+  const [loading, setLoading] = useState(true);
   
   // Dialog states
   const [renameImageDialogOpen, setRenameImageDialogOpen] = useState(false);
@@ -40,13 +49,26 @@ export function useRawImages(projectId: string) {
     fetchRawImages();
   }, [projectId]);
 
-  const fetchRawImages = async () => {
+  const fetchRawImages = async (forceRefresh = false) => {
+    setLoading(true);
+    
     try {
+      // Check if we have cached images
+      const cachedData = getCachedRawImages(projectId);
+      
+      if (cachedData && !forceRefresh) {
+        console.log("Using cached raw images");
+        setRawImages(cachedData);
+        setLoading(false);
+        return;
+      }
+      
+      // If no cache or force refresh, fetch from database
       const { data, error } = await supabase
         .from("raw_images")
         .select("*")
         .eq("project_id", projectId)
-        .order("filename", { ascending: true }); // Note: Changed from "name" to "filename" to match your component
+        .order("filename", { ascending: true });
 
       if (error) throw error;
       
@@ -54,7 +76,7 @@ export function useRawImages(projectId: string) {
       const imagesWithUrls = await Promise.all((data || []).map(async (img) => {
         // Get a URL for the image from storage. Signed URL for private bucket.
         const { data: urlData } = await supabase.storage
-          .from("raw-images")
+          .from("thumbnails")
           .createSignedUrl(img.storage_path, 3600); // 1 hour expiration
 
         return {
@@ -63,10 +85,16 @@ export function useRawImages(projectId: string) {
         };
       }));
       
+      // Update cache
+      cacheRawImages(projectId, imagesWithUrls);
+      
+      // Update state
       setRawImages(imagesWithUrls);
     } catch (error) {
       console.error("Error fetching raw images:", error);
       setRawImages([]);
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -79,18 +107,22 @@ export function useRawImages(projectId: string) {
     try {
       const { error } = await supabase
         .from("raw_images")
-        .update({ name: newImageName.trim() })
+        .update({ filename: newImageName.trim() })
         .eq("id", imageToRename.id);
 
       if (error) throw error;
 
-      setRawImages(
-        rawImages.map((img) =>
-          img.id === imageToRename.id
-            ? { ...img, name: newImageName.trim() }
-            : img
-        )
+      const updatedImages = rawImages.map((img) =>
+        img.id === imageToRename.id
+          ? { ...img, filename: newImageName.trim() }
+          : img
       );
+      
+      // Update state
+      setRawImages(updatedImages);
+      
+      // Update cache
+      updateRawImageInCache(projectId, imageToRename.id, { filename: newImageName.trim() });
 
       setRenameImageDialogOpen(false);
       setImageToRename(null);
@@ -113,13 +145,21 @@ export function useRawImages(projectId: string) {
       if (!imageToDelete.url) {
         throw new Error("Image URL is undefined");
       }
-      
+
       const url = new URL(imageToDelete.url);
       const storagePath = url.pathname.split("/").slice(2).join("/");
 
       if (storagePath) {
         const { error: storageError } = await supabase.storage
           .from("raw_images")
+          .remove([storagePath]);
+
+        if (storageError) throw storageError;
+      }
+      
+      if (storagePath) {
+        const { error: storageError } = await supabase.storage
+          .from("thumbnails")
           .remove([storagePath]);
 
         if (storageError) throw storageError;
@@ -136,6 +176,9 @@ export function useRawImages(projectId: string) {
       // Update local state
       setRawImages(rawImages.filter((img) => img.id !== imageId));
       setSelectedImages(selectedImages.filter((id) => id !== imageId));
+      
+      // Update cache
+      removeRawImageFromCache(projectId, imageId);
 
       if (showAlert) {
         alert("Image deleted successfully");
@@ -160,6 +203,9 @@ export function useRawImages(projectId: string) {
           .eq("id", image.id);
 
         if (error) throw error;
+        
+        // Update cache for each image
+        updateRawImageInCache(projectId, image.id, { folder_id: targetFolderId });
       }
 
       // Update local state
@@ -178,6 +224,118 @@ export function useRawImages(projectId: string) {
     } catch (error) {
       console.error("Error moving images:", error);
       alert("Failed to move images");
+    }
+  };
+
+  // Function to handle image upload
+  const handleImageUpload = async (
+    event: React.ChangeEvent<HTMLInputElement>
+  ) => {
+    const files = event.target.files;
+    if (!files || files.length === 0) return;
+
+    setUploading(true);
+
+    try {
+      for (let i = 0; i < files.length; i++) {
+        const file = files[i];
+        const fileName = file.name;
+        const filePath = `${projectId}/${fileName}`;
+
+        console.log(`Uploading image: ${fileName} to path: ${filePath}`);
+
+        // Upload to storage
+        const { data: uploadData, error: uploadError } = await supabase.storage
+          .from("raw_images")
+          .upload(filePath, file, {
+            cacheControl: "3600",
+            upsert: true,
+          });
+
+        if (uploadError) {
+          console.error("Storage upload error:", uploadError);
+          throw uploadError;
+        }
+
+        // Create thumbnail and upload
+        const { data: thumbnailData, error: thumbnailError } = await supabase.storage
+          .from("thumbnails")
+          .upload(filePath, file, {
+            cacheControl: "3600",
+            upsert: true,
+            // You might want to add transformation options for actual thumbnails
+          });
+
+        if (thumbnailError) {
+          console.error("Thumbnail upload error:", thumbnailError);
+          // Continue without thumbnail if there's an error
+        }
+
+        // Get signed URL for raw image
+        const { data: urlData } = await supabase.storage
+          .from("raw_images")
+          .createSignedUrl(uploadData.path, 3600); // 1 hour expiration
+
+        // Get signed URL for thumbnail if available
+        let thumbnailUrl = null;
+        if (thumbnailData) {
+          const { data: thumbUrlData } = await supabase.storage
+            .from("thumbnails")
+            .createSignedUrl(thumbnailData.path, 3600);
+          
+          thumbnailUrl = thumbUrlData?.signedUrl || null;
+        }
+
+        // Save to database
+        const { data, error } = await supabase
+          .from("raw_images")
+          .insert([
+            {
+              filename: fileName,
+              project_id: projectId,
+              storage_path: uploadData.path,
+              content_type: file.type,
+              size_bytes: file.size,
+              metadata: {},
+              folder_id: null, // Can be updated later when moving
+              panorama_id: null,
+              user_id: (await supabase.auth.getUser()).data.user?.id,
+            },
+          ])
+          .select();
+
+        if (error) {
+          console.error("Database insert error:", error);
+          throw error;
+        }
+
+        // Add to local state with URL
+        if (data && data.length > 0) {
+          const newImage = {
+            ...data[0],
+            url: urlData?.signedUrl,
+            thumbnail_url: thumbnailUrl
+          };
+          
+          // Update state
+          setRawImages((prev) => [...prev, newImage]);
+          
+          // Update cache
+          addRawImageToCache(projectId, newImage);
+        }
+      }
+
+      alert("Images uploaded successfully");
+    } catch (error) {
+      console.error("Error uploading images:", error);
+      const errorMessage = error instanceof Error ? error.message : "Unknown error";
+      alert(`Failed to upload images: ${errorMessage}`);
+    } finally {
+      setUploading(false);
+      // Reset the file input
+      if (fileInputRef.current) {
+        fileInputRef.current.value = "";
+      }
     }
   };
 
@@ -215,6 +373,7 @@ export function useRawImages(projectId: string) {
     setViewMode,
     uploading,
     setUploading,
+    loading,
     
     // Dialog related states
     renameImageDialogOpen,
@@ -238,6 +397,7 @@ export function useRawImages(projectId: string) {
     handleRenameImage,
     handleDeleteImage,
     handleMoveImages,
+    handleImageUpload,
     
     // Helper functions
     toggleImageSelection,

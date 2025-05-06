@@ -1,13 +1,14 @@
 import { useEffect } from "react";
 import { createClient } from "@/utils/supabase/client";
-import { useFolders } from "../../../hooks/useFolders";
-import { useRawImages } from "../../../hooks/useRawImages";
+import { useFolders } from "../../../../../../hooks/useFolders";
+import { useRawImages } from "../../../../../../hooks/useRawImages";
 import FolderSidebar from "./FolderSidebar";
 import ImageGrid from "./ImageGrid";
 import CreateFolderDialog from "./dialogs/CreateFolderDialog";
 import RenameFolderDialog from "./dialogs/RenameFolderDialog";
 import RenameImageDialog from "./dialogs/RenameImageDialog";
 import MoveImageDialog from "./dialogs/MoveImageDialog";
+import { generateThumbnail } from "@/utils/generate-thumbnail";
 
 interface RawImagesTabProps {
   projectId: string;
@@ -91,35 +92,69 @@ export default function RawImagesTab({ projectId }: RawImagesTabProps) {
         const file = files[i];
         const fileName = file.name;
         const filePath = `${projectId}/${fileName}`;
-
+        
         console.log(`Uploading file: ${fileName} to path: ${filePath}`);
 
         // Make sure you're using the correct bucket name
-        const { data: uploadData, error: uploadError } = await supabase.storage
+        const { data: uploadDataRaw, error: uploadErrorRaw } = await supabase.storage
           .from("raw-images") // Must match exactly the bucket name in your Supabase dashboard
           .upload(filePath, file, {
             cacheControl: "3600",
             upsert: true,
           });
 
-        if (uploadError) {
-          console.error("Storage upload error:", {
-            message: uploadError.message,
-            name: uploadError.name,
-            // code: uploadError.code, // Removed as 'code' does not exist on 'StorageError'
-            // details: uploadError.details, // Removed as 'details' does not exist on 'StorageError'
-            // hint: uploadError.hint, // Removed as 'hint' does not exist on 'StorageError'
-            fullError: JSON.stringify(uploadError, null, 2),
-          });
-          throw uploadError;
+        console.log(`Creating thumbnail for file: ${fileName}`);
+          
+        // Turn file into thumbnail
+        // Use downsampling to make it a lot smaller
+        const thumbnailFile = await generateThumbnail(file, {
+          maxDimension: 200,
+          quality: 0.7,
+          format: 'image/jpeg',
+          filename: `thumb_${fileName}`
+        });
+
+        // Confirm that thumbnailFile is a valid File object
+        if (!(thumbnailFile instanceof File)) {
+          console.error("Thumbnail generation failed: Not a valid File object");
+          throw new Error("Thumbnail generation failed: Not a valid File object");
         }
 
-        console.log("File uploaded successfully:", uploadData?.path);
+        const { data: uploadDataThumb, error: uploadErrorThumb } = await supabase.storage
+          .from("thumbnails") // Must match exactly the bucket name in your Supabase dashboard
+          .upload(filePath, thumbnailFile, {
+            cacheControl: "3600",
+            upsert: true,
+          });
+
+        if (uploadErrorRaw) {
+          console.error("Storage upload error:", {
+            message: uploadErrorRaw.message,
+            name: uploadErrorRaw.name,
+            fullError: JSON.stringify(uploadErrorRaw, null, 2),
+          });
+          throw uploadErrorRaw;
+        }
+
+        if (uploadErrorThumb) {
+          console.error("Storage upload error:", {
+            message: uploadErrorThumb.message,
+            name: uploadErrorThumb.name,
+            fullError: JSON.stringify(uploadErrorThumb, null, 2),
+          });
+          throw uploadErrorThumb;
+        }
+
+        console.log("File uploaded successfully:", uploadDataRaw?.path);
 
         // Get URL (note: raw-images bucket is private according to policies)
-        const { data: urlData } = await supabase.storage
+        const { data: urlDataRaw } = await supabase.storage
           .from("raw-images")
-          .createSignedUrl(uploadData.path, 3600); // 1 hour expiration
+          .createSignedUrl(uploadDataRaw.path, 3600); // 1 hour expiration
+
+        const { data: urlDataThumb } = await supabase.storage
+          .from("thumbnails")
+          .createSignedUrl(uploadDataThumb.path, 3600); // 1 hour expiration
 
         // Save to database
         const { data, error } = await supabase
@@ -127,7 +162,7 @@ export default function RawImagesTab({ projectId }: RawImagesTabProps) {
           .insert([
             {
               filename: fileName,
-              storage_path: uploadData.path,
+              storage_path: uploadDataRaw.path,
               project_id: projectId,
               folder_id: currentFolder?.id || null,
               user_id: (await supabase.auth.getUser()).data.user?.id, // Required field
@@ -156,7 +191,7 @@ export default function RawImagesTab({ projectId }: RawImagesTabProps) {
           const formattedData = data.map(img => ({
             ...img,
             name: img.filename, // Add name for component compatibility
-            url: img.storage_path // Add url for component compatibility
+            url: urlDataThumb?.signedUrl, // Add url for component compatibility
           }));
           
           setRawImages((prev) => [...prev, ...formattedData]);
@@ -372,30 +407,73 @@ export default function RawImagesTab({ projectId }: RawImagesTabProps) {
         // Upload files for this folder
         const filesToUpload = filesByPath[dirPath] || [];
         
-        for (const file of filesToUpload) {
+        for (let i = 0; i < filesToUpload.length; i++) {
+          const file = files[i];
           const fileName = file.name;
-          const filePath = `${projectId}/${folderId}/${fileName}`;
+          const filePath = `${projectId}/${fileName}`;
 
           console.log(`Uploading file: ${fileName} to path: ${filePath}`);
 
-          // Upload to storage
-          const { data: uploadData, error: uploadError } =
-            await supabase.storage.from("raw-images").upload(filePath, file, {
-              cacheControl: "3600",
-              upsert: true,
-            });
+        // Make sure you're using the correct bucket name
+        const { data: uploadDataRaw, error: uploadErrorRaw } = await supabase.storage
+          .from("raw-images") // Must match exactly the bucket name in your Supabase dashboard
+          .upload(filePath, file, {
+            cacheControl: "3600",
+            upsert: true,
+          });
 
-          if (uploadError) {
-            console.error("Storage upload error:", uploadError);
-            throw uploadError;
+        console.log(`Creating thumbnail for file: ${fileName}`);
+          
+        // Turn file into thumbnail
+        // Use downsampling to make it a lot smaller
+        const thumbnailFile = await generateThumbnail(file, {
+          maxDimension: 200,
+          quality: 0.7,
+          format: 'image/jpeg',
+          filename: `thumb_${fileName}`
+        });
+
+        // Confirm that thumbnailFile is a valid File object
+        if (!(thumbnailFile instanceof File)) {
+          console.error("Thumbnail generation failed: Not a valid File object");
+          throw new Error("Thumbnail generation failed: Not a valid File object");
+        }
+
+        const { data: uploadDataThumb, error: uploadErrorThumb } = await supabase.storage
+          .from("thumbnails") // Must match exactly the bucket name in your Supabase dashboard
+          .upload(filePath, thumbnailFile, {
+            cacheControl: "3600",
+            upsert: true,
+          });
+
+          if (uploadErrorRaw) {
+            console.error("Storage upload error:", {
+              message: uploadErrorRaw.message,
+              name: uploadErrorRaw.name,
+              fullError: JSON.stringify(uploadErrorRaw, null, 2),
+            });
+            throw uploadErrorRaw;
+          }
+  
+          if (uploadErrorThumb) {
+            console.error("Storage upload error:", {
+              message: uploadErrorThumb.message,
+              name: uploadErrorThumb.name,
+              fullError: JSON.stringify(uploadErrorThumb, null, 2),
+            });
+            throw uploadErrorThumb;
           }
 
-          console.log("File uploaded successfully:", uploadData?.path);
+          console.log("File uploaded successfully:", uploadDataRaw?.path);
 
-          // Get signed URL
-          const { data: urlData } = await supabase.storage
-            .from("raw-images")
-            .createSignedUrl(uploadData.path, 3600); // 1 hour expiration
+          // Get URL (note: raw-images bucket is private according to policies)
+          const { data: urlDataRaw } = await supabase.storage
+          .from("raw-images")
+          .createSignedUrl(uploadDataRaw.path, 3600); // 1 hour expiration
+
+        const { data: urlDataThumb } = await supabase.storage
+          .from("thumbnails")
+          .createSignedUrl(uploadDataThumb.path, 3600); // 1 hour expiration
 
           // Save to database
           const { data, error } = await supabase
@@ -403,7 +481,7 @@ export default function RawImagesTab({ projectId }: RawImagesTabProps) {
             .insert([
               {
                 filename: fileName,
-                storage_path: uploadData.path,
+                storage_path: uploadDataRaw.path,
                 project_id: projectId,
                 folder_id: folderId,
                 user_id: (await supabase.auth.getUser()).data.user?.id,
@@ -423,7 +501,7 @@ export default function RawImagesTab({ projectId }: RawImagesTabProps) {
           if (data && data.length > 0) {
             const imageWithUrl = {
               ...data[0],
-              url: urlData?.signedUrl
+              url: urlDataThumb?.signedUrl
             };
             setRawImages(prev => [...prev, imageWithUrl]);
           }

@@ -16,7 +16,7 @@ import {
   Box,
   Loader2,
 } from "lucide-react";
-import { Panorama } from "../../../hooks/usePanoramas";
+import { Panorama } from "../../../../../../hooks/usePanoramas";
 
 interface PanoramaGridProps {
   panoramas: Panorama[];
@@ -57,7 +57,7 @@ export default function PanoramaGrid({
   const panoramasToShow = getProjectPanoramas();
 
   return (
-    <div className="md:col-span-9">
+    <div className="w-full">
       <Card className="bg-background/80 backdrop-blur-sm border-border/50">
         <CardHeader>
           <div className="flex justify-between items-center">
@@ -138,7 +138,7 @@ export default function PanoramaGrid({
               </p>
             </div>
           ) : viewMode === "grid" ? (
-            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
               {panoramasToShow.map((panorama) => (
                 <Card
                   key={panorama.id}
@@ -149,17 +149,19 @@ export default function PanoramaGrid({
                   }`}
                   onClick={() => togglePanoramaSelection(panorama.id)}
                 >
-                  <div className="aspect-square relative">
-                    <img
-                      src={panorama.url}
-                      alt={panorama.name}
-                      className="object-cover w-full h-full"
-                    />
-                    {panorama.is_processing && (
-                      <div className="absolute inset-0 bg-background/60 flex items-center justify-center">
-                        <Loader2 className="h-8 w-8 animate-spin text-primary" />
-                      </div>
-                    )}
+                  <div className="relative w-full pt-[100%]">
+                    <div className="absolute inset-0">
+                      <img
+                        src={panorama.thumbnail_url ?? panorama.url ?? ""}
+                        alt={panorama.name}
+                        className="object-cover w-full h-full"
+                      />
+                      {panorama.is_processing && (
+                        <div className="absolute inset-0 bg-background/60 flex items-center justify-center">
+                          <Loader2 className="h-8 w-8 animate-spin text-primary" />
+                        </div>
+                      )}
+                    </div>
                     <div className="absolute bottom-0 left-0 right-0 bg-background/70 p-2 text-xs truncate">
                       {panorama.name}
                       {panorama.is_processing && " (Processing)"}
@@ -223,7 +225,7 @@ export default function PanoramaGrid({
                 >
                   <div className="h-10 w-10 mr-4 overflow-hidden rounded">
                     <img
-                      src={panorama.url}
+                      src={panorama.thumbnail_url ?? panorama.url ?? ""}
                       alt={panorama.name}
                       className="object-cover w-full h-full"
                     />
