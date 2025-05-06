@@ -148,7 +148,7 @@ export function useRawImages(projectId: string) {
       if (imageToDelete.storage_path) {
         // Delete original from raw_images bucket
         const { error: storageError } = await supabase.storage
-          .from("raw_images")
+          .from("raw-images")
           .remove([imageToDelete.storage_path]);
   
         if (storageError) {
@@ -291,7 +291,7 @@ export function useRawImages(projectId: string) {
 
         // Upload to storage with ID-based path
         const { data: uploadData, error: uploadError } = await supabase.storage
-          .from("raw_images")
+          .from("raw-images")
           .upload(filePath, file, {
             cacheControl: "3600",
             upsert: true,
@@ -364,8 +364,17 @@ export function useRawImages(projectId: string) {
           storage_path: uploadData.path
         };
         
-        // Update state
-        setRawImages((prev) => [...prev, newImage]);
+        // Update state - prevent duplicates by checking if image already exists
+        setRawImages((prev) => {
+          // Check if image already exists in array
+          if (prev.some(img => img.id === newImage.id)) {
+            // Replace the existing image instead of adding a new one
+            return prev.map(img => img.id === newImage.id ? newImage : img);
+          } else {
+            // Add as new image
+            return [...prev, newImage];
+          }
+        });
         
         // Update cache
         addRawImageToCache(projectId, newImage);

@@ -1,3 +1,4 @@
+import { useState, useEffect, useMemo } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
@@ -63,8 +64,25 @@ export default function ImageGrid({
   getCurrentFolderImages,
   getRootImages,
 }: ImageGridProps) {
-  // Determine which images to show based on currentFolder
-  const imagesToShow = currentFolder ? getCurrentFolderImages() : rawImages;
+  // Use useMemo for imagesToShow to prevent recalculations on every render
+  const imagesToShow = useMemo(() => 
+    currentFolder ? getCurrentFolderImages() : getRootImages(),
+    [currentFolder, getCurrentFolderImages, getRootImages]
+  );
+  
+  // Use useMemo for the unique images array to prevent infinite re-renders
+  const uniqueImageArray = useMemo(() => {
+    const imageMap = new Map<string, RawImage>();
+    
+    // Add each image to the map, ensuring no duplicates
+    imagesToShow.forEach((image) => {
+      if (!imageMap.has(image.id)) {
+        imageMap.set(image.id, image);
+      }
+    });
+    
+    return Array.from(imageMap.values());
+  }, [imagesToShow]);
 
   return (
     <div className="md:col-span-9">
@@ -161,9 +179,9 @@ export default function ImageGrid({
             </div>
           ) : viewMode === "grid" ? (
             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 xl:grid-cols-8 gap-4">
-              {imagesToShow.map((image) => (
+              {uniqueImageArray.map((image) => (
                 <Card
-                  key={image.id}
+                  key={`${image.id}-${image.updated_at}`}
                   className={`cursor-pointer overflow-hidden hover:border-primary transition-colors ${
                     selectedImages.includes(image.id)
                       ? "border-2 border-primary"
@@ -174,11 +192,11 @@ export default function ImageGrid({
                   <div className="aspect-square relative">
                     <img
                       src={image.url}
-                      alt={image.filename}
+                      alt={image.name}
                       className="object-cover w-full h-full"
                     />
                     <div className="absolute bottom-0 left-0 right-0 bg-background/70 p-2 text-xs truncate">
-                      {image.filename}
+                      {image.name}
                     </div>
                     <div className="absolute top-2 right-2">
                       <DropdownMenu>
@@ -199,7 +217,7 @@ export default function ImageGrid({
                             onClick={(e) => {
                               e.stopPropagation();
                               setImageToRename(image);
-                              setNewImageName(image.filename);
+                              setNewImageName(image.name);
                               setRenameImageDialogOpen(true);
                             }}
                           >
@@ -235,9 +253,9 @@ export default function ImageGrid({
             </div>
           ) : (
             <div className="space-y-2">
-              {imagesToShow.map((image) => (
+              {uniqueImageArray.map((image) => (
                 <div
-                  key={image.id}
+                  key={`${image.id}-${image.updated_at}`}
                   className={`flex items-center p-2 rounded border ${
                     selectedImages.includes(image.id)
                       ? "border-primary bg-primary/10"
@@ -248,11 +266,11 @@ export default function ImageGrid({
                   <div className="h-10 w-10 mr-4 overflow-hidden rounded">
                     <img
                       src={image.url}
-                      alt={image.filename}
+                      alt={image.name}
                       className="object-cover w-full h-full"
                     />
                   </div>
-                  <div className="flex-1 truncate">{image.filename}</div>
+                  <div className="flex-1 truncate">{image.name}</div>
                   <div className="flex items-center">
                     <DropdownMenu>
                       <DropdownMenuTrigger
@@ -268,7 +286,7 @@ export default function ImageGrid({
                           onClick={(e) => {
                             e.stopPropagation();
                             setImageToRename(image);
-                            setNewImageName(image.filename);
+                            setNewImageName(image.name);
                             setRenameImageDialogOpen(true);
                           }}
                         >
@@ -303,7 +321,7 @@ export default function ImageGrid({
             </div>
           )}
 
-          {imagesToShow.length === 0 && (
+          {uniqueImageArray.length === 0 && (
             <div className="text-center py-12">
               <ImageIcon className="h-16 w-16 text-muted-foreground mx-auto mb-4" />
               <p className="text-muted-foreground mb-4">
