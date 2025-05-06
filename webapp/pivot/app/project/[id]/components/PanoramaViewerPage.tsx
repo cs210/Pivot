@@ -149,6 +149,12 @@ export default function PanoramaViewerPage({
       markersPluginRef.current = viewer.getPlugin(MarkersPlugin);
       if (!markersPluginRef.current) return;
 
+      // Add loaded class to container
+      const container = document.querySelector('.psv-container');
+      if (container) {
+        container.classList.add('loaded');
+      }
+
       /* ---------- Render existing markers ---------- */
       const anns = currentPanorama.metadata?.annotations || [];
       markersPluginRef.current.clearMarkers();
@@ -538,18 +544,24 @@ const openMarkerEditor = (mk: Marker) => {
 
           {/* Photo Sphere */}
           {currentPanorama ? (
-            <ReactPhotoSphereViewer
-              key={currentPanorama.id}
-              ref={photoViewerRef}
-              src={currentPanorama.url}
-              height="100%"
-              width="100%"
-              plugins={[[MarkersPlugin, { markers: currentPanorama.metadata?.annotations || [] }]]}
-              navbar={["zoom", "fullscreen"]}
-              minFov={30}
-              maxFov={90}
-              onReady={initializeViewer}
-            />
+            <div className="relative w-full h-full">
+              <ReactPhotoSphereViewer
+                key={currentPanorama.id}
+                ref={photoViewerRef}
+                src={currentPanorama.url || ''}
+                height="100%"
+                width="100%"
+                plugins={[[MarkersPlugin, { markers: currentPanorama.metadata?.annotations || [] }]]}
+                navbar={["zoom", "fullscreen"]}
+                minFov={30}
+                maxFov={90}
+                onReady={initializeViewer}
+                containerClass="psv-container"
+                loader={false}
+              />
+              <div className="psv-loading-spinner"></div>
+              <div className="psv-loading-text">Loading Next 360°...</div>
+            </div>
           ) : (
             <div className="flex items-center justify-center w-full h-full text-gray-500">
               {isSharedView ? 'Loading panorama...' : 'Select a grid location to view its panorama'}
