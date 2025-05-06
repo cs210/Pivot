@@ -64,14 +64,15 @@ export default function ImageGrid({
   getCurrentFolderImages,
   getRootImages,
 }: ImageGridProps) {
-  // Determine which images to show based on currentFolder
-  const imagesToShow = currentFolder ? getCurrentFolderImages() : getRootImages();
+  // Use state to store the images to display
+  const [uniqueImageArray, setUniqueImageArray] = useState<RawImage[]>([]);
 
-  // Create a map to track unique images by ID to ensure no duplicates
-  const [uniqueImages, setUniqueImages] = useState<Map<string, RawImage>>(new Map());
-
-  // Update unique images when imagesToShow changes
+  // Update images when dependencies change
   useEffect(() => {
+    // Determine which images to show based on currentFolder
+    const imagesToShow = currentFolder ? getCurrentFolderImages() : getRootImages();
+    
+    // Create a map to track unique images by ID to ensure no duplicates
     const imageMap = new Map<string, RawImage>();
 
     // Add each image to the map, ensuring no duplicates
@@ -81,11 +82,9 @@ export default function ImageGrid({
       }
     });
 
-    setUniqueImages(imageMap);
-  }, [imagesToShow]);
-
-  // Convert the Map back to an array for rendering
-  const uniqueImageArray = Array.from(uniqueImages.values());
+    // Convert the Map back to an array for rendering
+    setUniqueImageArray(Array.from(imageMap.values()));
+  }, [rawImages, currentFolder, getCurrentFolderImages, getRootImages]);
 
   return (
     <div className="md:col-span-9">
