@@ -54,7 +54,9 @@ export const generateThumbnail = async (
         canvas.width = width;
         canvas.height = height;
         
-        // Draw the image at the new size
+        // Draw the image at the new size with better quality
+        ctx.imageSmoothingEnabled = true;
+        ctx.imageSmoothingQuality = 'high';
         ctx.drawImage(img, 0, 0, width, height);
         
         // Convert to blob with specified format and quality

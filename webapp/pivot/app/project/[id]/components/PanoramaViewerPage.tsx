@@ -583,7 +583,11 @@ const openMarkerEditor = (mk: Marker) => {
                     >
                       {pano ? (
                         <>
-                          <img src={pano.url} alt="thumb" className="w-full h-full object-cover rounded-full" />
+                          <img 
+                            src={pano.thumbnail_url ?? pano.url ?? ""} 
+                            alt="thumb" 
+                            className="w-full h-full object-cover rounded-full" 
+                          />
                           {!!pano.metadata?.annotations?.length && (
                             <div className="absolute -top-2 -right-2 bg-[#bd7581] text-xs text-white rounded-full w-5 h-5 flex items-center justify-center">
                               {pano.metadata.annotations.length}
