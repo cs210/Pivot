@@ -124,17 +124,6 @@ export default function ProjectSettings({
                   />
                 </div>
 
-                {inOrganization && (
-                  <Alert className="bg-primary/10 border-primary/30">
-                    <AlertCircle className="h-4 w-4" />
-                    <AlertTitle>This project is publicly accessible</AlertTitle>
-                    <AlertDescription>
-                      Anyone with the link can view this project. You can
-                      disable public access at any time.
-                    </AlertDescription>
-                  </Alert>
-                )}
-
                 <Button
                   onClick={handleShareProject}
                   variant={inOrganization ? "default" : "outline"}
