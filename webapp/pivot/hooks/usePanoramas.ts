@@ -423,8 +423,9 @@ export function usePanoramas(projectId: string) {
     }
   };
   
-
   const getProjectPanoramas = () => {
+    console.log("Fetching panoramas for project:", projectId);
+    console.log("Panoramas:", panoramas);
     return panoramas;
   };
 

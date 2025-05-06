@@ -703,10 +703,10 @@ USING (
 );
 
 -- Storage Bucket Policies for 'panoramas-public' bucket
-CREATE POLICY "Allow uploads to public panoramas bucket"
+CREATE POLICY "Panoramas Public Storage Insert: Allow uploads to public panoramas bucket"
 ON storage.objects FOR INSERT
 TO authenticated
-WITH CHECK (bucket_id = 'panoramas-public');
+WITH CHECK (bucket_id = 'panoramas-public' AND auth.uid() = owner);
 
 CREATE POLICY "Panoramas Public Storage Update: Users can update their own panoramas"
 ON storage.objects FOR UPDATE

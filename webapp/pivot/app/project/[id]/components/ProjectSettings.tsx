@@ -38,23 +38,21 @@ export default function ProjectSettings({
   const [isTogglingPublic, setIsTogglingPublic] = useState(false);
   const router = useRouter();
   
-  const {
-    panoramasToMove,
-    setPanoramasToMove,
-  } = usePanoramas(projectId);   
-
   const handleToggleProjectPublic = async () => {
     setIsTogglingPublic(true);
-    setPanoramasToMove((projectPanoramas ?? []).map((p) => p.id));
-    console.log("Panoramas to move:", panoramasToMove);
-
+    console.log("project panoramas", projectPanoramas);
+    
+    // Create the panorama IDs array directly instead of using state
+    const panoramaIds = (projectPanoramas ?? []).map((p) => p.id);
+    console.log("Panorama IDs to move:", panoramaIds);
+    
     try {
       const response = await fetch("/api/move-panoramas", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ 
           projectId: projectId,
-          panoramasToMove: panoramasToMove,
+          panoramasToMove: panoramaIds, // Use the local variable instead of state
           isNowPublic: !isPublic,
         }),
       });
