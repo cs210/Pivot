@@ -7,7 +7,7 @@ import { Switch } from "@/components/ui/switch";
 import { Save, Share2, AlertCircle, Loader2 } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { useRouter } from 'next/navigation';
-import { toggleProjectPublic } from '../../../../lib/toggle-project-public';
+import { usePanoramas } from "@/hooks/usePanoramas";
 
 interface ProjectSettingsProps {
   projectId: string;
@@ -19,6 +19,7 @@ interface ProjectSettingsProps {
   setShareDialogOpen?: (open: boolean) => void;
   setShareLink?: (link: string) => void;
   setCurrentProject?: (project: any) => void;
+  projectPanoramas?: any[];
 }
 
 export default function ProjectSettings({
@@ -31,16 +32,33 @@ export default function ProjectSettings({
   setShareDialogOpen,
   setShareLink,
   setCurrentProject,
+  projectPanoramas
 }: ProjectSettingsProps) {
   const [activeSection, setActiveSection] = useState("general");
   const [isTogglingPublic, setIsTogglingPublic] = useState(false);
   const router = useRouter();
+  
+  const {
+    panoramasToMove,
+    setPanoramasToMove,
+  } = usePanoramas(projectId);   
 
   const handleToggleProjectPublic = async () => {
     setIsTogglingPublic(true);
-    
+    setPanoramasToMove((projectPanoramas ?? []).map((p) => p.id));
+    console.log("Panoramas to move:", panoramasToMove);
+
     try {
-      const result = await toggleProjectPublic(projectId, setProject);
+      const response = await fetch("/api/move-panoramas", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ 
+          projectId: projectId,
+          panoramasToMove: panoramasToMove,
+          isNowPublic: !isPublic,
+        }),
+      });
+      const result = await response.json();      
       
       if (!result.success) {
         console.error(result.error || "Failed to update project visibility");

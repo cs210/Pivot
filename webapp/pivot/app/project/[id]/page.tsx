@@ -28,8 +28,8 @@ import {
   Globe,
   Link as LinkIcon,
 } from "lucide-react";
-import { createClient } from "@/utils/supabase/client";
 import { toggleProjectPublic } from '../../../lib/toggle-project-public';
+import { usePanoramas } from "@/hooks/usePanoramas";
 
 export default function ProjectPage() {
   const router = useRouter();
@@ -40,7 +40,6 @@ export default function ProjectPage() {
   const [isPublic, setIsPublic] = useState(false);
   const [shareLink, setShareLink] = useState("");
   const [copied, setCopied] = useState(false);
-  const supabase = createClient();
 
   const {
     project,
@@ -52,6 +51,10 @@ export default function ProjectPage() {
     setIsEditing,
     handleUpdateProjectName,
   } = useProject(projectId, router);
+
+  const {
+    getProjectPanoramas,
+  } = usePanoramas(projectId);
 
   useEffect(() => {
     if (project) {
@@ -226,6 +229,7 @@ export default function ProjectPage() {
                 handleUpdateProjectName={handleUpdateProjectName}
                 isPublic={isPublic}
                 setProject={setProject}
+                projectPanoramas={getProjectPanoramas()}
               />
             </TabsContent>
           </Tabs>

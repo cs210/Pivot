@@ -332,7 +332,6 @@ export async function POST(request) {
       // Generate a storage path
       const storagePath = `${projectId}/${panoramaId}_${Date.now()}.jpg`;
       const storageBucket = isPublic ? 'panoramas-public' : 'panoramas-private';
-      
 
       // Upload to Supabase storage
       const { data: uploadData, error: uploadError } = await supabase.storage
