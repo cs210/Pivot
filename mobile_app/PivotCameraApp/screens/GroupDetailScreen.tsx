@@ -393,7 +393,7 @@ const GroupDetailScreen = () => {
           .from("raw_images")
           .insert([
             {
-              filename: fileName,
+              name: fileName,
               storage_path: uploadData.path,
               project_id: projectId,
               folder_id: null, // No folder initially
