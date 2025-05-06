@@ -29,6 +29,7 @@ import {
   Link as LinkIcon,
 } from "lucide-react";
 import { createClient } from "@/utils/supabase/client";
+import { toggleProjectPublic } from "@/services/panorama-service";
 
 export default function ProjectPage() {
   const router = useRouter();
@@ -43,6 +44,7 @@ export default function ProjectPage() {
 
   const {
     project,
+    setProject,
     loading,
     projectName,
     setProjectName,
@@ -77,18 +79,18 @@ export default function ProjectPage() {
   const handleTogglePublic = async () => {
     try {
       // Update the project's public status
-      const { error } = await supabase
-        .from("projects")
-        .update({ is_public: !isPublic })
-        .eq("id", projectId);
+      const result = await toggleProjectPublic(projectId, setProject);
 
-      if (error) throw error;
+      if (!result.success) {
+        console.error(result.error || "Failed to update project visibility");
+        alert("Failed to update project visibility");
+        return;
+      }
 
-      const newPublicState = !isPublic;
-      setIsPublic(newPublicState);
+      setIsPublic(result.isNowPublic ?? false);
 
       // If we're making it public, generate and show the share link
-      if (newPublicState) {
+      if (isPublic) {
         const baseUrl = window.location.origin;
         const link = `${baseUrl}/shared/${projectId}`;
         setShareLink(link);
@@ -223,8 +225,7 @@ export default function ProjectPage() {
                 setProjectName={setProjectName}
                 handleUpdateProjectName={handleUpdateProjectName}
                 isPublic={isPublic}
-                projects={[]}  // Provide an empty array or fetch projects if needed
-                setProjects={() => {}}  // Provide a no-op function or proper state updater
+                setProject={setProject}
               />
             </TabsContent>
           </Tabs>

@@ -7,7 +7,6 @@ import { Project } from "../../../../hooks/useProject";
 
 interface ShareButtonProps {
   project: Project;
-  projects: Project[];
   setProjects: (projects: Project[]) => void;
   setCurrentProject: (project: Project) => void;
   setShareLink: (link: string) => void;
@@ -16,7 +15,6 @@ interface ShareButtonProps {
 
 const ShareButton = ({ 
   project, 
-  projects, 
   setProjects, 
   setCurrentProject, 
   setShareLink, 
@@ -41,7 +39,7 @@ const ShareButton = ({
       }
       
       // If project is private, make it public and move files
-      const result = await toggleProjectPublic(project.id, projects, setProjects);
+      const result = await toggleProjectPublic(project.id, setProjects);
       
       if (!result.success) {
         console.error(result.error || "Failed to update project visibility");

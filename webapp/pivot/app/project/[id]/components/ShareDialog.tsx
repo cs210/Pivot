@@ -18,7 +18,6 @@ interface ShareDialogProps {
   onOpenChange: (open: boolean) => void;
   shareLink: string;
   currentProject: Project | null;
-  projects: Project[];
   setProjects: (projects: Project[]) => void;
 }
 
@@ -27,7 +26,6 @@ const ShareDialog: React.FC<ShareDialogProps> = ({
   onOpenChange, 
   shareLink, 
   currentProject, 
-  projects, 
   setProjects 
 }) => {
   const [copied, setCopied] = useState(false);
@@ -46,7 +44,7 @@ const ShareDialog: React.FC<ShareDialogProps> = ({
     setIsTogglingPrivate(true);
     
     try {
-      const result = await toggleProjectPublic(currentProject.id, projects, setProjects);
+      const result = await toggleProjectPublic(currentProject.id, setProjects);
       
       if (!result.success) {
         console.error(result.error || "Failed to make project private");

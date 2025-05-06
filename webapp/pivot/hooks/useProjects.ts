@@ -7,7 +7,7 @@ export function useProjects(router: any) {
   const [loading, setLoading] = useState(true);
   const [projects, setProjects] = useState<Project[]>([]);
   const [user, setUser] = useState<any>(null);
-  
+    
   useEffect(() => {
     const checkUser = async () => {
       const { data: { user } } = await supabase.auth.getUser();

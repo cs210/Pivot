@@ -15,8 +15,7 @@ interface ProjectSettingsProps {
   setProjectName: (name: string) => void;
   handleUpdateProjectName: () => void;
   isPublic: boolean;
-  projects: any[];
-  setProjects: (projects: any[]) => void;
+  setProject: (project: any) => void;
   setShareDialogOpen?: (open: boolean) => void;
   setShareLink?: (link: string) => void;
   setCurrentProject?: (project: any) => void;
@@ -28,8 +27,7 @@ export default function ProjectSettings({
   setProjectName,
   handleUpdateProjectName,
   isPublic = false,
-  projects = [],
-  setProjects,
+  setProject,
   setShareDialogOpen,
   setShareLink,
   setCurrentProject,
@@ -42,7 +40,7 @@ export default function ProjectSettings({
     setIsTogglingPublic(true);
     
     try {
-      const result = await toggleProjectPublic(projectId, projects, setProjects);
+      const result = await toggleProjectPublic(projectId, setProject);
       
       if (!result.success) {
         console.error(result.error || "Failed to update project visibility");

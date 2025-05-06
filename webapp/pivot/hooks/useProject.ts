@@ -131,6 +131,7 @@ export function useProject(projectId: string, router: any) {
 
   return {
     project,
+    setProject,
     loading,
     projectName,
     setProjectName,
