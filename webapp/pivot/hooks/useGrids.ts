@@ -352,7 +352,7 @@ export function useGrids(projectId: string) {
     }
   };
 
-  // Remove a panorama from a grid position
+  // Remove a panorama from a grid position (staged until save)
   const handleUnassignPanorama = async (x: number, y: number) => {
     const posKey = getPosKey(x, y);
     const existingNode = gridNodes[posKey];
@@ -360,30 +360,35 @@ export function useGrids(projectId: string) {
     if (!existingNode || !existingNode.panorama_id) return;
     
     try {
-      // Update the grid node to remove panorama reference
-      const { error } = await supabase
-        .from("grid_nodes")
-        .update({ panorama_id: null })
-        .eq("id", existingNode.id);
-        
-      if (error) throw error;
-      
       // Find the panorama that was unassigned
       const unassignedPanorama = allPanoramas.find(
         p => p.id === existingNode.panorama_id
       );
       
-      // Update local state
-      const updatedNode = { ...existingNode, panorama_id: null };
+      // Update local state with temporary change
+      const updatedNode = { 
+        ...existingNode, 
+        panorama_id: null,
+        updated_at: new Date().toISOString()
+      };
+      
       setGridNodes(prev => ({
         ...prev,
         [posKey]: updatedNode
       }));
       
-      // Update cache
-      updateGridNodeInCache(projectId, posKey, updatedNode);
+      // Add to pending changes
+      setPendingChanges(prev => [
+        ...prev.filter(change => !(change.x === x && change.y === y)), // Remove any previous change for this cell
+        {
+          type: 'unassign',
+          x,
+          y,
+          existingNode
+        }
+      ]);
       
-      // Add the panorama back to unassigned list
+      // Add the panorama back to unassigned list (visual only until saved)
       if (unassignedPanorama) {
         setUnassignedPanoramas(prev => [...prev, unassignedPanorama]);
       }
@@ -391,7 +396,7 @@ export function useGrids(projectId: string) {
       // Mark that changes have been made that need to be saved
       setHasChanges(true);
     } catch (error) {
-      console.error("Error unassigning panorama:", error);
+      console.error("Error staging panorama unassignment:", error);
       alert("Failed to remove panorama from grid position");
     }
   };
@@ -432,7 +437,71 @@ export function useGrids(projectId: string) {
         updated_at: new Date().toISOString()
       });
       
-      // 2. Get all existing nodes for this grid
+      // 2. Process all pending changes
+      for (const change of pendingChanges) {
+        const { type, x, y, panoramaId, existingNode } = change;
+        const posKey = getPosKey(x, y);
+        
+        if (type === 'assign' && panoramaId) {
+          if (existingNode) {
+            // Update existing node
+            const { error } = await supabase
+              .from("grid_nodes")
+              .update({ panorama_id: panoramaId })
+              .eq("id", existingNode.id);
+              
+            if (error) throw error;
+            
+            // Update cache
+            updateGridNodeInCache(projectId, posKey, {
+              ...existingNode,
+              panorama_id: panoramaId
+            });
+          } else {
+            // Create new node
+            const { data, error } = await supabase
+              .from("grid_nodes")
+              .insert({
+                grid_id: currentGrid.id,
+                project_id: projectId,
+                grid_x: x,
+                grid_y: y,
+                panorama_id: panoramaId,
+                rotation_degrees: 0,
+                scale_factor: 1
+              })
+              .select()
+              .single();
+              
+            if (error) throw error;
+            
+            // Update local state with the real node (instead of temp)
+            setGridNodes(prev => ({
+              ...prev,
+              [posKey]: data
+            }));
+            
+            // Update cache
+            updateGridNodeInCache(projectId, posKey, data);
+          }
+        } else if (type === 'unassign' && existingNode) {
+          // Update the grid node to remove panorama reference
+          const { error } = await supabase
+            .from("grid_nodes")
+            .update({ panorama_id: null })
+            .eq("id", existingNode.id);
+            
+          if (error) throw error;
+          
+          // Update cache
+          updateGridNodeInCache(projectId, posKey, {
+            ...existingNode,
+            panorama_id: null
+          });
+        }
+      }
+      
+      // 3. Get all existing nodes for this grid
       const { data: existingNodes, error: fetchError } = await supabase
         .from("grid_nodes")
         .select("*")
@@ -440,7 +509,7 @@ export function useGrids(projectId: string) {
         
       if (fetchError) throw fetchError;
       
-      // 3. Delete nodes that are outside the new grid dimensions
+      // 4. Delete nodes that are outside the new grid dimensions
       const nodesToDelete = (existingNodes || []).filter(
         node => node.grid_x >= cols || node.grid_y >= rows
       );
@@ -478,6 +547,8 @@ export function useGrids(projectId: string) {
         setGridNodes(updatedGridNodes);
       }
       
+      // Clear pending changes after successful save
+      setPendingChanges([]);
       setHasChanges(false);
       alert("Grid saved successfully!");
     } catch (error) {
