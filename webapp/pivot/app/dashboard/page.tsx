@@ -135,6 +135,98 @@ export default function Dashboard() {
     router.refresh();
   };
 
+  // Function to handle updating project metadata without changing organization status
+  const handleUpdateMetadata = async (newMetadata: any) => {
+    if (!currentProject) return false;
+    
+    try {
+      const supabase = createClient();
+      
+      // Update the project metadata in the database
+      const { error } = await supabase
+        .from("projects")
+        .update({ metadata: newMetadata })
+        .eq("id", currentProject.id);
+        
+      if (error) throw error;
+      
+      // Update the local projects state
+      const updatedProjects = projects.map(p => 
+        p.id === currentProject.id ? { ...p, metadata: newMetadata } : p
+      );
+      
+      setProjects(updatedProjects);
+      
+      return true;
+    } catch (error) {
+      console.error("Error updating project metadata:", error);
+      return false;
+    }
+  };
+  
+  // Function to handle toggling project organization status
+  const handleToggleProjectOrg = async (customMetadata?: any) => {
+    if (!currentProject) return false;
+    
+    try {
+      const supabase = createClient();
+      
+      // Get current user
+      const { data: userData } = await supabase.auth.getUser();
+      if (!userData.user) return false;
+      
+      let newOrgId = null;
+      
+      if (!currentProject.organization_id) {
+        // Find the organization ID that matches the user's email domain
+        const { data: org, error } = await supabase
+          .from("organizations")
+          .select("*")
+          .eq("domain_restriction", userData.user.email.split("@")[1])
+          .single();
+          
+        if (error || !org) {
+          console.error("No organization found for this email domain");
+          return false;
+        }
+        
+        newOrgId = org.id;
+      }
+      
+      // Use the provided customMetadata if available, otherwise use existing metadata
+      const metadataToUse = customMetadata || currentProject.metadata || {};
+      
+      // Perform the update in the database
+      const { error } = await supabase
+        .from("projects")
+        .update({ 
+          organization_id: newOrgId,
+          metadata: metadataToUse
+        })
+        .eq("id", currentProject.id);
+        
+      if (error) throw error;
+      
+      // Update local projects state
+      const updatedProjects = projects.map(p => 
+        p.id === currentProject.id 
+          ? { 
+              ...p, 
+              organization_id: newOrgId,
+              metadata: metadataToUse 
+            } 
+          : p
+      );
+      
+      setProjects(updatedProjects);
+      
+      return true;
+    } catch (error) {
+      console.error("Error toggling project organization status:", error);
+      return false;
+    }
+  };
+
   return (
     <div className="flex flex-col min-h-screen text-foreground">
       <Header />
@@ -346,14 +438,52 @@ export default function Dashboard() {
             </DialogContent>
           </Dialog>
 
-          {/* Share Link Dialog - Replace with ShareDialog component */}
+          {/* Share Link Dialog */}
           <ShareDialog
             open={shareDialogOpen}
             onOpenChange={setShareDialogOpen}
             shareLink={shareLink}
             currentProject={currentProject}
-            projects={projects}
-            setProjects={setProjects}
+            handleToggleProjectOrg={async (metadata) => {
+              if (!currentProject) return false;
+              
+              const success = await handleToggleProjectOrg(metadata);
+              
+              if (success) {
+                // Update the local projects state to reflect the change
+                const updatedProjects = projects.map(p => 
+                  p.id === currentProject.id 
+                    ? { 
+                        ...p, 
+                        organization_id: !currentProject.organization_id ? "org-id" : null,
+                        metadata: metadata || p.metadata
+                      } 
+                    : p
+                );
+                
+                setProjects(updatedProjects);
+              }
+              
+              return success;
+            }}
+            handleUpdateMetadata={async (metadata) => {
+              if (!currentProject) return false;
+              
+              const success = await handleUpdateMetadata(metadata);
+              
+              if (success) {
+                // Update the local projects state to reflect the change
+                const updatedProjects = projects.map(p => 
+                  p.id === currentProject.id 
+                    ? { ...p, metadata } 
+                    : p
+                );
+                
+                setProjects(updatedProjects);
+              }
+              
+              return success;
+            }}
           />
         </div>
       </main>

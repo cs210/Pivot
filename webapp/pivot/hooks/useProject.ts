@@ -206,6 +206,44 @@ export function useProject(projectId: string, router: any) {
     }
   };
   
+  // Update project metadata only without changing organization status
+  const handleUpdateMetadata = async (newMetadata: any) => {
+    if (!project) return false;
+    
+    try {
+      console.log("Updating project metadata only:", newMetadata);
+      
+      // Perform the update in the database
+      const { error } = await supabase
+        .from("projects")
+        .update({ metadata: newMetadata })
+        .eq("id", projectId);
+        
+      if (error) throw error;
+
+      console.log("Project metadata updated successfully");
+      
+      // Update local state
+      setMetadata(newMetadata);
+      
+      // Update project state with new metadata
+      const updatedProject = {
+        ...project,
+        metadata: newMetadata
+      };
+      
+      setProject(updatedProject);
+      
+      // Update cache
+      cacheProject(updatedProject);
+      
+      return true;
+    } catch (error) {
+      console.error("Error updating project metadata:", error);
+      return false;
+    }
+  };
+
   // Function to clear cache for the current project
   const clearCache = (allProjects = false) => {
     if (allProjects) {
@@ -229,6 +267,7 @@ export function useProject(projectId: string, router: any) {
     setIsEditing,
     handleUpdateProjectName,
     handleToggleProjectOrg,
+    handleUpdateMetadata,
     user,
     clearCache,
     fetchProjectDetails

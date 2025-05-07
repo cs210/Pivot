@@ -30,6 +30,7 @@ interface ShareDialogProps {
   shareLink: string;
   currentProject: Project | null;
   handleToggleProjectOrg?: (metadata?: any) => Promise<boolean>;
+  handleUpdateMetadata?: (metadata: any) => Promise<boolean>;
 }
 
 const ShareDialog: React.FC<ShareDialogProps> = ({ 
@@ -38,10 +39,13 @@ const ShareDialog: React.FC<ShareDialogProps> = ({
   shareLink, 
   currentProject, 
   handleToggleProjectOrg,
+  handleUpdateMetadata
 }) => {
   const [copied, setCopied] = useState(false);
   const [isTogglingOrgAccess, setIsTogglingOrgAccess] = useState(false);
   const [activeStep, setActiveStep] = useState<number>(1);
+  const [isEditMode, setIsEditMode] = useState(false);
+  const [isSavingMetadata, setIsSavingMetadata] = useState(false);
   const router = useRouter();
   
   // Housing selection state - simplified
@@ -50,10 +54,31 @@ const ShareDialog: React.FC<ShareDialogProps> = ({
   const [residenceName, setResidenceName] = useState<string>("");
   const [roomType, setRoomType] = useState<string>("");
   
-  // Correctly flatten residence lists and ensure uniqueness
-  const allUndergraduateResidences = [...new Set(Object.values(UNDERGRADUATE_RESIDENCES).flat())];
-  const allGraduateResidences = [...new Set(Object.values(GRADUATE_RESIDENCES).flat())];
-
+  // Initialize housing information from project metadata when dialog opens
+  useEffect(() => {
+    if (open && currentProject?.metadata) {
+      setHousingType(currentProject.metadata.housing_type || "");
+      setResidenceType(currentProject.metadata.residence_type || "");
+      setResidenceName(currentProject.metadata.residence_name || "");
+      setRoomType(currentProject.metadata.room_type || "");
+      
+      // If project has housing metadata, go directly to step 5 (share link)
+      if (currentProject.metadata.housing_type) {
+        setActiveStep(5);
+      }
+    } else if (open) {
+      // Reset form when opening for a new project
+      setHousingType("");
+      setResidenceType("");
+      setResidenceName("");
+      setRoomType("");
+      setActiveStep(1);
+    }
+    
+    // Always reset edit mode when dialog opens/closes
+    setIsEditMode(false);
+  }, [open, currentProject]);
+  
   // Modified for filtering residences by type
   const getFilteredResidences = () => {
     if (!residenceType) return [];
@@ -159,6 +184,40 @@ const ShareDialog: React.FC<ShareDialogProps> = ({
       alert("Failed to share project");
     } finally {
       setIsTogglingOrgAccess(false);
+    }
+  };
+
+  const handleSaveMetadata = async () => {
+    if (!currentProject || !handleUpdateMetadata) return;
+    
+    setIsSavingMetadata(true);
+    
+    try {
+      // Create the updated housing metadata object
+      const updatedMetadata = {
+        ...currentProject.metadata, // Preserve any existing metadata
+        housing_type: housingType,
+        residence_type: residenceType,
+        residence_name: residenceName,
+        room_type: roomType
+      };
+      
+      console.log("Updating project metadata:", updatedMetadata);
+      
+      // Use the dedicated metadata update function that doesn't affect org status
+      const success = await handleUpdateMetadata(updatedMetadata);
+      
+      if (!success) {
+        throw new Error("Failed to update housing information");
+      }
+      
+      // Exit edit mode after successful save
+      setIsEditMode(false);
+    } catch (error) {
+      console.error("Error updating housing information:", error);
+      alert("Failed to update housing information");
+    } finally {
+      setIsSavingMetadata(false);
     }
   };
 
@@ -307,11 +366,21 @@ const ShareDialog: React.FC<ShareDialogProps> = ({
         )}
 
         {/* Step 5: Share Link */}
-        {activeStep === 5 && (
+        {activeStep === 5 && !isEditMode && (
           <>
             <div className="space-y-4">
               <div className="p-3 rounded-md bg-primary/10">
-                <h3 className="text-sm font-medium mb-2">Housing Information</h3>
+                <div className="flex items-center justify-between mb-2">
+                  <h3 className="text-sm font-medium">Housing Information</h3>
+                  <Button 
+                    size="sm" 
+                    variant="outline" 
+                    onClick={() => setIsEditMode(true)}
+                    className="h-7 px-2"
+                  >
+                    Edit
+                  </Button>
+                </div>
                 <div className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
                   <div className="flex items-center">
                     <School className="h-4 w-4 mr-2 text-primary" />
@@ -356,6 +425,111 @@ const ShareDialog: React.FC<ShareDialogProps> = ({
           </>
         )}
         
+        {/* Step 5 - Edit Mode */}
+        {activeStep === 5 && isEditMode && (
+          <div className="space-y-6">
+            <div className="space-y-4">
+              <h3 className="text-lg font-medium">Edit Housing Type</h3>
+              <RadioGroup 
+                value={housingType} 
+                onValueChange={(value) => {
+                  setHousingType(value);
+                  setResidenceType("");
+                  setResidenceName("");
+                  setRoomType("");
+                }}
+                className="grid grid-cols-2 gap-4"
+              >
+                {HOUSING_TYPES.map((type) => (
+                  <div key={type} className="flex items-center space-x-2">
+                    <RadioGroupItem value={type} id={`housing-edit-${type}`} />
+                    <Label htmlFor={`housing-edit-${type}`} className="flex items-center">
+                      <School className="mr-2 h-4 w-4" />
+                      {type}
+                    </Label>
+                  </div>
+                ))}
+              </RadioGroup>
+            </div>
+            
+            <div className="space-y-4">
+              <h3 className="text-lg font-medium">Edit Residence Type</h3>
+              <p className="text-sm text-muted-foreground">
+                {housingType === "Undergraduate" 
+                  ? "Choose the type of undergraduate housing" 
+                  : "Choose the type of graduate housing"}
+              </p>
+              
+              <Select value={residenceType} onValueChange={(value) => {
+                setResidenceType(value);
+                setResidenceName("");
+                setRoomType("");
+              }}>
+                <SelectTrigger className="w-full">
+                  <SelectValue placeholder="Select residence type" />
+                </SelectTrigger>
+                <SelectContent>
+                  {housingType === "Undergraduate" 
+                    ? UNDERGRADUATE_RESIDENCE_TYPES.map((type) => (
+                        <SelectItem key={type} value={type}>
+                          {type}
+                        </SelectItem>
+                      ))
+                    : GRADUATE_RESIDENCE_TYPES.map((type) => (
+                        <SelectItem key={type} value={type}>
+                          {type}
+                        </SelectItem>
+                      ))
+                  }
+                </SelectContent>
+              </Select>
+            </div>
+            
+            <div className="space-y-4">
+              <h3 className="text-lg font-medium">Edit Residence</h3>
+              <p className="text-sm text-muted-foreground">
+                Choose the specific building or residence
+              </p>
+              
+              <Select value={residenceName} onValueChange={(value) => {
+                setResidenceName(value);
+                setRoomType("");
+              }}>
+                <SelectTrigger className="w-full">
+                  <SelectValue placeholder="Select residence" />
+                </SelectTrigger>
+                <SelectContent>
+                  {filteredResidences.map((name) => (
+                    <SelectItem key={name} value={name}>
+                      {name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            
+            <div className="space-y-4">
+              <h3 className="text-lg font-medium">Edit Room Type</h3>
+              <p className="text-sm text-muted-foreground">
+                Choose the type of room in this residence
+              </p>
+              
+              <Select value={roomType} onValueChange={setRoomType}>
+                <SelectTrigger className="w-full">
+                  <SelectValue placeholder="Select room type" />
+                </SelectTrigger>
+                <SelectContent>
+                  {filteredRoomTypes.map((type: string) => (
+                    <SelectItem key={type} value={type}>
+                      {type}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+        )}
+        
         <DialogFooter className="flex justify-between mt-4">
           {activeStep < 5 ? (
             <>
@@ -390,6 +564,30 @@ const ShareDialog: React.FC<ShareDialogProps> = ({
                   Next
                 </Button>
               )}
+            </>
+          ) : isEditMode ? (
+            <>
+              <Button
+                variant="outline"
+                onClick={() => setIsEditMode(false)}
+                disabled={isSavingMetadata}
+              >
+                Cancel
+              </Button>
+              <Button 
+                onClick={handleSaveMetadata}
+                disabled={isSavingMetadata || !housingType || !residenceType || !residenceName || !roomType}
+                className="bg-cyber-gradient hover:opacity-90"
+              >
+                {isSavingMetadata ? (
+                  <>
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    Saving...
+                  </>
+                ) : (
+                  "Save Changes"
+                )}
+              </Button>
             </>
           ) : (
             <>

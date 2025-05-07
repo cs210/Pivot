@@ -39,7 +39,7 @@ export default function ProjectPage() {
     setIsEditing,
     handleUpdateProjectName,
     handleToggleProjectOrg,
-    updateProjectMetadata,
+    handleUpdateMetadata,
   } = useProject(projectId, router);
 
   useEffect(() => {
@@ -202,18 +202,7 @@ export default function ProjectPage() {
         shareLink={shareLink}
         currentProject={project}
         handleToggleProjectOrg={handleToggleProjectOrg}
-        setProjects={(updatedProjects) => {
-          // Update the project in cache
-          if (project) {
-            // Find the updated project with the matching ID if it exists
-            const updatedProject = Array.isArray(updatedProjects) 
-              ? updatedProjects.find(p => p.id === project.id) 
-              : null;
-            
-            // Cache the updated project if found, otherwise cache the original
-            cacheProject(updatedProject || project);
-          }
-        }}
+        handleUpdateMetadata={handleUpdateMetadata}
       />
     </div>
   );
