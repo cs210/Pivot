@@ -70,8 +70,10 @@ export default function ImageGrid({
   // Update images when dependencies change
   useEffect(() => {
     // Determine which images to show based on currentFolder
-    const imagesToShow = currentFolder ? getCurrentFolderImages() : getAllImages();
-    
+    const imagesToShow = currentFolder
+      ? getCurrentFolderImages()
+      : getAllImages();
+
     // Create a map to track unique images by ID to ensure no duplicates
     const imageMap = new Map<string, RawImage>();
 
@@ -168,6 +170,7 @@ export default function ImageGrid({
                 ref={folderInputRef}
                 type="file"
                 className="hidden"
+                // @ts-ignore
                 webkitdirectory=""
                 directory=""
                 multiple
