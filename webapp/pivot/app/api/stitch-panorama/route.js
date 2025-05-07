@@ -7,6 +7,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { promisify } from 'util';
 import { exec } from 'child_process';
 import { createClient } from '@/utils/supabase/server';
+import sharp from 'sharp';
 
 // Convert exec to Promise-based
 const execPromise = promisify(exec);
@@ -303,27 +304,20 @@ export async function POST(request) {
       );
     }
     
-    // Verify the file exists locally
+    // Generate thumbnail using sharp
     try {
-      log(`Verifying local panorama file: ${localResultPath}`);
+      log(`Generating thumbnail for panorama`);
+      const thumbnailBuffer = await sharp(localResultPath)
+        .resize(800, 800, {
+          fit: 'inside',
+          withoutEnlargement: true
+        })
+        .jpeg({ quality: 95 })
+        .toBuffer();
       
-      const localFiles = await readdir(jobDir);
-      log(`Local directory contents: ${localFiles.join(', ')}`);
+      log(`Successfully generated thumbnail`);
       
-      if (!localFiles.includes(outputFileName)) {
-        log(`Error: Panorama file not found in local directory`);
-        return NextResponse.json(
-          { error: "Panorama file not found after copy", debug: debugLog },
-          { status: 500 }
-        );
-      }
-    } catch (error) {
-      log(`Failed to verify local panorama file: ${error.message}`);
-      // Continue anyway
-    }
-    
-    // Upload the panorama to Supabase
-    try {
+      // Upload the panorama to Supabase
       log(`Uploading panorama to Supabase storage`);
       
       // Read the local file
@@ -348,6 +342,22 @@ export async function POST(request) {
       }
       
       log(`Successfully uploaded panorama to Supabase: ${uploadData.path}`);
+
+      // Upload thumbnail to Supabase storage
+      const { data: thumbnailData, error: thumbnailError } = await supabase.storage
+        .from("thumbnails-private")
+        .upload(storagePath, thumbnailBuffer, {
+          contentType: "image/jpeg",
+          cacheControl: "3600",
+          upsert: true,
+        });
+
+      if (thumbnailError) {
+        log(`Error uploading thumbnail to Supabase: ${thumbnailError.message}`);
+        throw thumbnailError;
+      }
+
+      log(`Successfully uploaded thumbnail to Supabase: ${thumbnailData.path}`);
       
       // Update the panorama record in the database
       const { error: updateError } = await supabase
@@ -380,8 +390,8 @@ export async function POST(request) {
         message: "Panorama created and uploaded successfully",
         debug: debugLog
       });
-    } catch (uploadError) {
-      log(`Failed to upload panorama to Supabase: ${uploadError.message}`);
+    } catch (error) {
+      log(`Failed to process panorama: ${error.message}`);
       
       // Update the database to mark the panorama as failed
       try {
@@ -390,7 +400,7 @@ export async function POST(request) {
           .update({
             metadata: {
               status: 'failed',
-              error: uploadError.message || "Failed to upload panorama",
+              error: error.message || "Failed to process panorama",
               source_images: sourceImages,
               source_folder: sourceFolder,
             }
@@ -403,7 +413,7 @@ export async function POST(request) {
       }
       
       return NextResponse.json(
-        { error: `Failed to upload panorama: ${uploadError.message}`, debug: debugLog },
+        { error: `Failed to process panorama: ${error.message}`, debug: debugLog },
         { status: 500 }
       );
     }
