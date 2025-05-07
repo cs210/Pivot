@@ -4,7 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
-import { Save, Share2, AlertCircle } from "lucide-react";
+import { Save, Share2, AlertCircle, Building } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 
 interface ProjectSettingsProps {
@@ -13,7 +13,7 @@ interface ProjectSettingsProps {
   setProjectName: (name: string) => void;
   handleUpdateProject: () => void;
   inOrganization: boolean;
-  handleShareProject?: () => void;
+  handleToggleProjectOrg?: () => void;
 }
 
 export default function ProjectSettings({
@@ -22,11 +22,23 @@ export default function ProjectSettings({
   setProjectName,
   handleUpdateProject,
   inOrganization = false,
-  handleShareProject,
+  handleToggleProjectOrg,
 }: ProjectSettingsProps) {
   const [activeSection, setActiveSection] = useState("general");
-  console.log("Org ID:", projectId);
-  console.log("Org id value:");
+  const [isToggling, setIsToggling] = useState(false);
+
+  const handleShareToggle = async () => {
+    if (!handleToggleProjectOrg) return;
+
+    setIsToggling(true);
+    try {
+      await handleToggleProjectOrg();
+    } catch (error) {
+      console.error("Error toggling organization access:", error);
+    } finally {
+      setIsToggling(false);
+    }
+  };
 
   return (
     <div className="grid grid-cols-1 gap-6 md:grid-cols-12">
@@ -114,18 +126,20 @@ export default function ProjectSettings({
                   <div className="space-y-1">
                     <h3 className="font-medium">Organization Access</h3>
                     <p className="text-sm text-muted-foreground">
-                      When enabled, anyone in your organization with the link can view this project
+                      When enabled, anyone in your organization can access this project with the link
                     </p>
                   </div>
                   <Switch
                     checked={inOrganization}
-                    onCheckedChange={handleShareProject}
+                    onCheckedChange={handleShareToggle}
+                    disabled={isToggling}
                     className="data-[state=checked]:bg-primary"
                   />
                 </div>
 
                 <Button
-                  onClick={handleShareProject}
+                  onClick={handleShareToggle}
+                  disabled={isToggling}
                   variant={inOrganization ? "default" : "outline"}
                   className={`w-full ${
                     inOrganization
@@ -133,9 +147,26 @@ export default function ProjectSettings({
                       : "cyber-border"
                   }`}
                 >
-                  <Share2 className="mr-2 h-4 w-4" />
-                  {inOrganization ? "Manage Sharing" : "Share Project"}
+                  <Building className="mr-2 h-4 w-4" />
+                  {isToggling ? (
+                    "Processing..."
+                  ) : inOrganization ? (
+                    "Disable Organization Access"
+                  ) : (
+                    "Enable Organization Access"
+                  )}
                 </Button>
+
+                {inOrganization && (
+                  <Button
+                    onClick={() => window.open(`/shared/${projectId}`, "_blank")}
+                    variant="outline"
+                    className="w-full mt-4"
+                  >
+                    <Share2 className="mr-2 h-4 w-4" />
+                    View Shared Project
+                  </Button>
+                )}
               </div>
             </CardContent>
           </Card>

@@ -11,22 +11,13 @@ import ProjectSettings from "./components/ProjectSettings";
 import RawImagesTab from "./components/tabs/RawImagesTab";
 import PanoramasTab from "./components/tabs/PanoramasTab";
 import { useProject } from "../../../hooks/useProject";
+import { cacheProject } from "../../../hooks/cache-service";
 import PlaceLocationsTabContent from "./components/EnhancedImageGrid";
 import { Button } from "@/components/ui/button";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
+import ShareDialog from "./components/ShareDialog";
 import {
   Share2,
-  Copy,
-  CheckCircle2,
-  Globe,
-  Link as LinkIcon,
+  Building,
 } from "lucide-react";
 
 export default function ProjectPage() {
@@ -36,7 +27,6 @@ export default function ProjectPage() {
   const [activeTab, setActiveTab] = useState("raw-images");
   const [shareDialogOpen, setShareDialogOpen] = useState(false);
   const [shareLink, setShareLink] = useState("");
-  const [copied, setCopied] = useState(false);
 
   const {
     project,
@@ -54,48 +44,14 @@ export default function ProjectPage() {
   useEffect(() => {
     if (project) {
       // Generate the share link when project loads
-      if (inOrganization) {
-        const baseUrl = window.location.origin;
-        const link = `${baseUrl}/shared/${projectId}`;
-        setShareLink(link);
-      }
+      const baseUrl = window.location.origin;
+      const link = `${baseUrl}/shared/${projectId}`;
+      setShareLink(link);
     }
-  }, [project, projectId, inOrganization]);
+  }, [project, projectId]);
 
   const handleShareButtonClick = () => {
-    // If already shared, simply show the share dialog with the link
-    if (inOrganization) {
-      setShareDialogOpen(true);
-    } else {
-      // If not in organization, toggle to add to organization first
-      handleToggleOrg();
-    }
-  };
-  
-  const handleToggleOrg = async () => {
-    try {
-      await handleToggleProjectOrg();
-
-      if (inOrganization) {
-        // If the project is now shared with organization members, generate the share link
-        const baseUrl = window.location.origin;
-        const link = `${baseUrl}/shared/${projectId}`;
-        setShareLink(link);
-        setShareDialogOpen(true);
-      }
-    } catch (error) {
-      console.error("Error toggling project organization:", error);
-    }
-  };
-
-  const copyToClipboard = async () => {
-    try {
-      await navigator.clipboard.writeText(shareLink);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-    } catch (err) {
-      console.error("Failed to copy: ", err);
-    }
+    setShareDialogOpen(true);
   };
 
   if (loading) {
@@ -138,13 +94,13 @@ export default function ProjectPage() {
             >
               {inOrganization ? (
                 <>
-                  <Globe className="mr-2 h-4 w-4" />
-                  Shared
+                  <Building className="mr-2 h-4 w-4" />
+                  Shared with Organization
                 </>
               ) : (
                 <>
                   <Share2 className="mr-2 h-4 w-4" />
-                  Share Project
+                  Share with Organization
                 </>
               )}
             </Button>
@@ -211,7 +167,7 @@ export default function ProjectPage() {
                   setProjectName={setProjectName}
                   handleUpdateProject={handleUpdateProjectName}
                   inOrganization={inOrganization}
-                  handleShareProject={handleToggleOrg}
+                  handleToggleProjectOrg={handleToggleProjectOrg}
                 />
             </TabsContent>
           </Tabs>
@@ -239,74 +195,24 @@ export default function ProjectPage() {
         </div>
       </footer>
 
-      {/* Share Dialog */}
-      <Dialog open={shareDialogOpen} onOpenChange={setShareDialogOpen}>
-        <DialogContent className="sm:max-w-[425px] bg-background text-white">
-          <DialogHeader>
-            <DialogTitle className="text-white">Share Project</DialogTitle>
-            <DialogDescription className="text-white/70">
-              Anyone with this link can view this project without needing to log
-              in.
-            </DialogDescription>
-          </DialogHeader>
-
-          <div className="flex items-center bg-primary/10 rounded-md p-3 mb-3">
-            <LinkIcon className="h-4 w-4 mr-2 text-primary" />
-            <span className="text-sm">
-              {inOrganization
-                ? "This project is publicly accessible"
-                : "Share this project to generate a link"}
-            </span>
-          </div>
-
-          <div className="flex items-center space-x-2 bg-muted/30 p-3 rounded-md">
-            <input
-              type="text"
-              readOnly
-              value={shareLink}
-              className="flex-1 bg-transparent border-none focus:outline-none text-sm text-white"
-            />
-            <Button
-              size="sm"
-              variant="ghost"
-              onClick={copyToClipboard}
-              className="h-8"
-            >
-              {copied ? (
-                <CheckCircle2 className="h-4 w-4 text-green-500" />
-              ) : (
-                <Copy className="h-4 w-4" />
-              )}
-            </Button>
-          </div>
-
-          <DialogFooter className="mt-4 flex justify-between">
-            {inOrganization && (
-              <Button
-                variant="outline"
-                onClick={handleToggleOrg}
-                className="border-destructive/40 text-destructive hover:bg-destructive/10"
-              >
-                Make Private
-              </Button>
-            )}
-            <Button
-              onClick={() => {
-                if (!inOrganization) {
-                  handleToggleOrg();
-                } else {
-                  setShareDialogOpen(false);
-                }
-              }}
-              className={`text-white ${
-                inOrganization ? "bg-cyber-gradient hover:opacity-90" : "bg-primary"
-              }`}
-            >
-              {inOrganization ? "Done" : "Share Project"}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <ShareDialog 
+        open={shareDialogOpen} 
+        onOpenChange={setShareDialogOpen}
+        shareLink={shareLink}
+        currentProject={project}
+        setProjects={(updatedProjects) => {
+          // Update the project in cache
+          if (project) {
+            // Find the updated project with the matching ID if it exists
+            const updatedProject = Array.isArray(updatedProjects) 
+              ? updatedProjects.find(p => p.id === project.id) 
+              : null;
+            
+            // Cache the updated project if found, otherwise cache the original
+            cacheProject(updatedProject || project);
+          }
+        }}
+      />
     </div>
   );
 }

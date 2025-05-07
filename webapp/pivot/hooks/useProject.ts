@@ -126,6 +126,7 @@ export function useProject(projectId: string, router: any) {
   const handleToggleProjectOrg = async () => {
     try {
       let newOrgId = null; // Changed from empty string to null
+      let updatedMetadata = project?.metadata || {};
       
       if (!inOrganization) {
         // Find the organization ID that matches the user's email domain
@@ -148,17 +149,27 @@ export function useProject(projectId: string, router: any) {
         // We're removing the organization, set to null
         newOrgId = null;
         setInOrganization(false);
+        
+        // Also clear the housing metadata when removing org access
+        updatedMetadata = {};
       }
 
       const { error } = await supabase
         .from("projects")
-        .update({ organization_id: newOrgId })
+        .update({ 
+          organization_id: newOrgId,
+          metadata: updatedMetadata
+        })
         .eq("id", projectId);
 
       if (error) throw error;
 
       const updatedProject = project 
-        ? { ...project, organization_id: newOrgId } 
+        ? { 
+            ...project, 
+            organization_id: newOrgId,
+            metadata: updatedMetadata
+          } 
         : null;
 
       // Update state
