@@ -1,6 +1,6 @@
 // app/api/stitch-panorama/route.js
 import { NextResponse } from 'next/server';
-import { writeFile, mkdir, readdir, readFile } from 'fs/promises';
+import { writeFile, mkdir, readFile } from 'fs/promises';
 import { existsSync } from 'fs';
 import path from 'path';
 import { v4 as uuidv4 } from 'uuid';

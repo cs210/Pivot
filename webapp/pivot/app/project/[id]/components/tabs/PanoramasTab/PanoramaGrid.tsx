@@ -37,7 +37,6 @@ interface PanoramaGridProps {
 }
 
 export default function PanoramaGrid({
-  panoramas,
   selectedPanoramas,
   viewMode,
   setViewMode,
