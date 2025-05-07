@@ -28,7 +28,7 @@ interface ShareDialogProps {
   onOpenChange: (open: boolean) => void;
   shareLink: string;
   currentProject: Project | null;
-  handleToggleProjectOrg?: () => Promise<boolean>;
+  handleToggleProjectOrg?: (metadata?: any) => Promise<boolean>;
   setProjectMetadata: (metadata: any) => Promise<boolean>;
 }
 
@@ -54,13 +54,6 @@ const ShareDialog: React.FC<ShareDialogProps> = ({
   // Correctly flatten residence lists and ensure uniqueness
   const allUndergraduateResidences = [...new Set(Object.values(UNDERGRADUATE_RESIDENCES).flat())];
   const allGraduateResidences = [...new Set(Object.values(GRADUATE_RESIDENCES).flat())];
-
-  // Log the arrays when the component renders
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  useEffect(() => {
-    console.log("Undergraduate residences:", allUndergraduateResidences);
-    console.log("Graduate residences:", allGraduateResidences);
-  }, []);
 
   const copyToClipboard = () => {
     navigator.clipboard.writeText(shareLink);
@@ -91,20 +84,23 @@ const ShareDialog: React.FC<ShareDialogProps> = ({
     setIsTogglingOrgAccess(true);
     
     try {
-      const metadataSuccess = await setProjectMetadata({
+      // Create the housing metadata object
+      const housingMetadata = {
         housing_type: housingType,
         residence_type: residenceType,
         residence_name: residenceName,
-        room_type: roomType,
-      });
-      if (!metadataSuccess) {
-        throw new Error("Failed to set project metadata");
-      }
-
-      const orgSuccess = await handleToggleProjectOrg();
+        room_type: roomType
+      };
+      
+      console.log("Adding project to org with metadata:", housingMetadata);
+      
+      // Pass the metadata directly to handleToggleProjectOrg
+      const orgSuccess = await handleToggleProjectOrg(housingMetadata);
+      
       if (!orgSuccess) {
         throw new Error("Failed to add project to organization");
       }
+      
       setActiveStep(5);
     } catch (error) {
       console.error("Error sharing project:", error);

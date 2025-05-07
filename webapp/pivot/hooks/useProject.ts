@@ -142,30 +142,36 @@ export function useProject(projectId: string, router: any) {
     
     try {
       console.log("Updating project metadata:", newMetadata);
-
-      const updatedMetadata = newMetadata;
       
       const { error } = await supabase
         .from("projects")
-        .update({ metadata: updatedMetadata })
+        .update({ metadata: newMetadata })
         .eq("id", projectId);
         
       if (error) throw error;
+
+      console.log("Project metadata updated successfully");
       
       // Update local state
-      setMetadata(updatedMetadata);
+      setMetadata(newMetadata);
+
+      console.log("Project metadata in state updated:", metadata);
       
       // Update project state with new metadata
       const updatedProject = {
         ...project,
-        metadata: updatedMetadata
+        metadata: newMetadata
       };
       
       setProject(updatedProject);
+
+      console.log("Project state updated with new metadata:", updatedProject);
       
       // Update cache
       cacheProject(updatedProject);
       
+      console.log("Project metadata cached successfully");
+
       return true;
     } catch (error) {
       console.error("Error updating project metadata:", error);
@@ -173,7 +179,7 @@ export function useProject(projectId: string, router: any) {
     }
   };
 
-  const handleToggleProjectOrg = async () => {
+  const handleToggleProjectOrg = async (customMetadata?: any) => {
     try {
       let newOrgId = null;
       
@@ -200,12 +206,17 @@ export function useProject(projectId: string, router: any) {
         setInOrganization(false);
       }
 
+      // Use the provided customMetadata if available, otherwise use the current state
+      const metadataToUse = customMetadata || metadata;
+      
+      console.log("Updating project with organization_id:", newOrgId, "and metadata:", metadataToUse);
+
       // Perform the update in the database
       const { error } = await supabase
         .from("projects")
         .update({ 
           organization_id: newOrgId,
-          metadata: metadata
+          metadata: metadataToUse
         })
         .eq("id", projectId);
 
@@ -216,11 +227,15 @@ export function useProject(projectId: string, router: any) {
         ? { 
             ...project, 
             organization_id: newOrgId,
+            metadata: metadataToUse
           } 
         : null;
 
       // Update state
       setProject(updatedProject);
+      
+      // Also update metadata state to keep it in sync
+      setMetadata(metadataToUse);
 
       // Update cache
       if (updatedProject) {
