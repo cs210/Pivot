@@ -71,7 +71,7 @@ const ShareDialog: React.FC<ShareDialogProps> = ({
   const filteredResidences = getFilteredResidences();
 
   // Get room types specific to the selected residence
-  const getFilteredRoomTypes = () => {
+  const getFilteredRoomTypes = (): string[] => {
     if (!residenceName) return [];
     
     if (housingType === "Undergraduate") {
@@ -284,7 +284,7 @@ const ShareDialog: React.FC<ShareDialogProps> = ({
               onChange={(e) => setRoomType(e.target.value)}
             >
               <option value="">Select room type</option>
-              {filteredRoomTypes.map(type => (
+              {filteredRoomTypes.map((type: string) => (
                 <option key={type} value={type}>{type}</option>
               ))}
             </select>
