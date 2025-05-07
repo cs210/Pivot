@@ -10,6 +10,7 @@ import {
 } from "../../../../components/ui/dialog";
 import { Button } from "../../../../components/ui/button";
 import { RadioGroup, RadioGroupItem } from "../../../../components/ui/radio-group";
+import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "../../../../components/ui/select";
 import { useRouter } from 'next/navigation';
 import { Project } from "../../../../hooks/useProject";
 import { Label } from "../../../../components/ui/label";
@@ -227,21 +228,31 @@ const ShareDialog: React.FC<ShareDialogProps> = ({
         {activeStep === 2 && (
           <div className="space-y-4">
             <h3 className="text-lg font-medium">Select Residence Type</h3>
-            <select
-              className="w-full h-9 rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm focus:outline-none"
-              value={residenceType}
-              onChange={(e) => setResidenceType(e.target.value)}
-            >
-              <option value="">Select residence type</option>
+            <p className="text-sm text-muted-foreground">
               {housingType === "Undergraduate" 
-                ? UNDERGRADUATE_RESIDENCE_TYPES.map(type => (
-                    <option key={type} value={type}>{type}</option>
-                  ))
-                : GRADUATE_RESIDENCE_TYPES.map(type => (
-                    <option key={type} value={type}>{type}</option>
-                  ))
-              }
-            </select>
+                ? "Choose the type of undergraduate housing" 
+                : "Choose the type of graduate housing"}
+            </p>
+            
+            <Select value={residenceType} onValueChange={setResidenceType}>
+              <SelectTrigger className="w-full">
+                <SelectValue placeholder="Select residence type" />
+              </SelectTrigger>
+              <SelectContent>
+                {housingType === "Undergraduate" 
+                  ? UNDERGRADUATE_RESIDENCE_TYPES.map((type) => (
+                      <SelectItem key={type} value={type}>
+                        {type}
+                      </SelectItem>
+                    ))
+                  : GRADUATE_RESIDENCE_TYPES.map((type) => (
+                      <SelectItem key={type} value={type}>
+                        {type}
+                      </SelectItem>
+                    ))
+                }
+              </SelectContent>
+            </Select>
           </div>
         )}
 
@@ -253,20 +264,22 @@ const ShareDialog: React.FC<ShareDialogProps> = ({
               Choose the specific building or residence
             </p>
             
-            <select
-              className="w-full h-9 rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm focus:outline-none text-white"
-              value={residenceName}
-              onChange={(e) => {
-                setResidenceName(e.target.value);
-                // Reset room type when residence changes
-                setRoomType("");
-              }}
-            >
-              <option value="">Select residence</option>
-              {filteredResidences.map(name => (
-                <option key={name} value={name}>{name}</option>
-              ))}
-            </select>
+            <Select value={residenceName} onValueChange={(value) => {
+              setResidenceName(value);
+              // Reset room type when residence changes
+              setRoomType("");
+            }}>
+              <SelectTrigger className="w-full">
+                <SelectValue placeholder="Select residence" />
+              </SelectTrigger>
+              <SelectContent>
+                {filteredResidences.map((name) => (
+                  <SelectItem key={name} value={name}>
+                    {name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
         )}
 
@@ -278,16 +291,18 @@ const ShareDialog: React.FC<ShareDialogProps> = ({
               Choose the type of room in this residence
             </p>
             
-            <select
-              className="w-full h-9 rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm focus:outline-none text-white"
-              value={roomType}
-              onChange={(e) => setRoomType(e.target.value)}
-            >
-              <option value="">Select room type</option>
-              {filteredRoomTypes.map((type: string) => (
-                <option key={type} value={type}>{type}</option>
-              ))}
-            </select>
+            <Select value={roomType} onValueChange={setRoomType}>
+              <SelectTrigger className="w-full">
+                <SelectValue placeholder="Select room type" />
+              </SelectTrigger>
+              <SelectContent>
+                {filteredRoomTypes.map((type: string) => (
+                  <SelectItem key={type} value={type}>
+                    {type}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
         )}
 
