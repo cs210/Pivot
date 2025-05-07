@@ -53,6 +53,59 @@ const ShareDialog: React.FC<ShareDialogProps> = ({
   const allUndergraduateResidences = [...new Set(Object.values(UNDERGRADUATE_RESIDENCES).flat())];
   const allGraduateResidences = [...new Set(Object.values(GRADUATE_RESIDENCES).flat())];
 
+  // Modified for filtering residences by type
+  const getFilteredResidences = () => {
+    if (!residenceType) return [];
+    
+    if (housingType === "Undergraduate") {
+      // Return only residences that match the selected type
+      return UNDERGRADUATE_RESIDENCES[residenceType as keyof typeof UNDERGRADUATE_RESIDENCES] || [];
+    } else if (housingType === "Graduate") {
+      return GRADUATE_RESIDENCES[residenceType as keyof typeof GRADUATE_RESIDENCES] || [];
+    }
+    
+    return [];
+  };
+  
+  // Get the filtered residences based on the selected residence type
+  const filteredResidences = getFilteredResidences();
+
+  // Get room types specific to the selected residence
+  const getFilteredRoomTypes = () => {
+    if (!residenceName) return [];
+    
+    if (housingType === "Undergraduate") {
+      // Check if there are specific room types for this house
+      const UNDERGRADUATE_ROOM_TYPES_BY_HOUSE = require("../../../../lib/stanford-housing-data").UNDERGRADUATE_ROOM_TYPES_BY_HOUSE;
+      if (UNDERGRADUATE_ROOM_TYPES_BY_HOUSE[residenceName]) {
+        return UNDERGRADUATE_ROOM_TYPES_BY_HOUSE[residenceName];
+      }
+      
+      // Fall back to room types for this residence type
+      const UNDERGRADUATE_ROOM_TYPES_BY_RESIDENCE_TYPE = require("../../../../lib/stanford-housing-data").UNDERGRADUATE_ROOM_TYPES_BY_RESIDENCE_TYPE;
+      if (residenceType && UNDERGRADUATE_ROOM_TYPES_BY_RESIDENCE_TYPE[residenceType]) {
+        return UNDERGRADUATE_ROOM_TYPES_BY_RESIDENCE_TYPE[residenceType];
+      }
+      
+      // If no specific room types are found, return all undergraduate room types
+      return UNDERGRADUATE_ROOM_TYPES;
+    } else if (housingType === "Graduate") {
+      // Get room types specific to this graduate residence
+      const GRADUATE_ROOM_TYPES_BY_RESIDENCE = require("../../../../lib/stanford-housing-data").GRADUATE_ROOM_TYPES_BY_RESIDENCE;
+      if (GRADUATE_ROOM_TYPES_BY_RESIDENCE[residenceName]) {
+        return GRADUATE_ROOM_TYPES_BY_RESIDENCE[residenceName];
+      }
+      
+      // Fall back to all graduate room types
+      return GRADUATE_ROOM_TYPES;
+    }
+    
+    return [];
+  };
+  
+  // Get filtered room types based on selected residence
+  const filteredRoomTypes = getFilteredRoomTypes();
+
   const copyToClipboard = () => {
     navigator.clipboard.writeText(shareLink);
     setCopied(true);
@@ -203,17 +256,16 @@ const ShareDialog: React.FC<ShareDialogProps> = ({
             <select
               className="w-full h-9 rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm focus:outline-none text-white"
               value={residenceName}
-              onChange={(e) => setResidenceName(e.target.value)}
+              onChange={(e) => {
+                setResidenceName(e.target.value);
+                // Reset room type when residence changes
+                setRoomType("");
+              }}
             >
               <option value="">Select residence</option>
-              {housingType === "Undergraduate" 
-                ? allUndergraduateResidences.map(name => (
-                    <option key={name} value={name}>{name}</option>
-                  ))
-                : allGraduateResidences.map(name => (
-                    <option key={name} value={name}>{name}</option>
-                  ))
-              }
+              {filteredResidences.map(name => (
+                <option key={name} value={name}>{name}</option>
+              ))}
             </select>
           </div>
         )}
@@ -232,14 +284,9 @@ const ShareDialog: React.FC<ShareDialogProps> = ({
               onChange={(e) => setRoomType(e.target.value)}
             >
               <option value="">Select room type</option>
-              {housingType === "Undergraduate" 
-                ? UNDERGRADUATE_ROOM_TYPES.map(type => (
-                    <option key={type} value={type}>{type}</option>
-                  ))
-                : GRADUATE_ROOM_TYPES.map(type => (
-                    <option key={type} value={type}>{type}</option>
-                  ))
-              }
+              {filteredRoomTypes.map(type => (
+                <option key={type} value={type}>{type}</option>
+              ))}
             </select>
           </div>
         )}
