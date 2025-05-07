@@ -557,7 +557,7 @@ const openMarkerEditor = (mk: Marker) => {
                 maxFov={90}
                 onReady={initializeViewer}
                 containerClass="psv-container"
-                loader={false}
+                // loader property removed as it is not supported
               />
               <div className="psv-loading-spinner"></div>
               <div className="psv-loading-text">Loading Next 360°...</div>

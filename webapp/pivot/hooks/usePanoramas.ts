@@ -508,13 +508,14 @@ export function usePanoramas(projectId: string) {
             is_processing: false
           };
   
-        // ✅ Prevent duplicate appends
-        setPanoramas(prev => {
-          if (prev.some(p => p.id === newPanorama.id)) return prev;
-          return [...prev, newPanorama];
-        });
+          // ✅ Prevent duplicate appends
+          setPanoramas(prev => {
+            if (prev.some(p => p.id === newPanorama.id)) return prev;
+            return [...prev, newPanorama];
+          });
   
-        addPanoramaToCache(projectId, newPanorama);
+          addPanoramaToCache(projectId, newPanorama);
+        }
       }
   
       alert("360 images uploaded successfully");
