@@ -57,13 +57,13 @@ export default function ProjectSettings({
               >
                 General
               </Button>
-              <Button
+              {/* <Button
                 variant={activeSection === "sharing" ? "default" : "ghost"}
                 className="justify-start"
                 onClick={() => setActiveSection("sharing")}
               >
                 Sharing
-              </Button>
+              </Button> */}
               <Button
                 variant="ghost"
                 className="justify-start"
