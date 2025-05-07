@@ -12,13 +12,14 @@ export interface Project {
   name: string;
   created_at: string;
   user_id: string;
-  is_public: boolean;
-  organization_id: string;
+  is_public: boolean; 
+  organization_id: string | null;
   metadata: {
     housing_type?: string;
     residence_type?: string;
     residence_name?: string;
     room_type?: string;
+    [key: string]: any;  // Allow for any other metadata properties
   };
 }
 
@@ -27,8 +28,10 @@ export function useProject(projectId: string, router: any) {
   const [loading, setLoading] = useState(true);
   const [project, setProject] = useState<Project | null>(null);
   const [projectName, setProjectName] = useState("");
+  const [inOrganization, setInOrganization] = useState(false);
   const [user, setUser] = useState<any>(null);
   const [isEditing, setIsEditing] = useState(false);
+  const [metadata, setMetadata] = useState<any>({});
 
   useEffect(() => {
     const checkUser = async () => {
@@ -46,6 +49,15 @@ export function useProject(projectId: string, router: any) {
     checkUser();
   }, [router, supabase, projectId]);
 
+  // Update metadata when project changes
+  useEffect(() => {
+    if (project?.metadata) {
+      setMetadata(project.metadata);
+    } else {
+      setMetadata({});
+    }
+  }, [project]);
+
   const fetchProjectDetails = async (forceRefresh = false) => {
     try {
       setLoading(true);
@@ -57,6 +69,8 @@ export function useProject(projectId: string, router: any) {
         console.log("Using cached project details");
         setProject(cachedProject);
         setProjectName(cachedProject.name);
+        setInOrganization(!!cachedProject.organization_id); // Convert to boolean
+        setMetadata(cachedProject.metadata || {});
         setLoading(false);
         return;
       }
@@ -76,6 +90,8 @@ export function useProject(projectId: string, router: any) {
       // Update state
       setProject(data);
       setProjectName(data.name);
+      setInOrganization(!!data.organization_id); // Convert to boolean
+      setMetadata(data.metadata || {});
     } catch (error) {
       console.error("Error fetching project:", error);
       // If project not found, redirect to dashboard
@@ -85,7 +101,7 @@ export function useProject(projectId: string, router: any) {
     }
   };
 
-  const handleUpdateProject = async () => {
+  const handleUpdateProjectName = async () => {
     if (!projectName.trim()) {
       alert("Please enter a project name");
       return;
@@ -112,13 +128,122 @@ export function useProject(projectId: string, router: any) {
       }
       
       setIsEditing(false);
-      alert("Project updated successfully");
+      
+      return true;
     } catch (error) {
       console.error("Error updating project:", error);
-      alert("Failed to update project");
+      throw error;
+    }
+  };
+
+  const handleToggleProjectOrg = async (customMetadata?: any) => {
+    try {
+      let newOrgId = null;
+      
+      if (!inOrganization) {
+        // Find the organization ID that matches the user's email domain
+        const { data: orgs, error } = await supabase
+          .from("organizations")
+          .select("*")
+          .eq("domain_restriction", user.email.split("@")[1])
+          .single();
+        if (error) throw error;
+
+        if (orgs) {
+          console.log("Found organization");
+          newOrgId = orgs.id;
+          setInOrganization(true);
+        } else {
+          alert("No organization found for this email domain: " + user.email.split("@")[1]);
+          return false;
+        }
+      } else {
+        // We're removing the organization, set to null
+        newOrgId = null;
+        setInOrganization(false);
+      }
+
+      // Use the provided customMetadata if available, otherwise use the current state
+      const metadataToUse = customMetadata || metadata;
+      
+      console.log("Updating project with organization_id:", newOrgId, "and metadata:", metadataToUse);
+
+      // Perform the update in the database
+      const { error } = await supabase
+        .from("projects")
+        .update({ 
+          organization_id: newOrgId,
+          metadata: metadataToUse
+        })
+        .eq("id", projectId);
+
+      if (error) throw error;
+
+      // Update project state
+      const updatedProject = project 
+        ? { 
+            ...project, 
+            organization_id: newOrgId,
+            metadata: metadataToUse
+          } 
+        : null;
+
+      // Update state
+      setProject(updatedProject);
+      
+      // Also update metadata state to keep it in sync
+      setMetadata(metadataToUse);
+
+      // Update cache
+      if (updatedProject) {
+        cacheProject(updatedProject);
+      }
+
+      return true;
+    } catch (error) {
+      console.error("Error updating project organization:", error);
+      throw error;
     }
   };
   
+  // Update project metadata only without changing organization status
+  const handleUpdateMetadata = async (newMetadata: any) => {
+    if (!project) return false;
+    
+    try {
+      console.log("Updating project metadata only:", newMetadata);
+      
+      // Perform the update in the database
+      const { error } = await supabase
+        .from("projects")
+        .update({ metadata: newMetadata })
+        .eq("id", projectId);
+        
+      if (error) throw error;
+
+      console.log("Project metadata updated successfully");
+      
+      // Update local state
+      setMetadata(newMetadata);
+      
+      // Update project state with new metadata
+      const updatedProject = {
+        ...project,
+        metadata: newMetadata
+      };
+      
+      setProject(updatedProject);
+      
+      // Update cache
+      cacheProject(updatedProject);
+      
+      return true;
+    } catch (error) {
+      console.error("Error updating project metadata:", error);
+      return false;
+    }
+  };
+
   // Function to clear cache for the current project
   const clearCache = (allProjects = false) => {
     if (allProjects) {
@@ -130,12 +255,19 @@ export function useProject(projectId: string, router: any) {
 
   return {
     project,
+    setProject,
     loading,
     projectName,
+    inOrganization,
+    metadata,
+    setMetadata,
     setProjectName,
+    setInOrganization,
     isEditing,
     setIsEditing,
-    handleUpdateProject,
+    handleUpdateProjectName,
+    handleToggleProjectOrg,
+    handleUpdateMetadata,
     user,
     clearCache,
     fetchProjectDetails

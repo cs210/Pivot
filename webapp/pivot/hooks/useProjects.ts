@@ -7,7 +7,7 @@ export function useProjects(router: any) {
   const [loading, setLoading] = useState(true);
   const [projects, setProjects] = useState<Project[]>([]);
   const [user, setUser] = useState<any>(null);
-  
+    
   useEffect(() => {
     const checkUser = async () => {
       const { data: { user } } = await supabase.auth.getUser();
@@ -73,14 +73,12 @@ export function useProjects(router: any) {
             rows: 1,
             cols: 1,
             is_default: true,
-            is_public: false,
             user_id: userId,
           },
         ])
         .select();
       if (gridError) throw gridError;
       console.log("Grid created:", gridData);
-
 
       if (projectData && projectData.length > 0) {
         // Add the new project to the local state
@@ -112,12 +110,39 @@ export function useProjects(router: any) {
     }
   };
 
+  const updateProjectName = async (id: string, name: string) => {
+    try {
+      if (!name.trim()) {
+        throw new Error("Project name cannot be empty");
+      }
+
+      const { error } = await supabase
+        .from("projects")
+        .update({ name: name.trim() })
+        .eq("id", id);
+
+      if (error) throw error;
+
+      // Update local state with the new name
+      setProjects(projects.map(p => 
+        p.id === id ? { ...p, name: name.trim() } : p
+      ));
+      
+      return true;
+    } catch (error) {
+      console.error("Error updating project:", error);
+      throw error;
+    }
+  };
+
   return {
     projects,
     loading,
     user,
     createProject,
     deleteProject,
+    updateProjectName,
+    setProjects,
     refreshProjects: () => user && fetchProjects(user.id)
   };
 }

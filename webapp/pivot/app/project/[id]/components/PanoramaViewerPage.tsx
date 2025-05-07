@@ -135,7 +135,7 @@ export default function PanoramaViewerPage({
     markersPluginRef.current?.removeMarker(markerId);
     setCurrentPanorama((prev) => {
       if (!prev) return prev;
-      const remaining = (prev.metadata?.annotations || []).filter((m) => m.id !== markerId);
+      const remaining = (prev.metadata?.annotations || []).filter((m: Marker) => m.id !== markerId);
       return { ...prev, metadata: { ...(prev.metadata || {}), annotations: remaining } } as Panorama;
     });
   };
@@ -264,7 +264,7 @@ export default function PanoramaViewerPage({
         // (a) VIEW‑MODE → navigate through nav pins
         if (viewerModeRef.current === 'view') {
           if (viewerMarker.data?.type === 'navigation' && viewerMarker.data.targetPanoramaId) {
-            const dest = panoramas.find((p) => p.id === viewerMarker.data.targetPanoramaId);
+            const dest = panoramas.find((p) => p.id === viewerMarker.data?.targetPanoramaId);
             if (dest) setCurrentPanorama(dest);
           }
           return;
@@ -278,7 +278,7 @@ export default function PanoramaViewerPage({
           return;
 
         // 👉 try to get the pristine marker kept in metadata
-        const pristine = currentPanorama?.metadata?.annotations?.find((m) => m.id === viewerMarker.id);
+        const pristine = currentPanorama?.metadata?.annotations?.find((m: Marker) => m.id === viewerMarker.id);
 
         openMarkerEditor(pristine ?? viewerMarker);
       });
@@ -341,7 +341,7 @@ const openMarkerEditor = (mk: Marker) => {
     if (!currentPanorama || !editingMarker || !markersPluginRef.current) return;
 
     const list = currentPanorama.metadata?.annotations || [];
-    const target = list.find((m) => m.id === editingMarker);
+    const target = list.find((m: Marker) => m.id === editingMarker);
     if (!target) return;
     const isNav = target.data?.type === 'navigation';
 
@@ -366,7 +366,7 @@ const openMarkerEditor = (mk: Marker) => {
   const handleCancelEdit = () => {
     if (!editingMarker) return;
 
-    const ann = currentPanorama?.metadata?.annotations?.find((m) => m.id === editingMarker);
+    const ann = currentPanorama?.metadata?.annotations?.find((m: Marker) => m.id === editingMarker);
     const isEmptyNav = ann?.data?.type === 'navigation' && !ann.data.targetPanoramaId;
     const isEmptyAnno = !ann?.data?.type && (!ann?.tooltip || (typeof ann.tooltip === 'object' && 'content' in ann.tooltip && !(ann.tooltip as any).content));
 
@@ -386,7 +386,7 @@ const openMarkerEditor = (mk: Marker) => {
 
     removeMarkerLocal(editingMarker);
 
-    const meta = { ...(currentPanorama.metadata || {}), annotations: currentPanorama.metadata?.annotations?.filter((m) => m.id !== editingMarker) || [] };
+    const meta = { ...(currentPanorama.metadata || {}), annotations: currentPanorama.metadata?.annotations?.filter((m: Marker) => m.id !== editingMarker) || [] };
     await updatePanorama(currentPanorama.id, { metadata: meta });
     setCurrentPanorama({ ...currentPanorama, metadata: meta });
 
@@ -506,11 +506,11 @@ const openMarkerEditor = (mk: Marker) => {
           {editingMarker && !isSharedView && (
             <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 bg-white border border-gray-300 p-4 rounded shadow-lg z-50 text-white">
               <h3 className="font-bold mb-2">
-                {currentPanorama?.metadata?.annotations?.find((m) => m.id === editingMarker)?.data?.type === 'navigation'
+                {currentPanorama?.metadata?.annotations?.find((m: Marker) => m.id === editingMarker)?.data?.type === 'navigation'
                   ? 'Edit Navigation Marker'
                   : 'Edit Marker Annotation'}
               </h3>
-              {currentPanorama?.metadata?.annotations?.find((m) => m.id === editingMarker)?.data?.type === 'navigation' ? (
+              {currentPanorama?.metadata?.annotations?.find((m: Marker) => m.id === editingMarker)?.data?.type === 'navigation' ? (
                 <div className="mb-3">
                   <label className="block mb-1">Select Target Panorama:</label>
                   <select
@@ -557,7 +557,7 @@ const openMarkerEditor = (mk: Marker) => {
                 maxFov={90}
                 onReady={initializeViewer}
                 containerClass="psv-container"
-                loader={false}
+                // loader property removed as it is not supported
               />
               <div className="psv-loading-spinner"></div>
               <div className="psv-loading-text">Loading Next 360°...</div>

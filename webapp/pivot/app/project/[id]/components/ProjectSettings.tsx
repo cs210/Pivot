@@ -4,7 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
-import { Save, Share2, AlertCircle } from "lucide-react";
+import { Save, Share2, AlertCircle, Building } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 
 interface ProjectSettingsProps {
@@ -12,8 +12,8 @@ interface ProjectSettingsProps {
   projectName: string;
   setProjectName: (name: string) => void;
   handleUpdateProject: () => void;
-  isPublic?: boolean;
-  handleShareProject?: () => void;
+  inOrganization: boolean;
+  handleToggleProjectOrg?: () => void;
 }
 
 export default function ProjectSettings({
@@ -21,10 +21,24 @@ export default function ProjectSettings({
   projectName,
   setProjectName,
   handleUpdateProject,
-  isPublic = false,
-  handleShareProject,
+  inOrganization = false,
+  handleToggleProjectOrg,
 }: ProjectSettingsProps) {
   const [activeSection, setActiveSection] = useState("general");
+  const [isToggling, setIsToggling] = useState(false);
+
+  const handleShareToggle = async () => {
+    if (!handleToggleProjectOrg) return;
+
+    setIsToggling(true);
+    try {
+      await handleToggleProjectOrg();
+    } catch (error) {
+      console.error("Error toggling organization access:", error);
+    } finally {
+      setIsToggling(false);
+    }
+  };
 
   return (
     <div className="grid grid-cols-1 gap-6 md:grid-cols-12">
@@ -43,13 +57,13 @@ export default function ProjectSettings({
               >
                 General
               </Button>
-              <Button
+              {/* <Button
                 variant={activeSection === "sharing" ? "default" : "ghost"}
                 className="justify-start"
                 onClick={() => setActiveSection("sharing")}
               >
                 Sharing
-              </Button>
+              </Button> */}
               <Button
                 variant="ghost"
                 className="justify-start"
@@ -110,42 +124,49 @@ export default function ProjectSettings({
               <div className="space-y-6">
                 <div className="flex items-center justify-between p-4 bg-muted/30 rounded-md">
                   <div className="space-y-1">
-                    <h3 className="font-medium">Public Access</h3>
+                    <h3 className="font-medium">Organization Access</h3>
                     <p className="text-sm text-muted-foreground">
-                      When enabled, anyone with the link can view this project
-                      without logging in
+                      When enabled, anyone in your organization can access this project with the link
                     </p>
                   </div>
                   <Switch
-                    checked={isPublic}
-                    onCheckedChange={handleShareProject}
+                    checked={inOrganization}
+                    onCheckedChange={handleShareToggle}
+                    disabled={isToggling}
                     className="data-[state=checked]:bg-primary"
                   />
                 </div>
 
-                {isPublic && (
-                  <Alert className="bg-primary/10 border-primary/30">
-                    <AlertCircle className="h-4 w-4" />
-                    <AlertTitle>This project is publicly accessible</AlertTitle>
-                    <AlertDescription>
-                      Anyone with the link can view this project. You can
-                      disable public access at any time.
-                    </AlertDescription>
-                  </Alert>
-                )}
-
                 <Button
-                  onClick={handleShareProject}
-                  variant={isPublic ? "default" : "outline"}
+                  onClick={handleShareToggle}
+                  disabled={isToggling}
+                  variant={inOrganization ? "default" : "outline"}
                   className={`w-full ${
-                    isPublic
+                    inOrganization
                       ? "bg-cyber-gradient hover:opacity-90"
                       : "cyber-border"
                   }`}
                 >
-                  <Share2 className="mr-2 h-4 w-4" />
-                  {isPublic ? "Manage Sharing" : "Share Project"}
+                  <Building className="mr-2 h-4 w-4" />
+                  {isToggling ? (
+                    "Processing..."
+                  ) : inOrganization ? (
+                    "Disable Organization Access"
+                  ) : (
+                    "Enable Organization Access"
+                  )}
                 </Button>
+
+                {inOrganization && (
+                  <Button
+                    onClick={() => window.open(`/shared/${projectId}`, "_blank")}
+                    variant="outline"
+                    className="w-full mt-4"
+                  >
+                    <Share2 className="mr-2 h-4 w-4" />
+                    View Shared Project
+                  </Button>
+                )}
               </div>
             </CardContent>
           </Card>
