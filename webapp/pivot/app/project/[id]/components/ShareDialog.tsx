@@ -13,8 +13,6 @@ import { RadioGroup, RadioGroupItem } from "../../../../components/ui/radio-grou
 import { useRouter } from 'next/navigation';
 import { Project } from "../../../../hooks/useProject";
 import { Label } from "../../../../components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../../../../components/ui/select";
-import { createClient } from "@/utils/supabase/client";
 import { 
   HOUSING_TYPES, 
   UNDERGRADUATE_RESIDENCE_TYPES, 
@@ -22,9 +20,7 @@ import {
   UNDERGRADUATE_RESIDENCES, 
   GRADUATE_RESIDENCES, 
   UNDERGRADUATE_ROOM_TYPES, 
-  GRADUATE_ROOM_TYPES,
-  UNDERGRADUATE_ROOM_TYPES_BY_HOUSE,
-  UNDERGRADUATE_ROOM_TYPES_BY_RESIDENCE_TYPE
+  GRADUATE_ROOM_TYPES
 } from "../../../../lib/stanford-housing-data";
 
 interface ShareDialogProps {
@@ -32,7 +28,8 @@ interface ShareDialogProps {
   onOpenChange: (open: boolean) => void;
   shareLink: string;
   currentProject: Project | null;
-  setProjects: (projects: Project[]) => void;
+  handleToggleProjectOrg?: () => Promise<boolean>;
+  setProjectMetadata: (metadata: any) => Promise<boolean>;
 }
 
 const ShareDialog: React.FC<ShareDialogProps> = ({ 
@@ -40,87 +37,30 @@ const ShareDialog: React.FC<ShareDialogProps> = ({
   onOpenChange, 
   shareLink, 
   currentProject, 
-  setProjects 
+  handleToggleProjectOrg,
+  setProjectMetadata,
 }) => {
   const [copied, setCopied] = useState(false);
   const [isTogglingOrgAccess, setIsTogglingOrgAccess] = useState(false);
   const [activeStep, setActiveStep] = useState<number>(1);
   const router = useRouter();
-  const supabase = createClient();
   
-  // Housing selection state
+  // Housing selection state - simplified
   const [housingType, setHousingType] = useState<string>("");
   const [residenceType, setResidenceType] = useState<string>("");
   const [residenceName, setResidenceName] = useState<string>("");
   const [roomType, setRoomType] = useState<string>("");
+  
+  // Correctly flatten residence lists and ensure uniqueness
+  const allUndergraduateResidences = [...new Set(Object.values(UNDERGRADUATE_RESIDENCES).flat())];
+  const allGraduateResidences = [...new Set(Object.values(GRADUATE_RESIDENCES).flat())];
 
-  // Store the available options based on previous selections
-  const [availableResidenceTypes, setAvailableResidenceTypes] = useState<string[]>([]);
-  const [availableResidences, setAvailableResidences] = useState<string[]>([]);
-  const [availableRoomTypes, setAvailableRoomTypes] = useState<string[]>([]);
-
-  // Reset selections when housing type changes
+  // Log the arrays when the component renders
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
-    if (housingType === "Undergraduate") {
-      setAvailableResidenceTypes(UNDERGRADUATE_RESIDENCE_TYPES);
-    } else if (housingType === "Graduate") {
-      setAvailableResidenceTypes(GRADUATE_RESIDENCE_TYPES);
-    } else {
-      setAvailableResidenceTypes([]);
-    }
-    setResidenceType("");
-    setResidenceName("");
-    setRoomType("");
-    setAvailableResidences([]);
-    setAvailableRoomTypes([]);
-  }, [housingType]);
-
-  // Update available residences when residence type changes
-  useEffect(() => {
-    if (!residenceType) {
-      setAvailableResidences([]);
-      return;
-    }
-
-    if (housingType === "Undergraduate" && UNDERGRADUATE_RESIDENCES[residenceType]) {
-      setAvailableResidences(UNDERGRADUATE_RESIDENCES[residenceType]);
-    } else if (housingType === "Graduate" && GRADUATE_RESIDENCES[residenceType]) {
-      setAvailableResidences(GRADUATE_RESIDENCES[residenceType]);
-    } else {
-      setAvailableResidences([]);
-    }
-    setResidenceName("");
-    setRoomType("");
-    setAvailableRoomTypes([]);
-  }, [residenceType, housingType]);
-
-  // Update available room types when residence name changes
-  useEffect(() => {
-    if (!residenceName) {
-      setAvailableRoomTypes([]);
-      return;
-    }
-
-    if (housingType === "Undergraduate") {
-      if (UNDERGRADUATE_ROOM_TYPES_BY_HOUSE[residenceName]) {
-        // If we have specific room types for this house
-        setAvailableRoomTypes(UNDERGRADUATE_ROOM_TYPES_BY_HOUSE[residenceName]);
-      } else if (UNDERGRADUATE_ROOM_TYPES_BY_RESIDENCE_TYPE[residenceType]) {
-        // Fall back to room types for this residence type
-        setAvailableRoomTypes(UNDERGRADUATE_ROOM_TYPES_BY_RESIDENCE_TYPE[residenceType]);
-      } else {
-        // Fall back to all undergraduate room types
-        setAvailableRoomTypes(UNDERGRADUATE_ROOM_TYPES);
-      }
-    } else if (housingType === "Graduate") {
-      // Get room types specific to this graduate residence if available
-      const graduateRoomTypes = GRADUATE_ROOM_TYPES;
-      setAvailableRoomTypes(graduateRoomTypes);
-    } else {
-      setAvailableRoomTypes([]);
-    }
-    setRoomType("");
-  }, [residenceName, housingType, residenceType]);
+    console.log("Undergraduate residences:", allUndergraduateResidences);
+    console.log("Graduate residences:", allGraduateResidences);
+  }, []);
 
   const copyToClipboard = () => {
     navigator.clipboard.writeText(shareLink);
@@ -129,45 +69,13 @@ const ShareDialog: React.FC<ShareDialogProps> = ({
   };
   
   const handleRemoveFromOrg = async () => {
-    if (!currentProject) return;
+    if (!handleToggleProjectOrg) return;
     
     setIsTogglingOrgAccess(true);
     
     try {
-      // Remove from organization
-      const { error } = await supabase
-        .from("projects")
-        .update({ 
-          organization_id: null 
-        })
-        .eq("id", currentProject.id);
-        
-      if (error) throw error;
-      
-      // Update the projects list with the new data
-      if (setProjects) {
-        setProjects((prev) => {
-          // Check if prev is an array (which it should be)
-          if (Array.isArray(prev)) {
-            return prev.map((p) => 
-              p.id === currentProject.id
-                ? { 
-                    ...p, 
-                    organization_id: null
-                  }
-                : p
-            );
-          }
-          // If prev is not an array, just return it unchanged
-          console.error("setProjects was called with a non-array value:", prev);
-          return prev;
-        });
-      }
-      
-      // Close the dialog
+      await handleToggleProjectOrg();
       onOpenChange(false);
-      
-      // Force a refresh to get updated data
       router.refresh();
     } catch (error) {
       console.error("Error removing project from organization:", error);
@@ -178,88 +86,35 @@ const ShareDialog: React.FC<ShareDialogProps> = ({
   };
 
   const handleAddToOrg = async () => {
-    if (!currentProject) return;
+    if (!currentProject || !handleToggleProjectOrg) return;
     
     setIsTogglingOrgAccess(true);
     
     try {
-      // Get the organization ID for the user's email domain
-      const { data: userData } = await supabase.auth.getUser();
-      const user = userData?.user;
-      
-      if (!user) {
-        throw new Error("User not authenticated");
-      }
-      
-      const domain = user.email?.split('@')[1];
-      
-      if (!domain) {
-        throw new Error("Unable to determine user's email domain");
-      }
-      
-      const { data: orgData, error: orgError } = await supabase
-        .from("organizations")
-        .select("id")
-        .eq("domain_restriction", domain)
-        .single();
-        
-      if (orgError) {
-        throw new Error(`No organization found for domain ${domain}`);
-      }
-      
-      // Save the housing data to the project's metadata
-      const updatedMetadata = {
-        ...currentProject.metadata,
+      const metadataSuccess = await setProjectMetadata({
         housing_type: housingType,
         residence_type: residenceType,
         residence_name: residenceName,
-        room_type: roomType
-      };
-      
-      // Update the project in the database
-      const { error } = await supabase
-        .from("projects")
-        .update({ 
-          organization_id: orgData.id,
-          metadata: updatedMetadata
-        })
-        .eq("id", currentProject.id);
-        
-      if (error) throw error;
-      
-      // Update the projects in state
-      if (setProjects) {
-        setProjects((prev) => {
-          // Check if prev is an array (which it should be)
-          if (Array.isArray(prev)) {
-            return prev.map((p) => 
-              p.id === currentProject.id
-                ? { 
-                    ...p, 
-                    organization_id: orgData.id,
-                    metadata: updatedMetadata 
-                  }
-                : p
-            );
-          }
-          // If prev is not an array, just return it unchanged
-          console.error("setProjects was called with a non-array value:", prev);
-          return prev;
-        });
+        room_type: roomType,
+      });
+      if (!metadataSuccess) {
+        throw new Error("Failed to set project metadata");
       }
-      
-      // Move to the final step showing the share link
+
+      const orgSuccess = await handleToggleProjectOrg();
+      if (!orgSuccess) {
+        throw new Error("Failed to add project to organization");
+      }
       setActiveStep(5);
     } catch (error) {
       console.error("Error sharing project:", error);
-      alert("Failed to share project: " + (error instanceof Error ? error.message : "Unknown error"));
+      alert("Failed to share project");
     } finally {
       setIsTogglingOrgAccess(false);
     }
   };
 
   const handleNext = () => {
-    // Validate current step before proceeding
     if (activeStep === 1 && !housingType) {
       alert("Please select a housing type");
       return;
@@ -286,33 +141,6 @@ const ShareDialog: React.FC<ShareDialogProps> = ({
   const handleBack = () => {
     setActiveStep(prev => Math.max(1, prev - 1));
   };
-
-  // Reset state when dialog is opened/closed
-  useEffect(() => {
-    if (open) {
-      // If the project already has housing data in its metadata, use that as initial values
-      if (currentProject?.metadata) {
-        const { housing_type, residence_type, residence_name, room_type } = currentProject.metadata;
-        
-        if (housing_type) {
-          setHousingType(housing_type);
-          // The rest of the values will be set by the useEffect hooks above
-        }
-        
-        // If all housing data is present and project is in an organization, skip to the last step
-        if (housing_type && residence_type && residence_name && room_type && currentProject.organization_id) {
-          setActiveStep(5);
-        }
-      } else {
-        // Reset to first step with no selections
-        setActiveStep(1);
-        setHousingType("");
-        setResidenceType("");
-        setResidenceName("");
-        setRoomType("");
-      }
-    }
-  }, [open, currentProject]);
   
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -352,24 +180,21 @@ const ShareDialog: React.FC<ShareDialogProps> = ({
         {activeStep === 2 && (
           <div className="space-y-4">
             <h3 className="text-lg font-medium">Select Residence Type</h3>
-            <p className="text-sm text-muted-foreground">
+            <select
+              className="w-full h-9 rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm focus:outline-none"
+              value={residenceType}
+              onChange={(e) => setResidenceType(e.target.value)}
+            >
+              <option value="">Select residence type</option>
               {housingType === "Undergraduate" 
-                ? "Choose the type of undergraduate housing" 
-                : "Choose the type of graduate housing"}
-            </p>
-            
-            <Select value={residenceType} onValueChange={setResidenceType}>
-              <SelectTrigger className="w-full">
-                <SelectValue placeholder="Select residence type" />
-              </SelectTrigger>
-              <SelectContent>
-                {availableResidenceTypes.map((type) => (
-                  <SelectItem key={type} value={type}>
-                    {type}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+                ? UNDERGRADUATE_RESIDENCE_TYPES.map(type => (
+                    <option key={type} value={type}>{type}</option>
+                  ))
+                : GRADUATE_RESIDENCE_TYPES.map(type => (
+                    <option key={type} value={type}>{type}</option>
+                  ))
+              }
+            </select>
           </div>
         )}
 
@@ -381,18 +206,21 @@ const ShareDialog: React.FC<ShareDialogProps> = ({
               Choose the specific building or residence
             </p>
             
-            <Select value={residenceName} onValueChange={setResidenceName}>
-              <SelectTrigger className="w-full">
-                <SelectValue placeholder="Select residence" />
-              </SelectTrigger>
-              <SelectContent>
-                {availableResidences.map((name) => (
-                  <SelectItem key={name} value={name}>
-                    {name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <select
+              className="w-full h-9 rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm focus:outline-none text-white"
+              value={residenceName}
+              onChange={(e) => setResidenceName(e.target.value)}
+            >
+              <option value="">Select residence</option>
+              {housingType === "Undergraduate" 
+                ? allUndergraduateResidences.map(name => (
+                    <option key={name} value={name}>{name}</option>
+                  ))
+                : allGraduateResidences.map(name => (
+                    <option key={name} value={name}>{name}</option>
+                  ))
+              }
+            </select>
           </div>
         )}
 
@@ -404,18 +232,21 @@ const ShareDialog: React.FC<ShareDialogProps> = ({
               Choose the type of room in this residence
             </p>
             
-            <Select value={roomType} onValueChange={setRoomType}>
-              <SelectTrigger className="w-full">
-                <SelectValue placeholder="Select room type" />
-              </SelectTrigger>
-              <SelectContent>
-                {availableRoomTypes.map((type) => (
-                  <SelectItem key={type} value={type}>
-                    {type}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <select
+              className="w-full h-9 rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm focus:outline-none text-white"
+              value={roomType}
+              onChange={(e) => setRoomType(e.target.value)}
+            >
+              <option value="">Select room type</option>
+              {housingType === "Undergraduate" 
+                ? UNDERGRADUATE_ROOM_TYPES.map(type => (
+                    <option key={type} value={type}>{type}</option>
+                  ))
+                : GRADUATE_ROOM_TYPES.map(type => (
+                    <option key={type} value={type}>{type}</option>
+                  ))
+              }
+            </select>
           </div>
         )}
 

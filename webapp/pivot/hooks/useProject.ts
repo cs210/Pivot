@@ -13,12 +13,13 @@ export interface Project {
   created_at: string;
   user_id: string;
   is_public: boolean; 
-  organization_id: string;
+  organization_id: string | null;
   metadata: {
     housing_type?: string;
     residence_type?: string;
     residence_name?: string;
     room_type?: string;
+    [key: string]: any;  // Allow for any other metadata properties
   };
 }
 
@@ -30,6 +31,7 @@ export function useProject(projectId: string, router: any) {
   const [inOrganization, setInOrganization] = useState(false);
   const [user, setUser] = useState<any>(null);
   const [isEditing, setIsEditing] = useState(false);
+  const [metadata, setMetadata] = useState<any>({});
 
   useEffect(() => {
     const checkUser = async () => {
@@ -47,6 +49,15 @@ export function useProject(projectId: string, router: any) {
     checkUser();
   }, [router, supabase, projectId]);
 
+  // Update metadata when project changes
+  useEffect(() => {
+    if (project?.metadata) {
+      setMetadata(project.metadata);
+    } else {
+      setMetadata({});
+    }
+  }, [project]);
+
   const fetchProjectDetails = async (forceRefresh = false) => {
     try {
       setLoading(true);
@@ -59,6 +70,7 @@ export function useProject(projectId: string, router: any) {
         setProject(cachedProject);
         setProjectName(cachedProject.name);
         setInOrganization(!!cachedProject.organization_id); // Convert to boolean
+        setMetadata(cachedProject.metadata || {});
         setLoading(false);
         return;
       }
@@ -79,6 +91,7 @@ export function useProject(projectId: string, router: any) {
       setProject(data);
       setProjectName(data.name);
       setInOrganization(!!data.organization_id); // Convert to boolean
+      setMetadata(data.metadata || {});
     } catch (error) {
       console.error("Error fetching project:", error);
       // If project not found, redirect to dashboard
@@ -123,10 +136,46 @@ export function useProject(projectId: string, router: any) {
     }
   };
 
+  // Update project metadata
+  const updateProjectMetadata = async (newMetadata: any) => {
+    if (!project) return false;
+    
+    try {
+      console.log("Updating project metadata:", newMetadata);
+
+      const updatedMetadata = newMetadata;
+      
+      const { error } = await supabase
+        .from("projects")
+        .update({ metadata: updatedMetadata })
+        .eq("id", projectId);
+        
+      if (error) throw error;
+      
+      // Update local state
+      setMetadata(updatedMetadata);
+      
+      // Update project state with new metadata
+      const updatedProject = {
+        ...project,
+        metadata: updatedMetadata
+      };
+      
+      setProject(updatedProject);
+      
+      // Update cache
+      cacheProject(updatedProject);
+      
+      return true;
+    } catch (error) {
+      console.error("Error updating project metadata:", error);
+      return false;
+    }
+  };
+
   const handleToggleProjectOrg = async () => {
     try {
-      let newOrgId = null; // Changed from empty string to null
-      let updatedMetadata = project?.metadata || {};
+      let newOrgId = null;
       
       if (!inOrganization) {
         // Find the organization ID that matches the user's email domain
@@ -143,32 +192,30 @@ export function useProject(projectId: string, router: any) {
           setInOrganization(true);
         } else {
           alert("No organization found for this email domain: " + user.email.split("@")[1]);
-          return;
+          return false;
         }
       } else {
         // We're removing the organization, set to null
         newOrgId = null;
         setInOrganization(false);
-        
-        // Also clear the housing metadata when removing org access
-        updatedMetadata = {};
       }
 
+      // Perform the update in the database
       const { error } = await supabase
         .from("projects")
         .update({ 
           organization_id: newOrgId,
-          metadata: updatedMetadata
+          metadata: metadata
         })
         .eq("id", projectId);
 
       if (error) throw error;
 
+      // Update project state
       const updatedProject = project 
         ? { 
             ...project, 
             organization_id: newOrgId,
-            metadata: updatedMetadata
           } 
         : null;
 
@@ -202,6 +249,9 @@ export function useProject(projectId: string, router: any) {
     loading,
     projectName,
     inOrganization,
+    metadata,
+    setMetadata,
+    updateProjectMetadata,
     setProjectName,
     setInOrganization,
     isEditing,

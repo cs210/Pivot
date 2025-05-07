@@ -39,6 +39,7 @@ export default function ProjectPage() {
     setIsEditing,
     handleUpdateProjectName,
     handleToggleProjectOrg,
+    updateProjectMetadata,
   } = useProject(projectId, router);
 
   useEffect(() => {
@@ -200,6 +201,8 @@ export default function ProjectPage() {
         onOpenChange={setShareDialogOpen}
         shareLink={shareLink}
         currentProject={project}
+        handleToggleProjectOrg={handleToggleProjectOrg}
+        setProjectMetadata={updateProjectMetadata}
         setProjects={(updatedProjects) => {
           // Update the project in cache
           if (project) {
