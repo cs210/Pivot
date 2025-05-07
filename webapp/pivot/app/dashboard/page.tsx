@@ -182,7 +182,7 @@ export default function Dashboard() {
         const { data: org, error } = await supabase
           .from("organizations")
           .select("*")
-          .eq("domain_restriction", userData.user.email.split("@")[1])
+          .eq("domain_restriction", userData.user?.email?.split("@")[1] || "")
           .single();
           
         if (error || !org) {
@@ -388,7 +388,6 @@ export default function Dashboard() {
                     ) : (
                       <ShareButton
                         project={project}
-                        projects={projects}
                         setProjects={setProjects}
                         setCurrentProject={setCurrentProject}
                         setShareLink={setShareLink}
