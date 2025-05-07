@@ -136,49 +136,6 @@ export function useProject(projectId: string, router: any) {
     }
   };
 
-  // Update project metadata
-  const updateProjectMetadata = async (newMetadata: any) => {
-    if (!project) return false;
-    
-    try {
-      console.log("Updating project metadata:", newMetadata);
-      
-      const { error } = await supabase
-        .from("projects")
-        .update({ metadata: newMetadata })
-        .eq("id", projectId);
-        
-      if (error) throw error;
-
-      console.log("Project metadata updated successfully");
-      
-      // Update local state
-      setMetadata(newMetadata);
-
-      console.log("Project metadata in state updated:", metadata);
-      
-      // Update project state with new metadata
-      const updatedProject = {
-        ...project,
-        metadata: newMetadata
-      };
-      
-      setProject(updatedProject);
-
-      console.log("Project state updated with new metadata:", updatedProject);
-      
-      // Update cache
-      cacheProject(updatedProject);
-      
-      console.log("Project metadata cached successfully");
-
-      return true;
-    } catch (error) {
-      console.error("Error updating project metadata:", error);
-      return false;
-    }
-  };
-
   const handleToggleProjectOrg = async (customMetadata?: any) => {
     try {
       let newOrgId = null;
@@ -266,7 +223,6 @@ export function useProject(projectId: string, router: any) {
     inOrganization,
     metadata,
     setMetadata,
-    updateProjectMetadata,
     setProjectName,
     setInOrganization,
     isEditing,

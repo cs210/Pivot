@@ -202,7 +202,6 @@ export default function ProjectPage() {
         shareLink={shareLink}
         currentProject={project}
         handleToggleProjectOrg={handleToggleProjectOrg}
-        setProjectMetadata={updateProjectMetadata}
         setProjects={(updatedProjects) => {
           // Update the project in cache
           if (project) {

@@ -29,7 +29,6 @@ interface ShareDialogProps {
   shareLink: string;
   currentProject: Project | null;
   handleToggleProjectOrg?: (metadata?: any) => Promise<boolean>;
-  setProjectMetadata: (metadata: any) => Promise<boolean>;
 }
 
 const ShareDialog: React.FC<ShareDialogProps> = ({ 
@@ -38,7 +37,6 @@ const ShareDialog: React.FC<ShareDialogProps> = ({
   shareLink, 
   currentProject, 
   handleToggleProjectOrg,
-  setProjectMetadata,
 }) => {
   const [copied, setCopied] = useState(false);
   const [isTogglingOrgAccess, setIsTogglingOrgAccess] = useState(false);
