@@ -3,17 +3,13 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Switch } from "@/components/ui/switch";
-import { Save, Share2, AlertCircle } from "lucide-react";
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Save } from "lucide-react";
 
 interface ProjectSettingsProps {
   projectId: string;
   projectName: string;
   setProjectName: (name: string) => void;
   handleUpdateProject: () => void;
-  isPublic?: boolean;
-  handleShareProject?: () => void;
 }
 
 export default function ProjectSettings({
@@ -21,8 +17,6 @@ export default function ProjectSettings({
   projectName,
   setProjectName,
   handleUpdateProject,
-  isPublic = false,
-  handleShareProject,
 }: ProjectSettingsProps) {
   const [activeSection, setActiveSection] = useState("general");
 
@@ -42,13 +36,6 @@ export default function ProjectSettings({
                 onClick={() => setActiveSection("general")}
               >
                 General
-              </Button>
-              <Button
-                variant={activeSection === "sharing" ? "default" : "ghost"}
-                className="justify-start"
-                onClick={() => setActiveSection("sharing")}
-              >
-                Sharing
               </Button>
               <Button
                 variant="ghost"
@@ -95,56 +82,6 @@ export default function ProjectSettings({
                 >
                   <Save className="mr-2 h-4 w-4" />
                   Save Changes
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
-        )}
-
-        {activeSection === "sharing" && (
-          <Card className="bg-background/80 backdrop-blur-sm border-border/50">
-            <CardHeader>
-              <CardTitle>Sharing Settings</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-6">
-                <div className="flex items-center justify-between p-4 bg-muted/30 rounded-md">
-                  <div className="space-y-1">
-                    <h3 className="font-medium">Public Access</h3>
-                    <p className="text-sm text-muted-foreground">
-                      When enabled, anyone with the link can view this project
-                      without logging in
-                    </p>
-                  </div>
-                  <Switch
-                    checked={isPublic}
-                    onCheckedChange={handleShareProject}
-                    className="data-[state=checked]:bg-primary"
-                  />
-                </div>
-
-                {isPublic && (
-                  <Alert className="bg-primary/10 border-primary/30">
-                    <AlertCircle className="h-4 w-4" />
-                    <AlertTitle>This project is publicly accessible</AlertTitle>
-                    <AlertDescription>
-                      Anyone with the link can view this project. You can
-                      disable public access at any time.
-                    </AlertDescription>
-                  </Alert>
-                )}
-
-                <Button
-                  onClick={handleShareProject}
-                  variant={isPublic ? "default" : "outline"}
-                  className={`w-full ${
-                    isPublic
-                      ? "bg-cyber-gradient hover:opacity-90"
-                      : "cyber-border"
-                  }`}
-                >
-                  <Share2 className="mr-2 h-4 w-4" />
-                  {isPublic ? "Manage Sharing" : "Share Project"}
                 </Button>
               </div>
             </CardContent>

@@ -11,12 +11,18 @@ import PanoramaViewerPage from "../../project/[id]/components/PanoramaViewerPage
 import PlaceLocationsTabContent from "../../project/[id]/components/EnhancedImageGrid";
 import { Lock, Eye, ArrowLeft } from "lucide-react";
 
+interface Project {
+  id: string;
+  name: string;
+  organization_id: string;
+}
+
 export default function SharedProjectPage() {
   const params = useParams();
   const projectId = params.id as string;
   const supabase = createClient();
   const [loading, setLoading] = useState(true);
-  const [project, setProject] = useState(null);
+  const [project, setProject] = useState<Project | null>(null);
   const [error, setError] = useState("");
   const [activeTab, setActiveTab] = useState("walkthrough");
 
@@ -25,18 +31,47 @@ export default function SharedProjectPage() {
       try {
         setLoading(true);
 
+        // Get the current user
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) {
+          setError("You must be logged in to view this project.");
+          setLoading(false);
+          return;
+        }
+
+        // Get user's email domain
+        const domain = user.email?.split('@')[1];
+        if (!domain) {
+          setError("Invalid email address.");
+          setLoading(false);
+          return;
+        }
+
+        // Find matching organization
+        const { data: orgData, error: orgError } = await supabase
+          .from('organizations')
+          .select('*')
+          .eq('domain_restriction', domain)
+          .single();
+
+        if (orgError || !orgData) {
+          setError("Your email domain doesn't have access to this project.");
+          setLoading(false);
+          return;
+        }
+
         // Fetch the project
         const { data: projectData, error: projectError } = await supabase
           .from("projects")
           .select("*")
           .eq("id", projectId)
-          .eq("is_public", true)
+          .eq("organization_id", orgData.id)
           .single();
 
         if (projectError) throw projectError;
 
         if (!projectData) {
-          setError("This project doesn't exist or is not publicly shared.");
+          setError("This project doesn't exist or is not shared with your organization.");
           setLoading(false);
           return;
         }
@@ -45,7 +80,7 @@ export default function SharedProjectPage() {
       } catch (error) {
         console.error("Error fetching shared project:", error);
         setError(
-          "Failed to load the project. It may not exist or is not publicly shared."
+          "Failed to load the project. It may not exist or is not shared with your organization."
         );
       } finally {
         setLoading(false);
@@ -110,7 +145,7 @@ export default function SharedProjectPage() {
                   </Button>
                 </Link>
                 <h1 className="text-2xl font-bold cyber-glow">
-                  {project.name}
+                  {project?.name || 'Untitled Project'}
                 </h1>
               </div>
               <div className="flex items-center text-sm text-muted-foreground">

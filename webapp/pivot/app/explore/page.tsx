@@ -118,7 +118,7 @@ export default function ExplorePage() {
   
   // Navigate to project details
   const viewProject = (projectId: string) => {
-    router.push(`/project/${projectId}`);
+    router.push(`/shared/${projectId}`);
   };
   
   if (userLoading || isLoading) {

@@ -10,16 +10,10 @@ import {
 export interface Project {
   id: string;
   name: string;
+  organization_id: string | null;
+  metadata?: any;
   created_at: string;
-  user_id: string;
-  is_public: boolean;
-  organization_id: string;
-  metadata: {
-    housing_type?: string;
-    residence_type?: string;
-    residence_name?: string;
-    room_type?: string;
-  };
+  updated_at: string;
 }
 
 export function useProject(projectId: string, router: any) {
@@ -27,6 +21,7 @@ export function useProject(projectId: string, router: any) {
   const [loading, setLoading] = useState(true);
   const [project, setProject] = useState<Project | null>(null);
   const [projectName, setProjectName] = useState("");
+  const [inOrganization, setInOrganization] = useState(false);
   const [user, setUser] = useState<any>(null);
   const [isEditing, setIsEditing] = useState(false);
 
@@ -57,6 +52,7 @@ export function useProject(projectId: string, router: any) {
         console.log("Using cached project details");
         setProject(cachedProject);
         setProjectName(cachedProject.name);
+        setInOrganization(!!cachedProject.organization_id);
         setLoading(false);
         return;
       }
@@ -76,6 +72,7 @@ export function useProject(projectId: string, router: any) {
       // Update state
       setProject(data);
       setProjectName(data.name);
+      setInOrganization(!!data.organization_id);
     } catch (error) {
       console.error("Error fetching project:", error);
       // If project not found, redirect to dashboard
@@ -119,6 +116,73 @@ export function useProject(projectId: string, router: any) {
     }
   };
   
+  const handleToggleProjectOrg = async (metadata?: any) => {
+    if (!project) return false;
+
+    try {
+      // Get user's email domain
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user?.email) return false;
+
+      const domain = user.email.split('@')[1];
+
+      // Find matching organization
+      const { data: orgs } = await supabase
+        .from('organizations')
+        .select('*')
+        .eq('domain_restriction', domain)
+        .single();
+
+      if (!orgs) return false;
+
+      // Update project
+      const { error: updateError } = await supabase
+        .from('projects')
+        .update({ 
+          organization_id: project.organization_id ? null : orgs.id,
+          metadata: metadata || project.metadata
+        })
+        .eq('id', project.id);
+
+      if (updateError) throw updateError;
+
+      setInOrganization(!project.organization_id);
+      setProject({
+        ...project,
+        organization_id: project.organization_id ? null : orgs.id,
+        metadata: metadata || project.metadata
+      });
+
+      return true;
+    } catch (error) {
+      console.error("Error toggling organization:", error);
+      return false;
+    }
+  };
+
+  const handleUpdateMetadata = async (metadata: any) => {
+    if (!project) return false;
+
+    try {
+      const { error } = await supabase
+        .from('projects')
+        .update({ metadata })
+        .eq('id', project.id);
+
+      if (error) throw error;
+
+      setProject({
+        ...project,
+        metadata
+      });
+
+      return true;
+    } catch (error) {
+      console.error("Error updating metadata:", error);
+      return false;
+    }
+  };
+
   // Function to clear cache for the current project
   const clearCache = (allProjects = false) => {
     if (allProjects) {
@@ -132,10 +196,14 @@ export function useProject(projectId: string, router: any) {
     project,
     loading,
     projectName,
+    inOrganization,
     setProjectName,
+    setInOrganization,
     isEditing,
     setIsEditing,
     handleUpdateProject,
+    handleToggleProjectOrg,
+    handleUpdateMetadata,
     user,
     clearCache,
     fetchProjectDetails

@@ -104,14 +104,16 @@ export function useHousingFilters(projects: Project[]) {
     const filtered = projects.filter((project: Project) => {
       // Filter by housing metadata
       const metadata = project.metadata || {};
-      
-      if (housingType && metadata.housing_type !== housingType) return false;
-      
-      // For multi-select filters, check if any selected option matches
-      if (selectedResidenceTypes.length > 0 && !selectedResidenceTypes.includes(metadata.residence_type || '')) return false;
-      if (selectedResidenceNames.length > 0 && !selectedResidenceNames.includes(metadata.residence_name || '')) return false;
-      if (selectedRoomTypes.length > 0 && !selectedRoomTypes.includes(metadata.room_type || '')) return false;
-      
+      const housingTypeVal = (metadata as any).housingType || metadata.housing_type;
+      const residenceTypeVal = (metadata as any).residenceType || metadata.residence_type;
+      const residenceNameVal = (metadata as any).residence || metadata.residence_name;
+      const roomTypeVal = (metadata as any).roomType || metadata.room_type;
+
+      if (housingType && housingTypeVal !== housingType) return false;
+      if (selectedResidenceTypes.length > 0 && !selectedResidenceTypes.includes(residenceTypeVal || '')) return false;
+      if (selectedResidenceNames.length > 0 && !selectedResidenceNames.includes(residenceNameVal || '')) return false;
+      if (selectedRoomTypes.length > 0 && !selectedRoomTypes.includes(roomTypeVal || '')) return false;
+
       return true;
     });
     

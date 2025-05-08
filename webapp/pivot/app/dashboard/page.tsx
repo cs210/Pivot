@@ -29,10 +29,6 @@ import {
   Trash2,
   Edit,
   Calendar,
-  Share2,
-  Copy,
-  CheckCircle2,
-  Globe,
 } from "lucide-react";
 import { Header } from "@/components/header";
 import { useProjects } from "@/hooks/useProjects";
@@ -50,11 +46,8 @@ export default function Dashboard() {
   const [newProjectName, setNewProjectName] = useState("");
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
   const [editDialogOpen, setEditDialogOpen] = useState(false);
-  const [shareDialogOpen, setShareDialogOpen] = useState(false);
   const [currentProject, setCurrentProject] = useState<any>(null);
   const [editProjectName, setEditProjectName] = useState("");
-  const [shareLink, setShareLink] = useState("");
-  const [copied, setCopied] = useState(false);
 
   const handleCreateProject = async () => {
     if (!newProjectName.trim()) {
@@ -125,67 +118,14 @@ export default function Dashboard() {
     }
   };
 
-  const handleTogglePublic = async (project: any) => {
-    try {
-      // We need to keep this logic since it's not in the useProjects hook
-      const supabase = createClient();
-      const newPublicState = !project.is_public;
-
-      const { error } = await supabase
-        .from("projects")
-        .update({ is_public: newPublicState })
-        .eq("id", project.id);
-
-      if (error) throw error;
-
-      if (newPublicState) {
-        // Generate and show the share link
-        setCurrentProject(project);
-        const baseUrl = window.location.origin;
-        const link = `${baseUrl}/shared/${project.id}`;
-        setShareLink(link);
-        setShareDialogOpen(true);
-      }
-      
-      // Force a refresh to get updated data
-      router.refresh();
-    } catch (error) {
-      console.error("Error updating project visibility:", error);
-      alert("Failed to update project visibility");
-    }
-  };
-
   const openEditDialog = (project: any) => {
     setCurrentProject(project);
     setEditProjectName(project.name);
     setEditDialogOpen(true);
   };
 
-  const openShareDialog = (project: any) => {
-    setCurrentProject(project);
-    const baseUrl = window.location.origin;
-    const link = `${baseUrl}/shared/${project.id}`;
-    setShareLink(link);
-    setShareDialogOpen(true);
-  };
-
-  const copyToClipboard = async () => {
-    try {
-      await navigator.clipboard.writeText(shareLink);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-    } catch (err) {
-      console.error("Failed to copy: ", err);
-    }
-  };
-
   const navigateToProject = (projectId: string) => {
     router.push(`/project/${projectId}`);
-  };
-
-  const navigateToSharedProject = (projectId: string) => {
-    // Open in a new tab
-    window.open(`/shared/${projectId}`, "_blank");
   };
 
   const handleSignOut = async () => {
@@ -251,32 +191,22 @@ export default function Dashboard() {
                   </DialogFooter>
                 </DialogContent>
               </Dialog>
-
-              <Button
-                onClick={handleSignOut}
-                variant="outline"
-                className="cyber-border"
-              >
-                Sign Out
-              </Button>
             </div>
           </div>
 
           {loading ? (
-            <div className="text-center py-12">Loading your projects...</div>
+            <div className="text-center py-12">Loading projects...</div>
           ) : projects.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-16 bg-muted/20 rounded-lg border border-border/40">
-              <Folder className="h-16 w-16 text-muted-foreground mb-4" />
-              <h2 className="text-xl font-semibold mb-2">No projects yet</h2>
-              <p className="text-muted-foreground mb-6">
-                Create your first project to get started
+            <div className="text-center py-12">
+              <p className="text-lg text-muted-foreground mb-4">
+                You haven't created any projects yet.
               </p>
               <Button
                 onClick={() => setCreateDialogOpen(true)}
                 className="bg-cyber-gradient hover:opacity-90"
               >
                 <PlusCircle className="mr-2 h-4 w-4" />
-                Create Project
+                Create Your First Project
               </Button>
             </div>
           ) : (
@@ -284,202 +214,91 @@ export default function Dashboard() {
               {projects.map((project) => (
                 <Card
                   key={project.id}
-                  className={`bg-background/80 backdrop-blur-sm border-border/50 hover:border-primary/50 transition-colors ${
-                    project.is_public ? "border-l-4 border-l-primary" : ""
-                  }`}
+                  className="bg-background/70 border-border/50 hover:border-border/80 transition-colors"
                 >
-                  <CardHeader className="pb-2">
-                    <CardTitle className="flex justify-between items-center">
-                      <div className="flex items-center gap-2">
-                        <span className="truncate">{project.name}</span>
-                        {project.is_public && (
-                          <Globe className="h-4 w-4 text-primary" />
-                        )}
-                      </div>
-                      <div className="flex gap-1">
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-8 w-8"
-                          onClick={() => openEditDialog(project)}
-                        >
-                          <Edit className="h-4 w-4" />
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-8 w-8 hover:bg-destructive/20 hover:text-destructive"
-                          onClick={() => handleDeleteProjectClick(project.id)}
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
-                      </div>
+                  <CardHeader>
+                    <CardTitle className="text-lg font-semibold">
+                      {project.name}
                     </CardTitle>
                   </CardHeader>
                   <CardContent>
                     <div className="flex items-center text-sm text-muted-foreground">
                       <Calendar className="mr-2 h-4 w-4" />
-                      <span>
-                        Created on{" "}
-                        {new Date(project.created_at).toLocaleDateString()}
-                      </span>
+                      {new Date(project.created_at).toLocaleDateString()}
                     </div>
-                    {project.is_public && (
-                      <div className="mt-2">
-                        <Button
-                          variant="link"
-                          size="sm"
-                          className="text-xs text-primary p-0 h-auto"
-                          onClick={() => navigateToSharedProject(project.id)}
-                        >
-                          View shared version
-                        </Button>
-                      </div>
-                    )}
                   </CardContent>
-                  <CardFooter className="flex gap-2">
+                  <CardFooter className="flex justify-between">
                     <Button
+                      variant="ghost"
+                      size="sm"
                       onClick={() => navigateToProject(project.id)}
-                      className="flex-1 bg-cyber-gradient hover:opacity-90"
+                      className="text-primary hover:text-primary/80"
                     >
-                      Open Project
+                      <Folder className="mr-2 h-4 w-4" />
+                      Open
                     </Button>
-                    {project.is_public ? (
+                    <div className="flex gap-2">
                       <Button
-                        onClick={() => openShareDialog(project)}
-                        variant="outline"
-                        size="icon"
-                        className="h-10 w-10 cyber-border"
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => openEditDialog(project)}
+                        className="text-muted-foreground hover:text-foreground"
                       >
-                        <Share2 className="h-4 w-4" />
+                        <Edit className="h-4 w-4" />
                       </Button>
-                    ) : (
                       <Button
-                        onClick={() => handleTogglePublic(project)}
-                        variant="outline"
-                        size="icon"
-                        className="h-10 w-10 cyber-border"
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => handleDeleteProjectClick(project.id)}
+                        className="text-destructive hover:text-destructive/80"
                       >
-                        <Share2 className="h-4 w-4" />
+                        <Trash2 className="h-4 w-4" />
                       </Button>
-                    )}
+                    </div>
                   </CardFooter>
                 </Card>
               ))}
             </div>
           )}
-
-          {/* Edit Project Dialog */}
-          <Dialog open={editDialogOpen} onOpenChange={setEditDialogOpen}>
-            <DialogContent className="sm:max-w-[425px] bg-background text-white">
-              <DialogHeader>
-                <DialogTitle className="text-white">Edit Project</DialogTitle>
-                <DialogDescription className="text-white/70">
-                  Update your project's details.
-                </DialogDescription>
-              </DialogHeader>
-              <div className="grid gap-4 py-4">
-                <div className="grid grid-cols-4 items-center gap-4">
-                  <Label
-                    htmlFor="edit-project-name"
-                    className="text-right text-white"
-                  >
-                    Name
-                  </Label>
-                  <Input
-                    id="edit-project-name"
-                    value={editProjectName}
-                    onChange={(e) => setEditProjectName(e.target.value)}
-                    className="col-span-3 text-white bg-background/70 border-white/20"
-                  />
-                </div>
-              </div>
-              <DialogFooter>
-                <Button
-                  type="submit"
-                  onClick={handleUpdateProject}
-                  className="text-white bg-cyber-gradient hover:opacity-90"
-                >
-                  Save Changes
-                </Button>
-              </DialogFooter>
-            </DialogContent>
-          </Dialog>
-
-          {/* Share Link Dialog */}
-          <Dialog open={shareDialogOpen} onOpenChange={setShareDialogOpen}>
-            <DialogContent className="sm:max-w-[425px] bg-background text-white">
-              <DialogHeader>
-                <DialogTitle className="text-white">Share Project</DialogTitle>
-                <DialogDescription className="text-white/70">
-                  Anyone with this link can view your project without logging
-                  in.
-                </DialogDescription>
-              </DialogHeader>
-              <div className="flex items-center space-x-2 bg-muted/30 p-3 rounded-md">
-                <input
-                  type="text"
-                  readOnly
-                  value={shareLink}
-                  className="flex-1 bg-transparent border-none focus:outline-none text-sm text-white"
-                />
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  onClick={copyToClipboard}
-                  className="h-8"
-                >
-                  {copied ? (
-                    <CheckCircle2 className="h-4 w-4 text-green-500" />
-                  ) : (
-                    <Copy className="h-4 w-4" />
-                  )}
-                </Button>
-              </div>
-              <div className="mt-4 flex justify-between">
-                <Button
-                  variant="outline"
-                  onClick={() =>
-                    currentProject && handleTogglePublic(currentProject)
-                  }
-                  className="border-destructive/40 text-destructive hover:bg-destructive/10"
-                >
-                  Make Private
-                </Button>
-                <Button
-                  onClick={() => {
-                    window.open(shareLink, "_blank");
-                  }}
-                  className="text-white bg-cyber-gradient hover:opacity-90"
-                >
-                  Open Shared View
-                </Button>
-              </div>
-            </DialogContent>
-          </Dialog>
         </div>
       </main>
-      <footer className="border-t border-border/40 bg-background">
-        <div className="container flex flex-col gap-2 py-4 md:h-16 md:flex-row md:items-center md:justify-between md:py-0">
-          <p className="text-center text-sm text-muted-foreground md:text-left">
-            © 2025 Pivot. All rights reserved.
-          </p>
-          <nav className="flex items-center justify-center gap-4 md:gap-6">
-            <Link
-              className="text-sm font-medium text-muted-foreground hover:text-foreground"
-              href="#"
+
+      {/* Edit Project Dialog */}
+      <Dialog open={editDialogOpen} onOpenChange={setEditDialogOpen}>
+        <DialogContent className="sm:max-w-[425px] bg-background text-white">
+          <DialogHeader>
+            <DialogTitle className="text-white">Edit Project</DialogTitle>
+            <DialogDescription className="text-white/70">
+              Update your project's name.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-4 py-4">
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label
+                htmlFor="edit-project-name"
+                className="text-right text-white"
+              >
+                Name
+              </Label>
+              <Input
+                id="edit-project-name"
+                value={editProjectName}
+                onChange={(e) => setEditProjectName(e.target.value)}
+                className="col-span-3 text-white bg-background/70 border-white/20"
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button
+              type="submit"
+              onClick={handleUpdateProject}
+              className="text-white bg-cyber-gradient hover:opacity-90"
             >
-              Terms of Service
-            </Link>
-            <Link
-              className="text-sm font-medium text-muted-foreground hover:text-foreground"
-              href="#"
-            >
-              Privacy
-            </Link>
-          </nav>
-        </div>
-      </footer>
+              Save Changes
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

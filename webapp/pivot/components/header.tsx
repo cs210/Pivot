@@ -42,11 +42,23 @@ export function Header() {
             </Link>
           )}
           {user ? (
-            <Link href="/dashboard">
-              <Button variant="outline" className="glass-card geometric-text">
-                My Account
+            <>
+              <Link href="/dashboard">
+                <Button variant="outline" className="glass-card geometric-text">
+                  My Account
+                </Button>
+              </Link>
+              <Button
+                variant="ghost"
+                className="text-foreground hover:text-primary hover:bg-background/80 geometric-text"
+                onClick={async () => {
+                  await supabase.auth.signOut();
+                  window.location.href = "/";
+                }}
+              >
+                Sign Out
               </Button>
-            </Link>
+            </>
           ) : (
             <>
               <Link href="/login">

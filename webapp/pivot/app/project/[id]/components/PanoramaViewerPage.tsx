@@ -263,8 +263,8 @@ export default function PanoramaViewerPage({
 
         // (a) VIEW‑MODE → navigate through nav pins
         if (viewerModeRef.current === 'view') {
-          if (viewerMarker.data?.type === 'navigation' && viewerMarker.data.targetPanoramaId) {
-            const dest = panoramas.find((p) => p.id === viewerMarker.data.targetPanoramaId);
+          if (viewerMarker.data?.type === 'navigation' && viewerMarker.data?.targetPanoramaId) {
+            const dest = panoramas.find((p) => p.id === viewerMarker.data?.targetPanoramaId);
             if (dest) setCurrentPanorama(dest);
           }
           return;
@@ -557,14 +557,13 @@ const openMarkerEditor = (mk: Marker) => {
                 maxFov={90}
                 onReady={initializeViewer}
                 containerClass="psv-container"
-                loader={false}
               />
               <div className="psv-loading-spinner"></div>
               <div className="psv-loading-text">Loading Next 360°...</div>
             </div>
           ) : (
             <div className="flex items-center justify-center w-full h-full text-gray-500">
-              {isSharedView ? 'Loading panorama...' : 'Select a grid location to view its panorama'}
+              {isSharedView ? 'Loading shared panorama...' : 'Select a grid location to view its panorama'}
             </div>
           )}
         </div>

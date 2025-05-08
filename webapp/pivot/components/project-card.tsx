@@ -14,28 +14,29 @@ interface ProjectCardProps {
 }
 
 export function ProjectCard({ project, onClick }: ProjectCardProps) {
+  const meta = project.metadata || {};
+  const residence = (meta as any).residence || (meta as any).residence_name || project.name;
+  const housingType = (meta as any).housingType || (meta as any).housing_type;
+  const roomType = (meta as any).roomType || (meta as any).room_type;
   return (
     <Card 
       key={project.id} 
-      className="cursor-pointer hover:shadow-md transition-shadow duration-200" 
+      className="cursor-pointer hover:shadow-md transition-shadow duration-200 rounded-2xl border border-gray-200 bg-[#f7f5f2]"
       onClick={() => onClick(project.id)}
     >
       <CardHeader className="pb-2">
-        <CardTitle className="text-lg">{project.name}</CardTitle>
-        <CardDescription>
-          {project.metadata?.residence_name || 'Unknown Residence'}
+        <CardTitle className="text-2xl font-bold">{residence}</CardTitle>
+        <CardDescription className="text-lg mt-2">
+          {(meta as any).residence ? project.name : residence}
         </CardDescription>
       </CardHeader>
       <CardContent>
-        <div className="space-y-1 text-sm">
-          {project.metadata?.housing_type && (
-            <div><span className="font-medium">Type:</span> {project.metadata.housing_type}</div>
+        <div className="space-y-1 text-lg">
+          {housingType && (
+            <div>Type: {housingType}</div>
           )}
-          {project.metadata?.room_type && (
-            <div><span className="font-medium">Room:</span> {project.metadata.room_type}</div>
-          )}
-          {project.is_public && (
-            <div className="text-green-600 mt-2">Public Project</div>
+          {roomType && (
+            <div>Room: {roomType}</div>
           )}
         </div>
       </CardContent>
