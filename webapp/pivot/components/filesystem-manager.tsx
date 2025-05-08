@@ -187,16 +187,21 @@ export default function FileSystemManager({
         `Got ${locationImages.length} images for location: ${currentLocation}`
       );
 
-      items = locationImages.map((img) => {
-        console.log("Processing image:", img);
-        return {
-          id: img.id,
-          name: img.name || "Unnamed Image",
-          type: "image" as FSItemType,
-          url: img.url,
-          parent: currentLocation,
-        };
-      });
+      items = (Array.isArray(locationImages) ? locationImages.flat() : locationImages)
+        .filter(
+          (img): img is { id: string; name?: string; url: string } =>
+            !!img && typeof img === "object" && !Array.isArray(img) && "id" in img
+        )
+        .map((img) => {
+          console.log("Processing image:", img);
+          return {
+            id: img.id,
+            name: img.name || "Unnamed Image",
+            type: "image" as FSItemType,
+            url: img.url,
+            parent: currentLocation,
+          };
+        });
     }
 
     console.log(`Final items for ${currentLocation}:`, items);
