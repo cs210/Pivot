@@ -122,11 +122,17 @@ export default function PanoramasTab({ projectId }: PanoramasTabProps) {
           }),
         });
 
-        const result = await response.json();
-
+        let result;
+        let isJson = false;
+        try {
+          result = await response.json();
+          isJson = true;
+        } catch (e) {
+          result = await response.text();
+        }
         if (!response.ok) {
           console.error("Stitching failed:", result);
-          throw new Error(result.error || "Failed to stitch panorama");
+          throw new Error(isJson && result?.error ? result.error : result || "Failed to stitch panorama");
         }
 
         // The API already updated the database record with the correct storage path
@@ -228,11 +234,17 @@ export default function PanoramasTab({ projectId }: PanoramasTabProps) {
             }),
           });
 
-          const result = await response.json();
-
+          let result;
+          let isJson = false;
+          try {
+            result = await response.json();
+            isJson = true;
+          } catch (e) {
+            result = await response.text();
+          }
           if (!response.ok) {
             console.error("Panorama stitching failed:", result);
-            throw new Error(result.error || "Failed to stitch panorama");
+            throw new Error(isJson && result?.error ? result.error : result || "Failed to stitch panorama");
           }
 
           // The API has already updated the database record,
