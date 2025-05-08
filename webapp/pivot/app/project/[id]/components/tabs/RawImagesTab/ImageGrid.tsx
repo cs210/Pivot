@@ -19,7 +19,6 @@ import {
 } from "lucide-react";
 import { RawImage } from "../../../../../../hooks/useRawImages";
 import { Folder } from "../../../../../../hooks/useFolders";
-import { useState, useEffect } from "react";
 
 interface ImageGridProps {
   rawImages: RawImage[];
@@ -40,7 +39,7 @@ interface ImageGridProps {
   setImagesToMove: (images: RawImage[]) => void;
   setMoveImageDialogOpen: (open: boolean) => void;
   getCurrentFolderImages: () => RawImage[];
-  getAllImages: () => RawImage[];
+  getRootImages: () => RawImage[];
 }
 
 export default function ImageGrid({
@@ -62,31 +61,10 @@ export default function ImageGrid({
   setImagesToMove,
   setMoveImageDialogOpen,
   getCurrentFolderImages,
-  getAllImages,
+  getRootImages,
 }: ImageGridProps) {
-  // Use state to store the images to display
-  const [uniqueImageArray, setUniqueImageArray] = useState<RawImage[]>([]);
-
-  // Update images when dependencies change
-  useEffect(() => {
-    // Determine which images to show based on currentFolder
-    const imagesToShow = currentFolder
-      ? getCurrentFolderImages()
-      : getAllImages();
-
-    // Create a map to track unique images by ID to ensure no duplicates
-    const imageMap = new Map<string, RawImage>();
-
-    // Add each image to the map, ensuring no duplicates
-    imagesToShow.forEach((image) => {
-      if (!imageMap.has(image.id)) {
-        imageMap.set(image.id, image);
-      }
-    });
-
-    // Convert the Map back to an array for rendering
-    setUniqueImageArray(Array.from(imageMap.values()));
-  }, [rawImages, currentFolder, getCurrentFolderImages, getAllImages]);
+  // Determine which images to show based on currentFolder
+  const imagesToShow = currentFolder ? getCurrentFolderImages() : rawImages;
 
   return (
     <div className="md:col-span-9">
@@ -170,7 +148,6 @@ export default function ImageGrid({
                 ref={folderInputRef}
                 type="file"
                 className="hidden"
-                // @ts-ignore
                 webkitdirectory=""
                 directory=""
                 multiple
@@ -188,9 +165,9 @@ export default function ImageGrid({
             </div>
           ) : viewMode === "grid" ? (
             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 xl:grid-cols-8 gap-4">
-              {uniqueImageArray.map((image) => (
+              {imagesToShow.map((image) => (
                 <Card
-                  key={`${image.id}-${image.updated_at}`}
+                  key={image.id}
                   className={`cursor-pointer overflow-hidden hover:border-primary transition-colors ${
                     selectedImages.includes(image.id)
                       ? "border-2 border-primary"
@@ -201,11 +178,11 @@ export default function ImageGrid({
                   <div className="aspect-square relative">
                     <img
                       src={image.url}
-                      alt={image.name}
+                      alt={image.filename}
                       className="object-cover w-full h-full"
                     />
                     <div className="absolute bottom-0 left-0 right-0 bg-background/70 p-2 text-xs truncate">
-                      {image.name}
+                      {image.filename}
                     </div>
                     <div className="absolute top-2 right-2">
                       <DropdownMenu>
@@ -226,7 +203,7 @@ export default function ImageGrid({
                             onClick={(e) => {
                               e.stopPropagation();
                               setImageToRename(image);
-                              setNewImageName(image.name);
+                              setNewImageName(image.filename);
                               setRenameImageDialogOpen(true);
                             }}
                           >
@@ -262,9 +239,9 @@ export default function ImageGrid({
             </div>
           ) : (
             <div className="space-y-2">
-              {uniqueImageArray.map((image) => (
+              {imagesToShow.map((image) => (
                 <div
-                  key={`${image.id}-${image.updated_at}`}
+                  key={image.id}
                   className={`flex items-center p-2 rounded border ${
                     selectedImages.includes(image.id)
                       ? "border-primary bg-primary/10"
@@ -275,11 +252,11 @@ export default function ImageGrid({
                   <div className="h-10 w-10 mr-4 overflow-hidden rounded">
                     <img
                       src={image.url}
-                      alt={image.name}
+                      alt={image.filename}
                       className="object-cover w-full h-full"
                     />
                   </div>
-                  <div className="flex-1 truncate">{image.name}</div>
+                  <div className="flex-1 truncate">{image.filename}</div>
                   <div className="flex items-center">
                     <DropdownMenu>
                       <DropdownMenuTrigger
@@ -295,7 +272,7 @@ export default function ImageGrid({
                           onClick={(e) => {
                             e.stopPropagation();
                             setImageToRename(image);
-                            setNewImageName(image.name);
+                            setNewImageName(image.filename);
                             setRenameImageDialogOpen(true);
                           }}
                         >
@@ -330,7 +307,7 @@ export default function ImageGrid({
             </div>
           )}
 
-          {uniqueImageArray.length === 0 && (
+          {imagesToShow.length === 0 && (
             <div className="text-center py-12">
               <ImageIcon className="h-16 w-16 text-muted-foreground mx-auto mb-4" />
               <p className="text-muted-foreground mb-4">

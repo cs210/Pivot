@@ -11,14 +11,24 @@ import ProjectSettings from "./components/ProjectSettings";
 import RawImagesTab from "./components/tabs/RawImagesTab";
 import PanoramasTab from "./components/tabs/PanoramasTab";
 import { useProject } from "../../../hooks/useProject";
-import { cacheProject } from "../../../hooks/cache-service";
 import PlaceLocationsTabContent from "./components/EnhancedImageGrid";
 import { Button } from "@/components/ui/button";
-import ShareDialog from "./components/ShareDialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import {
   Share2,
-  Building,
+  Copy,
+  CheckCircle2,
+  Globe,
+  Link as LinkIcon,
 } from "lucide-react";
+import { createClient } from "@/utils/supabase/client";
 
 export default function ProjectPage() {
   const router = useRouter();
@@ -26,33 +36,78 @@ export default function ProjectPage() {
   const projectId = params.id as string;
   const [activeTab, setActiveTab] = useState("raw-images");
   const [shareDialogOpen, setShareDialogOpen] = useState(false);
+  const [isPublic, setIsPublic] = useState(false);
   const [shareLink, setShareLink] = useState("");
+  const [copied, setCopied] = useState(false);
+  const supabase = createClient();
 
   const {
     project,
     loading,
     projectName,
-    inOrganization,
     setProjectName,
-    setInOrganization,
     isEditing,
     setIsEditing,
-    handleUpdateProjectName,
-    handleToggleProjectOrg,
-    handleUpdateMetadata,
+    handleUpdateProject,
   } = useProject(projectId, router);
 
   useEffect(() => {
     if (project) {
+      setIsPublic(project.is_public || false);
+
       // Generate the share link when project loads
-      const baseUrl = window.location.origin;
-      const link = `${baseUrl}/shared/${projectId}`;
-      setShareLink(link);
+      if (project.is_public) {
+        const baseUrl = window.location.origin;
+        const link = `${baseUrl}/shared/${projectId}`;
+        setShareLink(link);
+      }
     }
   }, [project, projectId]);
 
   const handleShareButtonClick = () => {
-    setShareDialogOpen(true);
+    // If already public, simply show the share dialog with the link
+    if (isPublic) {
+      setShareDialogOpen(true);
+    } else {
+      // If not public, toggle to public first
+      handleTogglePublic();
+    }
+  };
+
+  const handleTogglePublic = async () => {
+    try {
+      // Update the project's public status
+      const { error } = await supabase
+        .from("projects")
+        .update({ is_public: !isPublic })
+        .eq("id", projectId);
+
+      if (error) throw error;
+
+      const newPublicState = !isPublic;
+      setIsPublic(newPublicState);
+
+      // If we're making it public, generate and show the share link
+      if (newPublicState) {
+        const baseUrl = window.location.origin;
+        const link = `${baseUrl}/shared/${projectId}`;
+        setShareLink(link);
+        setShareDialogOpen(true);
+      }
+    } catch (error) {
+      console.error("Error updating project visibility:", error);
+      alert("Failed to update project visibility");
+    }
+  };
+
+  const copyToClipboard = async () => {
+    try {
+      await navigator.clipboard.writeText(shareLink);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch (err) {
+      console.error("Failed to copy: ", err);
+    }
   };
 
   if (loading) {
@@ -82,26 +137,26 @@ export default function ProjectPage() {
               setProjectName={setProjectName}
               isEditing={isEditing}
               setIsEditing={setIsEditing}
-              handleUpdateProjectName={handleUpdateProjectName}
+              handleUpdateProject={handleUpdateProject}
               router={router}
             />
 
             <Button
               onClick={handleShareButtonClick}
-              variant={inOrganization ? "default" : "outline"}
+              variant={isPublic ? "default" : "outline"}
               className={
-                inOrganization ? "bg-cyber-gradient hover:opacity-90" : "cyber-border"
+                isPublic ? "bg-cyber-gradient hover:opacity-90" : "cyber-border"
               }
             >
-              {inOrganization ? (
+              {isPublic ? (
                 <>
-                  <Building className="mr-2 h-4 w-4" />
-                  Shared with Organization
+                  <Globe className="mr-2 h-4 w-4" />
+                  Shared
                 </>
               ) : (
                 <>
                   <Share2 className="mr-2 h-4 w-4" />
-                  Share with Organization
+                  Share Project
                 </>
               )}
             </Button>
@@ -163,13 +218,13 @@ export default function ProjectPage() {
 
             <TabsContent value="settings">
               <ProjectSettings
-                  projectId={projectId}
-                  projectName={projectName}
-                  setProjectName={setProjectName}
-                  handleUpdateProject={handleUpdateProjectName}
-                  inOrganization={inOrganization}
-                  handleToggleProjectOrg={handleToggleProjectOrg}
-                />
+                projectId={projectId}
+                projectName={projectName}
+                setProjectName={setProjectName}
+                handleUpdateProject={handleUpdateProject}
+                isPublic={isPublic}
+                handleShareProject={handleTogglePublic}
+              />
             </TabsContent>
           </Tabs>
         </div>
@@ -196,14 +251,74 @@ export default function ProjectPage() {
         </div>
       </footer>
 
-      <ShareDialog 
-        open={shareDialogOpen} 
-        onOpenChange={setShareDialogOpen}
-        shareLink={shareLink}
-        currentProject={project}
-        handleToggleProjectOrg={handleToggleProjectOrg}
-        handleUpdateMetadata={handleUpdateMetadata}
-      />
+      {/* Share Dialog */}
+      <Dialog open={shareDialogOpen} onOpenChange={setShareDialogOpen}>
+        <DialogContent className="sm:max-w-[425px] bg-background text-white">
+          <DialogHeader>
+            <DialogTitle className="text-white">Share Project</DialogTitle>
+            <DialogDescription className="text-white/70">
+              Anyone with this link can view this project without needing to log
+              in.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="flex items-center bg-primary/10 rounded-md p-3 mb-3">
+            <LinkIcon className="h-4 w-4 mr-2 text-primary" />
+            <span className="text-sm">
+              {isPublic
+                ? "This project is publicly accessible"
+                : "Share this project to generate a link"}
+            </span>
+          </div>
+
+          <div className="flex items-center space-x-2 bg-muted/30 p-3 rounded-md">
+            <input
+              type="text"
+              readOnly
+              value={shareLink}
+              className="flex-1 bg-transparent border-none focus:outline-none text-sm text-white"
+            />
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={copyToClipboard}
+              className="h-8"
+            >
+              {copied ? (
+                <CheckCircle2 className="h-4 w-4 text-green-500" />
+              ) : (
+                <Copy className="h-4 w-4" />
+              )}
+            </Button>
+          </div>
+
+          <DialogFooter className="mt-4 flex justify-between">
+            {isPublic && (
+              <Button
+                variant="outline"
+                onClick={handleTogglePublic}
+                className="border-destructive/40 text-destructive hover:bg-destructive/10"
+              >
+                Make Private
+              </Button>
+            )}
+            <Button
+              onClick={() => {
+                if (!isPublic) {
+                  handleTogglePublic();
+                } else {
+                  setShareDialogOpen(false);
+                }
+              }}
+              className={`text-white ${
+                isPublic ? "bg-cyber-gradient hover:opacity-90" : "bg-primary"
+              }`}
+            >
+              {isPublic ? "Done" : "Share Project"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

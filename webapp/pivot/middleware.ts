@@ -13,19 +13,23 @@ export async function middleware(request: NextRequest) {
   // Get the pathname
   const pathname = request.nextUrl.pathname;
 
-  // If accessing protected routes (including shared) without session, redirect to login
-  if (
-    !session &&
-    (pathname.startsWith("/dashboard") ||
-      pathname.startsWith("/project") ||
-      pathname.startsWith("/shared/"))
-  ) {
-    return NextResponse.redirect(new URL("/login", request.url));
+  // Check if it's a shared project route - allow access regardless of authentication status
+  if (pathname.startsWith("/shared/")) {
+    // Allow both authenticated and unauthenticated users to access shared project pages
+    return response;
   }
 
   // For API routes that handle public project access
   if (pathname.startsWith("/api/public/")) {
     return response;
+  }
+
+  // If accessing protected routes without session, redirect to login
+  if (
+    !session &&
+    (pathname.startsWith("/dashboard") || pathname.startsWith("/project"))
+  ) {
+    return NextResponse.redirect(new URL("/login", request.url));
   }
 
   // If accessing auth pages with session, redirect to dashboard

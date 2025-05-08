@@ -132,36 +132,35 @@ export function useHousingFilters(projects: Project[]) {
       // Add this residence type
       setSelectedResidenceTypes(prev => [...prev, type]);
       
-      // No longer auto-selecting all residences of this type
-      // This allows users to see all relevant residences but select only those they want
+      // Also select all residences of this type
+      const residencesOfType = housingType === 'Undergraduate' 
+        ? UNDERGRADUATE_RESIDENCES[type as keyof typeof UNDERGRADUATE_RESIDENCES] || []
+        : GRADUATE_RESIDENCES[type as keyof typeof GRADUATE_RESIDENCES] || [];
+        
+      setSelectedResidenceNames(prev => {
+        // Create a new array with all previously selected residences
+        const newSelection = [...prev];
+        
+        // Add each residence from this type if not already selected
+        residencesOfType.forEach(residence => {
+          if (!newSelection.includes(residence)) {
+            newSelection.push(residence);
+          }
+        });
+        
+        return newSelection;
+      });
     } else {
       // Remove this residence type
       setSelectedResidenceTypes(prev => prev.filter(t => t !== type));
       
-      // Remove any selected residences that are no longer available
-      const remainingResidenceTypes = selectedResidenceTypes.filter(t => t !== type);
-      
-      if (remainingResidenceTypes.length === 0) {
-        // If no residence types remain, don't filter residences
-        return;
-      }
-      
-      // Get all residences from remaining selected residence types
-      const availableResidenceSet = new Set(
-        remainingResidenceTypes.flatMap(resType => {
-          if (housingType === 'Undergraduate') {
-            const residenceKey = resType as keyof typeof UNDERGRADUATE_RESIDENCES;
-            return UNDERGRADUATE_RESIDENCES[residenceKey] || [];
-          } else { // Graduate
-            const residenceKey = resType as keyof typeof GRADUATE_RESIDENCES;
-            return GRADUATE_RESIDENCES[residenceKey] || [];
-          }
-        })
-      );
-      
-      // Keep only the residences that are still available
+      // Also remove all residences belonging to this type
+      const residencesOfType = housingType === 'Undergraduate' 
+        ? UNDERGRADUATE_RESIDENCES[type as keyof typeof UNDERGRADUATE_RESIDENCES] || []
+        : GRADUATE_RESIDENCES[type as keyof typeof GRADUATE_RESIDENCES] || [];
+        
       setSelectedResidenceNames(prev => 
-        prev.filter(name => availableResidenceSet.has(name))
+        prev.filter(name => !residencesOfType.includes(name))
       );
     }
   };

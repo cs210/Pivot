@@ -8,11 +8,10 @@ import {
   removeRawImageFromCache,
   updateRawImageInCache
 } from "./cache-service";
-import { generateThumbnail } from "@/utils/generate-thumbnail";
 
 export interface RawImage {
   id: string;
-  name: string;
+  filename: string;
   storage_path: string;
   content_type: string;
   size_bytes: number;
@@ -23,7 +22,8 @@ export interface RawImage {
   user_id: string;
   uploaded_at: string;
   updated_at: string;
-  url?: string; // URL for displaying the image in the UI (to thumbnail)
+  url?: string; // URL for displaying the image in the UI
+  thumbnail_url?: string; // URL for displaying the thumbnail
 }
 
 export function useRawImages(projectId: string) {
@@ -68,7 +68,7 @@ export function useRawImages(projectId: string) {
         .from("raw_images")
         .select("*")
         .eq("project_id", projectId)
-        .order("name", { ascending: true });
+        .order("filename", { ascending: true });
 
       if (error) throw error;
       
@@ -76,7 +76,7 @@ export function useRawImages(projectId: string) {
       const imagesWithUrls = await Promise.all((data || []).map(async (img) => {
         // Get a URL for the image from storage. Signed URL for private bucket.
         const { data: urlData } = await supabase.storage
-          .from("thumbnails-private")
+          .from("thumbnails")
           .createSignedUrl(img.storage_path, 3600); // 1 hour expiration
 
         return {
@@ -107,14 +107,14 @@ export function useRawImages(projectId: string) {
     try {
       const { error } = await supabase
         .from("raw_images")
-        .update({ name: newImageName.trim() })
+        .update({ filename: newImageName.trim() })
         .eq("id", imageToRename.id);
 
       if (error) throw error;
 
       const updatedImages = rawImages.map((img) =>
         img.id === imageToRename.id
-          ? { ...img, name: newImageName.trim() }
+          ? { ...img, filename: newImageName.trim() }
           : img
       );
       
@@ -122,7 +122,7 @@ export function useRawImages(projectId: string) {
       setRawImages(updatedImages);
       
       // Update cache
-      updateRawImageInCache(projectId, imageToRename.id, { name: newImageName.trim() });
+      updateRawImageInCache(projectId, imageToRename.id, { filename: newImageName.trim() });
 
       setRenameImageDialogOpen(false);
       setImageToRename(null);
@@ -136,56 +136,50 @@ export function useRawImages(projectId: string) {
 
   const handleDeleteImage = async (imageId: string, showAlert = true) => {
     try {
-      // First get the image to get the storage path
+      // First get the image to get the file path
       const imageToDelete = rawImages.find((img) => img.id === imageId);
-  
-      if (!imageToDelete) {
-        console.error(`Image with ID ${imageId} not found`);
-        return;
+
+      if (!imageToDelete) return;
+
+      // Delete from storage (assuming the URL contains the path)
+      if (!imageToDelete.url) {
+        throw new Error("Image URL is undefined");
       }
-  
-      // Delete from storage using the storage_path directly
-      if (imageToDelete.storage_path) {
-        // Delete original from raw_images bucket
+
+      const url = new URL(imageToDelete.url);
+      const storagePath = url.pathname.split("/").slice(2).join("/");
+
+      if (storagePath) {
         const { error: storageError } = await supabase.storage
-          .from("raw-images")
-          .remove([imageToDelete.storage_path]);
-  
-        if (storageError) {
-          console.error("Error removing from raw_images storage:", storageError);
-          // Continue with deletion process even if storage removal fails
-        }
-  
-        // Delete thumbnail from thumbnails-private bucket
-        const { error: thumbnailError } = await supabase.storage
-          .from("thumbnails-private")
-          .remove([imageToDelete.storage_path]);
-  
-        if (thumbnailError) {
-          console.error("Error removing from thumbnails-private storage:", thumbnailError);
-          // Continue with deletion process even if thumbnail removal fails
-        }
-      } else {
-        console.warn(`No storage path found for image ${imageId}`);
+          .from("raw_images")
+          .remove([storagePath]);
+
+        if (storageError) throw storageError;
       }
-  
+      
+      if (storagePath) {
+        const { error: storageError } = await supabase.storage
+          .from("thumbnails")
+          .remove([storagePath]);
+
+        if (storageError) throw storageError;
+      }
+
       // Delete from database
       const { error: dbError } = await supabase
         .from("raw_images")
         .delete()
         .eq("id", imageId);
-  
-      if (dbError) {
-        throw dbError;
-      }
-  
+
+      if (dbError) throw dbError;
+
       // Update local state
       setRawImages(rawImages.filter((img) => img.id !== imageId));
       setSelectedImages(selectedImages.filter((id) => id !== imageId));
       
       // Update cache
       removeRawImageFromCache(projectId, imageId);
-  
+
       if (showAlert) {
         alert("Image deleted successfully");
       }
@@ -233,10 +227,9 @@ export function useRawImages(projectId: string) {
     }
   };
 
-  // Enhanced function to handle image upload with optional folder ID
+  // Function to handle image upload
   const handleImageUpload = async (
-    event: React.ChangeEvent<HTMLInputElement>,
-    folder_id: string | null = null
+    event: React.ChangeEvent<HTMLInputElement>
   ) => {
     const files = event.target.files;
     if (!files || files.length === 0) return;
@@ -246,138 +239,90 @@ export function useRawImages(projectId: string) {
     try {
       for (let i = 0; i < files.length; i++) {
         const file = files[i];
-        
-        // Check if file is a JPG image
-        if (file.type !== 'image/jpeg' && file.type !== 'image/jpg') {
-          console.log(`Skipping non-JPG file: ${file.name}`);
-          alert(`Only JPG images are supported. Skipping file: ${file.name}`);
-          continue;
+        const fileName = file.name;
+        const filePath = `${projectId}/${fileName}`;
+
+        console.log(`Uploading image: ${fileName} to path: ${filePath}`);
+
+        // Upload to storage
+        const { data: uploadData, error: uploadError } = await supabase.storage
+          .from("raw_images")
+          .upload(filePath, file, {
+            cacheControl: "3600",
+            upsert: true,
+          });
+
+        if (uploadError) {
+          console.error("Storage upload error:", uploadError);
+          throw uploadError;
         }
-        
-        // First, create database entry to get the ID
-        const { data: dbData, error: dbError } = await supabase
+
+        // Create thumbnail and upload
+        const { data: thumbnailData, error: thumbnailError } = await supabase.storage
+          .from("thumbnails")
+          .upload(filePath, file, {
+            cacheControl: "3600",
+            upsert: true,
+            // You might want to add transformation options for actual thumbnails
+          });
+
+        if (thumbnailError) {
+          console.error("Thumbnail upload error:", thumbnailError);
+          // Continue without thumbnail if there's an error
+        }
+
+        // Get signed URL for raw image
+        const { data: urlData } = await supabase.storage
+          .from("raw_images")
+          .createSignedUrl(uploadData.path, 3600); // 1 hour expiration
+
+        // Get signed URL for thumbnail if available
+        let thumbnailUrl = null;
+        if (thumbnailData) {
+          const { data: thumbUrlData } = await supabase.storage
+            .from("thumbnails")
+            .createSignedUrl(thumbnailData.path, 3600);
+          
+          thumbnailUrl = thumbUrlData?.signedUrl || null;
+        }
+
+        // Save to database
+        const { data, error } = await supabase
           .from("raw_images")
           .insert([
             {
-              name: file.name,
+              filename: fileName,
               project_id: projectId,
-              storage_path: null, // Will update this after storage upload
+              storage_path: uploadData.path,
               content_type: file.type,
               size_bytes: file.size,
               metadata: {},
-              folder_id: folder_id, // Use the passed folder ID
+              folder_id: null, // Can be updated later when moving
               panorama_id: null,
               user_id: (await supabase.auth.getUser()).data.user?.id,
             },
           ])
           .select();
 
-        if (dbError) {
-          console.error("Database insert error:", dbError);
-          throw dbError;
+        if (error) {
+          console.error("Database insert error:", error);
+          throw error;
         }
 
-        if (!dbData || dbData.length === 0) {
-          throw new Error("Failed to create database entry");
-        }
-
-        // Extract the unique ID from the database entry
-        const imageId = dbData[0].id;
-        
-        // Use the unique ID in the filepath and add .jpg extension
-        const filePath = `${projectId}/${imageId}.jpg`;
-
-        console.log(`Uploading image: ${file.name} with ID: ${imageId} to path: ${filePath}${folder_id ? ` in folder: ${folder_id}` : ''}`);
-
-        // Upload to storage with ID-based path
-        const { data: uploadData, error: uploadError } = await supabase.storage
-          .from("raw-images")
-          .upload(filePath, file, {
-            cacheControl: "3600",
-            upsert: true,
-            contentType: "image/jpeg" // Explicitly set content type to image/jpeg
-          });
-
-        if (uploadError) {
-          console.error("Raw image upload error:", uploadError);
-          throw uploadError;
-        }
-
-        // Create and upload actual thumbnail
-        console.log(`Creating thumbnail for: ${file.name}`);
-        
-        try {
-          // Generate a proper thumbnail using the utility
-          const thumbnailFile = await generateThumbnail(file, {
-            maxDimension: 200,
-            quality: 0.7,
-            format: 'image/jpeg',
-            filename: `thumb_${file.name}`
-          });
+        // Add to local state with URL
+        if (data && data.length > 0) {
+          const newImage = {
+            ...data[0],
+            url: urlData?.signedUrl,
+            thumbnail_url: thumbnailUrl
+          };
           
-          // Validate thumbnail
-          if (!(thumbnailFile instanceof File)) {
-            console.error("Thumbnail generation failed: Not a valid File object");
-            throw new Error("Thumbnail generation failed");
-          }
+          // Update state
+          setRawImages((prev) => [...prev, newImage]);
           
-          // Upload the thumbnail with the same path as the main image
-          const { data: thumbnailData, error: thumbnailError } = await supabase.storage
-            .from("thumbnails-private")
-            .upload(filePath, thumbnailFile, {
-              cacheControl: "3600",
-              upsert: true,
-              contentType: "image/jpeg"
-            });
-    
-          if (thumbnailError) {
-            console.error("Thumbnail upload error:", thumbnailError);
-            // Continue without thumbnail if there's an error
-          }
-        } catch (thumbError) {
-          console.error("Error generating thumbnail:", thumbError);
-          // Continue without thumbnail, we'll use the original instead
+          // Update cache
+          addRawImageToCache(projectId, newImage);
         }
-
-        // Update the database entry with the storage path
-        const { error: updateError } = await supabase
-          .from("raw_images")
-          .update({ storage_path: uploadData.path })
-          .eq("id", imageId);
-
-        if (updateError) {
-          console.error("Failed to update storage path:", updateError);
-          // Continue anyway since we have the file uploaded
-        }
-
-        // Get signed URL for thumbnail
-        const { data: thumbUrlData } = await supabase.storage
-          .from("thumbnails-private")
-          .createSignedUrl(filePath, 3600);
-        
-        const thumbnailUrl = thumbUrlData?.signedUrl;
-
-        // Create the final image object with URL
-        const newImage = {
-          ...dbData[0],
-          url: thumbnailUrl || null,
-          storage_path: uploadData.path
-        };
-        
-        // Update state - prevent duplicates by checking if image already exists
-        setRawImages((prev) => {
-          // Check if image already exists in array
-          if (prev.some(img => img.id === newImage.id)) {
-            // Replace the existing image instead of adding a new one
-            return prev.map(img => img.id === newImage.id ? newImage : img);
-          } else {
-            // Add as new image
-            return [...prev, newImage];
-          }
-        });
-        
-        // Update cache
-        addRawImageToCache(projectId, newImage);
       }
 
       alert("Images uploaded successfully");
@@ -392,8 +337,6 @@ export function useRawImages(projectId: string) {
         fileInputRef.current.value = "";
       }
     }
-    
-    return true;
   };
 
   // Helper function to toggle image selection
@@ -413,11 +356,6 @@ export function useRawImages(projectId: string) {
   // Get root level images (no folder)
   const getRootImages = () => {
     return rawImages.filter((img) => img.folder_id === null);
-  };
-
-  // Get ALL images for the project regardless of folder
-  const getAllImages = () => {
-    return rawImages;
   };
 
   // Get images in a folder by folderId
@@ -465,7 +403,6 @@ export function useRawImages(projectId: string) {
     toggleImageSelection,
     getCurrentFolderImages,
     getRootImages,
-    getAllImages,
     getImagesInFolder
   };
 }

@@ -252,17 +252,6 @@ export const UNDERGRADUATE_ROOM_TYPES_BY_RESIDENCE_TYPE = {
         "One Room Double",
         "Two Room Double",
         "One Room Triple"
-    ],
-    "Residence Halls": [
-        "Single",
-        "One Room Double",
-        "Two Room Double",
-        "One Room Triple",
-        "Two Room Triple",
-        "Three Room Triple",
-        "One Room Quad",
-        "Two Room Quad",
-        "Three Room Quad"
     ]
 };
 

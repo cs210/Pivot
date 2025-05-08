@@ -8,7 +8,7 @@ interface ProjectHeaderProps {
   setProjectName: (name: string) => void;
   isEditing: boolean;
   setIsEditing: (editing: boolean) => void;
-  handleUpdateProjectName: () => void;
+  handleUpdateProject: () => void;
   router: any;
 }
 
@@ -18,7 +18,7 @@ export default function ProjectHeader({
   setProjectName,
   isEditing,
   setIsEditing,
-  handleUpdateProjectName,
+  handleUpdateProject,
   router,
 }: ProjectHeaderProps) {
   return (
@@ -41,7 +41,7 @@ export default function ProjectHeader({
               className="text-xl font-bold text-white bg-background/70 border-white/20"
             />
             <Button
-              onClick={handleUpdateProjectName}
+              onClick={handleUpdateProject}
               className="bg-cyber-gradient hover:opacity-90"
             >
               <Save className="mr-2 h-4 w-4" />

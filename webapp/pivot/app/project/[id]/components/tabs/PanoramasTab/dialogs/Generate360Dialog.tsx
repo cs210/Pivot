@@ -149,11 +149,11 @@ import {
                     <div className="aspect-square relative">
                       <img
                         src={image.url}
-                        alt={image.name}
+                        alt={image.filename}
                         className="object-cover w-full h-full"
                       />
                       <div className="absolute bottom-0 left-0 right-0 bg-background/70 p-1 text-xs truncate">
-                        {image.name}
+                        {image.filename}
                       </div>
                     </div>
                   </div>

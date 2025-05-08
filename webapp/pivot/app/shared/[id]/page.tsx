@@ -1,6 +1,7 @@
 "use client";
+
 import { useState, useEffect } from "react";
-import { useParams, useRouter } from "next/navigation";
+import { useParams } from "next/navigation";
 import Link from "next/link";
 import { createClient } from "@/utils/supabase/client";
 import { Header } from "@/components/header";
@@ -8,96 +9,51 @@ import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import PanoramaViewerPage from "../../project/[id]/components/PanoramaViewerPage";
 import PlaceLocationsTabContent from "../../project/[id]/components/EnhancedImageGrid";
-import { Lock, Eye, ArrowLeft, Building2 } from "lucide-react";
+import { Lock, Eye, ArrowLeft } from "lucide-react";
 
 export default function SharedProjectPage() {
   const params = useParams();
-  const router = useRouter();
   const projectId = params.id as string;
   const supabase = createClient();
   const [loading, setLoading] = useState(true);
-  const [project, setProject] = useState<any>(null);
+  const [project, setProject] = useState(null);
   const [error, setError] = useState("");
   const [activeTab, setActiveTab] = useState("walkthrough");
-  const [organization, setOrganization] = useState<any>(null);
 
   useEffect(() => {
     const fetchProject = async () => {
       try {
         setLoading(true);
 
-        // Check if user is logged in
-        const {
-          data: { session },
-          error: authError,
-        } = await supabase.auth.getSession();
-        if (!session || authError) {
-          router.push("/login");
-          return;
-        }
-
-        // Get user's email domain
-        const userDomain = session.user.email?.split("@")[1];
-        if (!userDomain) {
-          setError(
-            "Unable to determine your organization. Please make sure you're logged in with a valid email."
-          );
-          setLoading(false);
-          return;
-        }
-
-        // Fetch project and its organization
+        // Fetch the project
         const { data: projectData, error: projectError } = await supabase
           .from("projects")
-          .select(
-            `
-            *,
-            organizations (
-              id,
-              name,
-              domain_restriction,
-              description
-            )
-          `
-          )
+          .select("*")
           .eq("id", projectId)
+          .eq("is_public", true)
           .single();
 
-        if (projectError || !projectData) {
-          setError(
-            "This project doesn't exist or you don't have access to it."
-          );
+        if (projectError) throw projectError;
+
+        if (!projectData) {
+          setError("This project doesn't exist or is not publicly shared.");
           setLoading(false);
           return;
         }
 
-        // Check if user belongs to the organization
-        if (projectData.organization_id) {
-          const orgDomain = projectData.organizations?.domain_restriction;
-
-          if (orgDomain === userDomain) {
-            setProject(projectData);
-            setOrganization(projectData.organizations);
-          } else {
-            setError(
-              `This project is only accessible to members of the ${
-                projectData.organizations?.name || "organization"
-              }.`
-            );
-          }
-        } else {
-          setError("This project is not shared with any organization.");
-        }
+        setProject(projectData);
       } catch (error) {
         console.error("Error fetching shared project:", error);
-        setError("Failed to load the project. Please try again later.");
+        setError(
+          "Failed to load the project. It may not exist or is not publicly shared."
+        );
       } finally {
         setLoading(false);
       }
     };
 
     fetchProject();
-  }, [projectId, supabase, router]);
+  }, [projectId, supabase]);
 
   if (loading) {
     return (
@@ -126,10 +82,10 @@ export default function SharedProjectPage() {
               <p className="text-muted-foreground mb-6 text-center max-w-md">
                 {error}
               </p>
-              <Link href="/login">
+              <Link href="/">
                 <Button className="bg-cyber-gradient hover:opacity-90">
                   <ArrowLeft className="mr-2 h-4 w-4" />
-                  Sign In
+                  Go Home
                 </Button>
               </Link>
             </div>
@@ -146,9 +102,9 @@ export default function SharedProjectPage() {
         <div className="absolute inset-0 bg-cyber-gradient opacity-5"></div>
         <div className="container mx-auto px-4 py-8 relative z-10">
           <div className="flex items-center mb-6">
-            <div className="w-full">
+            <div>
               <div className="flex items-center gap-2 mb-2">
-                <Link href="/explore">
+                <Link href="/">
                   <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
                     <ArrowLeft className="h-4 w-4" />
                   </Button>
@@ -157,17 +113,9 @@ export default function SharedProjectPage() {
                   {project.name}
                 </h1>
               </div>
-              <div className="flex items-center justify-between">
-                <div className="flex items-center text-sm text-muted-foreground">
-                  <Eye className="mr-2 h-4 w-4" />
-                  <span>View-only Project</span>
-                </div>
-                {organization && (
-                  <div className="flex items-center text-sm text-muted-foreground">
-                    <Building2 className="mr-2 h-4 w-4" />
-                    <span>Shared with {organization.name}</span>
-                  </div>
-                )}
+              <div className="flex items-center text-sm text-muted-foreground">
+                <Eye className="mr-2 h-4 w-4" />
+                <span>View-only Project</span>
               </div>
             </div>
           </div>

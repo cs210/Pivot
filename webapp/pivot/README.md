@@ -49,130 +49,75 @@ The easiest way to deploy your Next.js app is to use the [Vercel Platform](https
 
 Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
 
-# Supabase Setup
+## Supabase Setup
 
-## Overview
+This project utilizes Supabase for its backend, including database storage, file storage, and authentication. The setup is defined primarily through SQL scripts and requires some manual configuration in the Supabase dashboard.
 
-This document provides a comprehensive overview of the database schema and security policies for the Panorama Project. The system allows users to manage projects containing panoramic images organized in a grid layout, with support for organizational access controls and public/private sharing options.
+### Database Schema
 
-## Prerequisites
+The core database schema is defined using PostgreSQL. The necessary `uuid-ossp` extension is enabled.
 
-Before running the database setup script, you must create the following storage buckets:
+**Tables:**
 
-### Private Buckets (Authenticated Access Only)
-- `raw-images` - For storing original uploaded images
-- `panoramas-private` - For storing private panoramic images
-- `thumbnails-private` - For storing private thumbnails
+*   `projects`: Stores information about user projects, including name and description. Each project is linked to a `user_id` from `auth.users`.
+*   `folders`: Represents a hierarchical folder structure within each project for organizing raw images. Folders belong to a `project_id` and can have an optional `parent_folder_id`.
+*   `raw_images`: Contains metadata about uploaded raw image files. Each image belongs to a `project_id`, `user_id`, and optionally a `folder_id` or `panorama_id` (if used to generate a panorama). The actual image file is stored in Supabase Storage.
+*   `panoramas`: Stores metadata for generated panorama images, including their `storage_path`, `project_id`, and `user_id`. Associated raw images might be linked via `raw_images.panorama_id`.
+*   `grids`: Defines customizable grid layouts for projects, with attributes for rows, columns, visibility settings, and a default flag. Each grid is linked to a `project_id` and `user_id`.
+*   `grid_nodes`: Defines nodes within a project's grid layout. Each node has coordinates (`grid_x`, `grid_y`), belongs to a `grid_id` and `project_id`, and can optionally be linked to a specific `panorama_id`.
 
-### Public Buckets (Public Access Available)
-- `panoramas-public` - For storing public panoramic images
-- `thumbnails-public` - For storing public thumbnails
+**Relationships:**
 
-## Database Schema
+*   `projects` are linked to `auth.users`.
+*   `folders`, `raw_images`, `panoramas`, `grids`, and `grid_nodes` are linked to `projects`.
+*   `folders` can have parent-child relationships with other `folders`.
+*   `raw_images` can optionally belong to `folders`.
+*   `raw_images` can optionally link to `panoramas`.
+*   `grids` belong to a specific project and user.
+*   `grid_nodes` belong to a specific grid and can optionally link to a `panorama`, creating a layout of viewable panoramas within the grid.
 
-### Core Entities
+**Automatic Timestamps:**
 
-#### Organizations
-Organizations represent groups (like Stanford University) with domain restrictions for access control.
-- Each organization has a unique name and optional domain restriction (e.g., 'stanford.edu')
-- Users with matching email domains can access organization resources
+*   Triggers are set up to automatically update the `updated_at` column on `projects`, `folders`, `raw_images`, `panoramas`, `grids`, and `grid_nodes` tables whenever a row is updated.
 
-#### Projects
-Projects are the main containers for panoramic image collections.
-- Each project belongs to a specific user
-- Projects can be public or private
-- Projects can be associated with an organization
-- Projects can be archived
+**Indexes:**
 
-#### Folders
-Folders help organize raw images within projects.
-- Folders belong to a project
-- Folders can be nested (have a parent folder)
-- Each folder name must be unique within its parent folder in a project
+*   Various indexes are created on foreign keys (e.g., `user_id`, `project_id`) and frequently queried columns (e.g., `grid_nodes(grid_x, grid_y)`) to improve query performance.
 
-#### Raw Images
-Raw images are the original uploaded images.
-- Raw images belong to a project and optionally to a folder
-- Raw images can be linked to a panorama
-- Raw images have metadata like content type and size
+### Storage Buckets
 
-#### Panoramas
-Panoramas are processed images ready for viewing.
-- Panoramas belong to a project
-- Panoramas have metadata and storage information
-- A panorama can be created from one or more raw images
+Two Supabase Storage buckets are required:
 
-#### Grids
-Grids define the layout for displaying panoramas.
-- Grids belong to a project
-- Grids have a defined number of rows and columns
-- Projects can have multiple grids, with one marked as default
+1.  `raw-images`: Used to store the actual image files uploaded by users. This bucket should be configured as **private**, as access is controlled via RLS policies on the `raw_images` table metadata and potentially signed URLs.
+2.  `panoramas`: Used to store the generated panorama image files. This bucket can be configured as **public** if panoramas are intended to be directly accessible via URL without authentication, or private if access should be restricted.
 
-#### Grid Nodes
-Grid nodes connect panoramas to specific positions in a grid.
-- Grid nodes have x,y coordinates in the grid
-- Grid nodes can reference a panorama
-- Grid nodes can have additional display properties like rotation and scale
+*Note: Buckets must be created manually via the Supabase Dashboard or Management API.*
 
-## Security Model
+#### Storage Bucket Policies
 
-The database implements a comprehensive Row Level Security (RLS) model:
+The following RLS policies dictate how users can access objects within the storage buckets:
 
-### Access Control Policies
+**Policies for panoramas bucket:**
+- Authenticated users can upload panoramas (INSERT)
+- Users can update their own panoramas (UPDATE)
+- Users can delete their own panoramas (DELETE)
+- Users can view their own panoramas (SELECT)
+- Anyone (authenticated and anonymous) can view panoramas marked as public in the `panoramas` table
 
-#### Project Access
-- Users can see, edit, and delete their own projects
-- Users can see public projects
-- Users can see projects in their organization (based on email domain)
+**Policies for raw-images bucket:**
+- Authenticated users can upload raw images (INSERT)
+- Users can update their own raw images (UPDATE)
+- Users can delete their own raw images (DELETE)
+- Users can view ONLY their own raw images (SELECT)
 
-#### Folder Access
-- Users can only manage folders in their own projects
+These policies ensure that raw images remain private to the uploading user, while panoramas can be either private to the user or made publicly accessible based on the `is_public` flag in the `panoramas` table.
 
-#### Image Access
-- Users can see and manage raw images in their own projects
-- Users can see panoramas in public projects
-- Users can see panoramas in their organization's projects
+### Row Level Security (RLS)
 
-#### Grid Access
-- Users can see and manage grids in their own projects
-- Users can see grids in public projects
-- Users can see grids in their organization's projects
+RLS is enabled on all primary data tables (`projects`, `folders`, `raw_images`, `panoramas`, `grids`, `grid_nodes`) to enforce data privacy and security. The general policy is:
 
-### Storage Bucket Policies
+*   **Users can only interact with their own data:** They can select, insert, update, and delete records directly associated with their `user_id` (e.g., their `projects`, `raw_images`, `panoramas`).
+*   **Project-based access:** For tables like `folders` and `grid_nodes`, users can interact with records belonging to projects they own.
+*   **Public Access:** The `panoramas` table allows public read access (`SELECT`) if the `is_public` flag is set to `TRUE`. Similarly, `grids` marked as public can be viewed by anyone, and `grid_nodes` linked to public grids or public panoramas can also be viewed.
 
-#### Private Buckets
-- Users can only access their own files
-- Organization members can access files related to organization projects
-
-#### Public Buckets
-- Anyone can access files related to public projects
-- Only file owners can modify or delete files
-
-## Technical Features
-
-- UUID primary keys for all tables
-- Automatic timestamp management for created_at and updated_at
-- Referential integrity enforced with foreign key constraints
-- Uniqueness constraints where appropriate
-- Custom triggers to enforce business rules
-- Optimized indexes for common query patterns
-- JSONB fields for flexible metadata storage
-- Domain-based organization access control
-
-## Usage Notes
-
-1. Projects are the primary container for all content
-2. Users must own projects to modify their contents
-3. Organization-based sharing is determined by email domain
-4. Public projects are visible to all users
-5. Raw images can be organized in folders
-6. Panoramas can be positioned in multiple grid layouts
-7. Each grid node can display a different panorama
-
-## Security Best Practices
-
-- All modifications require authentication
-- Row-level security restricts access to authorized users
-- Organization access is based on email domain validation
-- Public content is explicitly marked via is_public flag
-- Storage access is synchronized with database permissions
+These policies ensure that users can only access data they are authorized to see, based on their authentication status and project ownership.

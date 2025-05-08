@@ -8,6 +8,7 @@ import CreateFolderDialog from "./dialogs/CreateFolderDialog";
 import RenameFolderDialog from "./dialogs/RenameFolderDialog";
 import RenameImageDialog from "./dialogs/RenameImageDialog";
 import MoveImageDialog from "./dialogs/MoveImageDialog";
+import { generateThumbnail } from "@/utils/generate-thumbnail";
 
 interface RawImagesTabProps {
   projectId: string;
@@ -21,6 +22,7 @@ export default function RawImagesTab({ projectId }: RawImagesTabProps) {
     rawImages,
     setRawImages,
     selectedImages,
+    setSelectedImages,
     viewMode,
     setViewMode,
     uploading,
@@ -29,6 +31,7 @@ export default function RawImagesTab({ projectId }: RawImagesTabProps) {
     setRenameImageDialogOpen,
     moveImageDialogOpen,
     setMoveImageDialogOpen,
+    imageToRename,
     setImageToRename,
     newImageName,
     setNewImageName,
@@ -43,9 +46,8 @@ export default function RawImagesTab({ projectId }: RawImagesTabProps) {
     handleMoveImages,
     toggleImageSelection,
     getCurrentFolderImages,
-    getAllImages,
-    getImagesInFolder,
-    handleImageUpload
+    getRootImages,
+    getImagesInFolder
   } = useRawImages(projectId);
 
   // Use the folders hook
@@ -60,8 +62,14 @@ export default function RawImagesTab({ projectId }: RawImagesTabProps) {
     setCreateFolderDialogOpen,
     renameFolderDialogOpen,
     setRenameFolderDialogOpen,
+    deleteFolderDialogOpen,
+    setDeleteFolderDialogOpen,
+    folderToRename,
     setFolderToRename,
+    folderToDelete,
+    setFolderToDelete,
     folderInputRef,
+    fetchFolders,
     handleCreateFolder,
     handleRenameFolder,
     handleDeleteFolder
@@ -74,7 +82,145 @@ export default function RawImagesTab({ projectId }: RawImagesTabProps) {
   const handleFileUpload = async (
     event: React.ChangeEvent<HTMLInputElement>
   ) => {
-    await handleImageUpload(event);
+    const files = event.target.files;
+    if (!files || files.length === 0) return;
+
+    setUploading(true);
+
+    try {
+      for (let i = 0; i < files.length; i++) {
+        const file = files[i];
+        const fileName = file.name;
+        const filePath = `${projectId}/${fileName}`;
+        
+        console.log(`Uploading file: ${fileName} to path: ${filePath}`);
+
+        // Make sure you're using the correct bucket name
+        const { data: uploadDataRaw, error: uploadErrorRaw } = await supabase.storage
+          .from("raw-images") // Must match exactly the bucket name in your Supabase dashboard
+          .upload(filePath, file, {
+            cacheControl: "3600",
+            upsert: true,
+          });
+
+        console.log(`Creating thumbnail for file: ${fileName}`);
+          
+        // Turn file into thumbnail
+        // Use downsampling to make it a lot smaller
+        const thumbnailFile = await generateThumbnail(file, {
+          maxDimension: 200,
+          quality: 0.7,
+          format: 'image/jpeg',
+          filename: `thumb_${fileName}`
+        });
+
+        // Confirm that thumbnailFile is a valid File object
+        if (!(thumbnailFile instanceof File)) {
+          console.error("Thumbnail generation failed: Not a valid File object");
+          throw new Error("Thumbnail generation failed: Not a valid File object");
+        }
+
+        const { data: uploadDataThumb, error: uploadErrorThumb } = await supabase.storage
+          .from("thumbnails") // Must match exactly the bucket name in your Supabase dashboard
+          .upload(filePath, thumbnailFile, {
+            cacheControl: "3600",
+            upsert: true,
+          });
+
+        if (uploadErrorRaw) {
+          console.error("Storage upload error:", {
+            message: uploadErrorRaw.message,
+            name: uploadErrorRaw.name,
+            fullError: JSON.stringify(uploadErrorRaw, null, 2),
+          });
+          throw uploadErrorRaw;
+        }
+
+        if (uploadErrorThumb) {
+          console.error("Storage upload error:", {
+            message: uploadErrorThumb.message,
+            name: uploadErrorThumb.name,
+            fullError: JSON.stringify(uploadErrorThumb, null, 2),
+          });
+          throw uploadErrorThumb;
+        }
+
+        console.log("File uploaded successfully:", uploadDataRaw?.path);
+
+        // Get URL (note: raw-images bucket is private according to policies)
+        const { data: urlDataRaw } = await supabase.storage
+          .from("raw-images")
+          .createSignedUrl(uploadDataRaw.path, 3600); // 1 hour expiration
+
+        const { data: urlDataThumb } = await supabase.storage
+          .from("thumbnails")
+          .createSignedUrl(uploadDataThumb.path, 3600); // 1 hour expiration
+
+        // Save to database
+        const { data, error } = await supabase
+          .from("raw_images")
+          .insert([
+            {
+              filename: fileName,
+              storage_path: uploadDataRaw.path,
+              project_id: projectId,
+              folder_id: currentFolder?.id || null,
+              user_id: (await supabase.auth.getUser()).data.user?.id, // Required field
+              content_type: file.type, // Required field
+              size_bytes: file.size, // Required field
+              metadata: {} // Required field but can be empty
+            },
+          ])
+          .select();
+
+        if (error) {
+          console.error("Database insert error:", {
+            message: error instanceof Error ? error.message : "Unknown error",
+            code: error instanceof Error ? (error as any).code : "Unknown code",
+            details: error instanceof Error && 'details' in error ? (error as any).details : undefined,
+            hint: error instanceof Error && 'hint' in error ? (error as any).hint : undefined,
+            fullError: JSON.stringify(error, null, 2),
+          });
+          throw error;
+        }
+
+        console.log("Image record created in database:", data);
+
+        // Add to local state with proper mapping
+        if (data && data.length > 0) {
+          const formattedData = data.map(img => ({
+            ...img,
+            name: img.filename, // Add name for component compatibility
+            url: urlDataThumb?.signedUrl, // Add url for component compatibility
+          }));
+          
+          setRawImages((prev) => [...prev, ...formattedData]);
+        }
+      }
+
+      alert("Images uploaded successfully");
+    } catch (error) {
+      console.error("Error uploading images:", {
+        message: error instanceof Error ? error.message : "Unknown error",
+        code: error instanceof Error ? (error as any).code : "Unknown code",
+        details: error instanceof Error && 'details' in error ? (error as any).details : undefined,
+        hint: error instanceof Error && 'hint' in error ? (error as any).hint : undefined,
+        name: error instanceof Error ? error.name : "Unknown name",
+        stack: error instanceof Error ? error.stack : undefined,
+        fullError: JSON.stringify(error, null, 2),
+      });
+      if (error instanceof Error) {
+        alert(`Failed to upload images: ${error.message}`);
+      } else {
+        alert("Failed to upload images: Unknown error");
+      }
+    } finally {
+      setUploading(false);
+      // Reset the file input
+      if (fileInputRef.current) {
+        fileInputRef.current.value = "";
+      }
+    }
   };
 
   const handleFolderUpload = async (
@@ -95,7 +241,6 @@ export default function RawImagesTab({ projectId }: RawImagesTabProps) {
       // Track directories that only contain other directories
       const emptyDirectories = new Set<string>();
       
-      // Analyze the file structure
       for (let i = 0; i < files.length; i++) {
         const file = files[i];
         const relativePath = file.webkitRelativePath;
@@ -177,34 +322,189 @@ export default function RawImagesTab({ projectId }: RawImagesTabProps) {
           // This is a subdirectory, so we need to find or create its parent
           const parentFolderName = pathParts[pathParts.length - 2];
           
-          // Create or get parent folder ID
-          parentFolderId = await ensureFolderExists(parentFolderName);
+          // Check if parent folder exists
+          let { data: existingParentFolders } = await supabase
+            .from("folders")
+            .select("id")
+            .eq("name", parentFolderName)
+            .eq("project_id", projectId)
+            .eq("parent_id", currentFolder?.id || null);
+            
+          if (existingParentFolders && existingParentFolders.length > 0) {
+            parentFolderId = existingParentFolders[0].id;
+          } else {
+            // Create parent folder if it doesn't exist and isn't an empty directory
+            if (!emptyDirectories.has(parentFolderName)) {
+              const { data: parentFolderData, error: parentFolderError } = await supabase
+                .from("folders")
+                .insert([
+                  {
+                    name: parentFolderName,
+                    project_id: projectId,
+                    parent_id: currentFolder?.id || null,
+                  },
+                ])
+                .select();
+
+              if (parentFolderError) {
+                console.error("Parent folder creation error:", parentFolderError);
+                throw parentFolderError;
+              }
+
+              if (parentFolderData && parentFolderData.length > 0) {
+                parentFolderId = parentFolderData[0].id;
+                // Add new parent folder to state
+                setFolders(prev => [...prev, ...parentFolderData]);
+              }
+            }
+          }
         }
 
-        // Create or get current folder ID
-        const folderId = await ensureFolderExists(folderName, parentFolderId);
+        // Check if current folder exists
+        let { data: existingFolders } = await supabase
+          .from("folders")
+          .select("id")
+          .eq("name", folderName)
+          .eq("project_id", projectId)
+          .eq("parent_id", parentFolderId);
+          
+        let folderId;
+          
+        if (existingFolders && existingFolders.length > 0) {
+          // Use existing folder
+          folderId = existingFolders[0].id;
+          console.log(`Using existing folder with ID: ${folderId}`);
+        } else {
+          // Create folder if it doesn't exist
+          const { data: folderData, error: folderError } = await supabase
+            .from("folders")
+            .insert([
+              {
+                name: folderName,
+                project_id: projectId,
+                parent_id: parentFolderId,
+              },
+            ])
+            .select();
+
+          if (folderError) {
+            console.error("Folder creation error:", folderError);
+            throw folderError;
+          }
+
+          if (!folderData || folderData.length === 0) {
+            console.error("No folder data returned after insert");
+            continue;
+          }
+
+          folderId = folderData[0].id;
+          console.log(`Created folder with ID: ${folderId}`);
+
+          // Add folder to state
+          setFolders(prev => [...prev, ...folderData]);
+        }
 
         // Upload files for this folder
         const filesToUpload = filesByPath[dirPath] || [];
         
-        // Create a mock event for handleImageUpload
-        for (const file of filesToUpload) {
-          // Create a FileList-like object
-          const mockFileList = {
-            0: file,
-            length: 1,
-            item: (index: number) => index === 0 ? file : null
-          } as unknown as FileList;
+        for (let i = 0; i < filesToUpload.length; i++) {
+          const file = files[i];
+          const fileName = file.name;
+          const filePath = `${projectId}/${fileName}`;
+
+          console.log(`Uploading file: ${fileName} to path: ${filePath}`);
+
+        // Make sure you're using the correct bucket name
+        const { data: uploadDataRaw, error: uploadErrorRaw } = await supabase.storage
+          .from("raw-images") // Must match exactly the bucket name in your Supabase dashboard
+          .upload(filePath, file, {
+            cacheControl: "3600",
+            upsert: true,
+          });
+
+        console.log(`Creating thumbnail for file: ${fileName}`);
           
-          // Create a mock event
-          const mockEvent = {
-            target: {
-              files: mockFileList
-            }
-          } as React.ChangeEvent<HTMLInputElement>;
-          
-          // Call handleImageUpload with the folder ID
-          await handleImageUpload(mockEvent, folderId);
+        // Turn file into thumbnail
+        // Use downsampling to make it a lot smaller
+        const thumbnailFile = await generateThumbnail(file, {
+          maxDimension: 200,
+          quality: 0.7,
+          format: 'image/jpeg',
+          filename: `thumb_${fileName}`
+        });
+
+        // Confirm that thumbnailFile is a valid File object
+        if (!(thumbnailFile instanceof File)) {
+          console.error("Thumbnail generation failed: Not a valid File object");
+          throw new Error("Thumbnail generation failed: Not a valid File object");
+        }
+
+        const { data: uploadDataThumb, error: uploadErrorThumb } = await supabase.storage
+          .from("thumbnails") // Must match exactly the bucket name in your Supabase dashboard
+          .upload(filePath, thumbnailFile, {
+            cacheControl: "3600",
+            upsert: true,
+          });
+
+          if (uploadErrorRaw) {
+            console.error("Storage upload error:", {
+              message: uploadErrorRaw.message,
+              name: uploadErrorRaw.name,
+              fullError: JSON.stringify(uploadErrorRaw, null, 2),
+            });
+            throw uploadErrorRaw;
+          }
+  
+          if (uploadErrorThumb) {
+            console.error("Storage upload error:", {
+              message: uploadErrorThumb.message,
+              name: uploadErrorThumb.name,
+              fullError: JSON.stringify(uploadErrorThumb, null, 2),
+            });
+            throw uploadErrorThumb;
+          }
+
+          console.log("File uploaded successfully:", uploadDataRaw?.path);
+
+          // Get URL (note: raw-images bucket is private according to policies)
+          const { data: urlDataRaw } = await supabase.storage
+          .from("raw-images")
+          .createSignedUrl(uploadDataRaw.path, 3600); // 1 hour expiration
+
+        const { data: urlDataThumb } = await supabase.storage
+          .from("thumbnails")
+          .createSignedUrl(uploadDataThumb.path, 3600); // 1 hour expiration
+
+          // Save to database
+          const { data, error } = await supabase
+            .from("raw_images")
+            .insert([
+              {
+                filename: fileName,
+                storage_path: uploadDataRaw.path,
+                project_id: projectId,
+                folder_id: folderId,
+                user_id: (await supabase.auth.getUser()).data.user?.id,
+                content_type: file.type,
+                size_bytes: file.size,
+                metadata: {}
+              },
+            ])
+            .select();
+
+          if (error) {
+            console.error("Database insert error:", error);
+            throw error;
+          }
+
+          // Add to local state with URL
+          if (data && data.length > 0) {
+            const imageWithUrl = {
+              ...data[0],
+              url: urlDataThumb?.signedUrl
+            };
+            setRawImages(prev => [...prev, imageWithUrl]);
+          }
         }
       }
 
@@ -224,57 +524,6 @@ export default function RawImagesTab({ projectId }: RawImagesTabProps) {
         folderInputRef.current.value = "";
       }
     }
-  };
-
-  // Helper functions for folder uploads
-  
-  // Create or find a folder by name
-  const ensureFolderExists = async (
-    folderName: string, 
-    parentFolderId: string | null = null
-  ): Promise<string> => {
-    // Check if folder already exists
-    let { data: existingFolders } = await supabase
-      .from("folders")
-      .select("id")
-      .eq("name", folderName)
-      .eq("project_id", projectId)
-      .eq("parent_id", parentFolderId);
-      
-    if (existingFolders && existingFolders.length > 0) {
-      // Use existing folder
-      console.log(`Using existing folder with ID: ${existingFolders[0].id}`);
-      return existingFolders[0].id;
-    }
-    
-    // Create new folder
-    const { data: folderData, error: folderError } = await supabase
-      .from("folders")
-      .insert([
-        {
-          name: folderName,
-          project_id: projectId,
-          parent_id: parentFolderId,
-        },
-      ])
-      .select();
-
-    if (folderError) {
-      console.error("Folder creation error:", folderError);
-      throw folderError;
-    }
-
-    if (!folderData || folderData.length === 0) {
-      console.error("No folder data returned after insert");
-      throw new Error("Failed to create folder");
-    }
-
-    console.log(`Created folder with ID: ${folderData[0].id}`);
-
-    // Add folder to state
-    setFolders((prev) => [...prev, ...folderData]);
-    
-    return folderData[0].id;
   };
 
   // Custom delete handler for folders that counts and deletes images inside
@@ -332,7 +581,7 @@ export default function RawImagesTab({ projectId }: RawImagesTabProps) {
         setImagesToMove={setImagesToMove}
         setMoveImageDialogOpen={setMoveImageDialogOpen}
         getCurrentFolderImages={() => getCurrentFolderImages(currentFolder)}
-        getAllImages={getAllImages}
+        getRootImages={getRootImages}
       />
 
       {/* Dialogs */}

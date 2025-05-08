@@ -105,24 +105,23 @@ export function usePanoramas(projectId: string) {
         if (item.is_public) {
           // For public panoramas, use the public URL
           url = supabase.storage
-            .from("panoramas-public")
+            .from("panoramas")
             .getPublicUrl(item.storage_path).data.publicUrl;
           
           // Get thumbnail URL from thumbnails bucket
           thumbnailUrl = supabase.storage
-            .from("thumbnails-public")
+            .from("thumbnails")
             .getPublicUrl(item.storage_path).data.publicUrl;
-
         } else {
           // For private panoramas, generate signed URLs
           const { data: urlData } = await supabase.storage
-            .from("panoramas-private")
+            .from("panoramas")
             .createSignedUrl(item.storage_path, 3600); // 1 hour expiration
   
           const { data: thumbUrlData } = await supabase.storage
-            .from("thumbnails-private")
+            .from("thumbnails")
             .createSignedUrl(item.storage_path, 3600); // 1 hour expiration
-
+  
           url = urlData?.signedUrl || null;
           thumbnailUrl = thumbUrlData?.signedUrl || null;
         }
@@ -191,12 +190,12 @@ export function usePanoramas(projectId: string) {
       if (panorama.is_public) {
         // For public panoramas, use the public URL
         url = supabase.storage
-          .from("panoramas-public")
+          .from("panoramas")
           .getPublicUrl(panorama.storage_path).data.publicUrl;
       } else {
         // For private panoramas, generate a signed URL
         const { data: urlData } = await supabase.storage
-          .from("panoramas-private")
+          .from("panoramas")
           .createSignedUrl(panorama.storage_path, 3600); // 1 hour expiration
 
         url = urlData?.signedUrl || null;
@@ -272,26 +271,15 @@ export function usePanoramas(projectId: string) {
       // Delete from storage
       try {
         if (panoramaToDelete.storage_path) {
-          if (panoramaToDelete.is_public) {
-            await supabase.storage
-              .from("panoramas-public")
-              .remove([panoramaToDelete.storage_path]);
-
-            // Delete the thumbnail
-            await supabase.storage
-            .from("thumbnails-public")
+          // Delete the full panorama
+          await supabase.storage
+            .from("panoramas")
             .remove([panoramaToDelete.storage_path]);
-
-          } else {
-            // Delete the full panorama
-            await supabase.storage
-              .from("panoramas-private")
-              .remove([panoramaToDelete.storage_path]);
-            // Delete the thumbnail
-            await supabase.storage
-              .from("thumbnails-private")
-              .remove([panoramaToDelete.storage_path]);
-          }
+            
+          // Delete the thumbnail
+          await supabase.storage
+            .from("thumbnails")
+            .remove([panoramaToDelete.storage_path]);
         }
       } catch (storageError) {
         console.warn("Could not delete from storage:", storageError);
@@ -336,59 +324,16 @@ export function usePanoramas(projectId: string) {
       for (let i = 0; i < files.length; i++) {
         const file = files[i];
         const fileName = file.name;
-        
-        // Check if file is a JPG image
-        if (file.type !== 'image/jpeg' && file.type !== 'image/jpg') {
-          console.log(`Skipping non-JPG file: ${fileName}`);
-          alert(`Only JPG images are supported. Skipping file: ${fileName}`);
-          continue;
-        }
-        
-        // First, create database entry to get the ID
-        const { data: dbData, error: dbError } = await supabase
-          .from("panoramas")
-          .insert([
-            {
-              name: fileName,
-              project_id: projectId,
-              storage_path: null, // Will update this after storage upload
-              content_type: "image/jpeg", // Always set to image/jpeg
-              size_bytes: file.size,
-              metadata: {},
-              user_id: (await supabase.auth.getUser()).data.user?.id,
-            },
-          ])
-          .select();
+        const filePath = `${projectId}/${fileName}`;
   
-        if (dbError) {
-          console.error("Database insert error:", dbError);
-          throw dbError;
-        }
+        console.log(`Uploading panorama: ${fileName} to path: ${filePath}`);
   
-        if (!dbData || dbData.length === 0) {
-          throw new Error("Failed to create database entry");
-        }
-  
-        // Extract the unique ID from the database entry
-        const panoramaId = dbData[0].id;
-        const isPublic = dbData[0].is_public;
-        
-        // Use the unique ID in the filepath with .jpg extension
-        const filePath = `${projectId}/${panoramaId}.jpg`;
-  
-        console.log(`Uploading panorama (public=${isPublic}): ${fileName} with ID: ${panoramaId} to path: ${filePath}`);
-        
-        // Choose the appropriate storage bucket based on public/private status
-        const storageBucket = isPublic ? "panoramas-public" : "panoramas-private";
-        const thumbnailBucket = isPublic ? "thumbnails-public" : "thumbnails-private";
-        
-        // Upload to storage with ID-based path
+        // Upload full panorama to storage
         const { data: uploadData, error: uploadError } = await supabase.storage
-          .from(storageBucket)
+          .from("panoramas")
           .upload(filePath, file, {
             cacheControl: "3600",
             upsert: true,
-            contentType: "image/jpeg" // Explicitly set content type to image/jpeg
           });
   
         if (uploadError) {
@@ -407,7 +352,7 @@ export function usePanoramas(projectId: string) {
         });
 
         const { data: thumbnailData, error: thumbnailError } = await supabase.storage
-          .from(thumbnailBucket)
+          .from("thumbnails")
           .upload(filePath, thumbnailBlob, {
             cacheControl: "3600",
             upsert: true,
@@ -420,63 +365,19 @@ export function usePanoramas(projectId: string) {
 
         console.log("Thumbnail uploaded successfully:", thumbnailData?.path);
   
-        const { error: databaseUpdateError } = await supabase
+        // Get signed URLs for both panorama and thumbnail
+        const { data: panoramaUrlData } = await supabase.storage
           .from("panoramas")
-          .update({ storage_path: uploadData.path })
-          .eq("id", panoramaId);
-       
-          if (databaseUpdateError) {
-          console.error("Database update error:", databaseUpdateError);
-          throw databaseUpdateError;
+          .createSignedUrl(uploadData.path, 3600);
+
+        const { data: thumbnailUrlData } = await supabase.storage
+          .from("thumbnails")
+          .createSignedUrl(thumbnailData.path, 3600);
+  
+        if (!panoramaUrlData?.signedUrl) {
+          console.error("Failed to get signed URL for panorama:", uploadData?.path);
+          throw new Error("Failed to get signed URL");
         }
-        console.log("Database updated with storage path:", uploadData.path);
-
-        let url;
-        let thumbnailUrl;
-        if (isPublic) {
-          // For public panoramas, use the public URL
-          const { data: urlData } = supabase.storage
-            .from(storageBucket)
-            .getPublicUrl(uploadData.path);
-          
-          if (!urlData?.publicUrl) {
-            console.error("Failed to get public URL for panorama:", uploadData?.path);
-            throw new Error("Failed to get public URL");
-          }
-
-          // For public panoramas, use the public URL
-          const { data: thumbnailUrlData } = supabase.storage
-          .from(thumbnailBucket)
-          .getPublicUrl(uploadData.path);
-          
-          if (!thumbnailUrlData?.publicUrl) {
-            console.error("Failed to get public URL for panorama thumbnail:", uploadData?.path);
-            throw new Error("Failed to get public URL");
-          }
-
-          url = urlData.publicUrl;
-          thumbnailUrl = thumbnailUrlData.publicUrl;
-        } else {
-          // Get signed URLs for both panorama and thumbnail
-          const { data: panoramaUrlData } = await supabase.storage
-            .from("panoramas")
-            .createSignedUrl(uploadData.path, 3600);
-          if (!panoramaUrlData?.signedUrl) {
-            console.error("Failed to get signed URL for panorama:", uploadData?.path);
-            throw new Error("Failed to get signed URL");
-          }
-          const { data: thumbnailUrlData } = await supabase.storage
-            .from(thumbnailBucket)
-            .createSignedUrl(thumbnailData.path, 3600);
-          if (!thumbnailUrlData?.signedUrl) {
-            console.error("Failed to get signed URL for panorama thumbnail:", thumbnailData?.path);
-            throw new Error("Failed to get signed URL");
-          }
-          url = panoramaUrlData.signedUrl;
-          thumbnailUrl = thumbnailUrlData.signedUrl;
-        }
-        console.log("Generated signed URL for panorama:", url);
-        console.log("Generated signed URL for thumbnail:", thumbnailUrl);
   
         // Insert into database
         const { data, error } = await supabase
@@ -503,8 +404,8 @@ export function usePanoramas(projectId: string) {
         if (data && data.length > 0) {
           const newPanorama = {
             ...data[0],
-            url: url,
-            thumbnail_url: thumbnailUrl,
+            url: panoramaUrlData.signedUrl,
+            thumbnail_url: thumbnailUrlData?.signedUrl || null,
             is_processing: false
           };
   
@@ -531,9 +432,8 @@ export function usePanoramas(projectId: string) {
     }
   };
   
+
   const getProjectPanoramas = () => {
-    console.log("Fetching panoramas for project:", projectId);
-    console.log("Panoramas:", panoramas);
     return panoramas;
   };
 
