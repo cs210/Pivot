@@ -18,7 +18,10 @@ export function useFolders(projectId: string) {
   const [renameFolderDialogOpen, setRenameFolderDialogOpen] = useState(false);
   const [folderToRename, setFolderToRename] = useState<Folder | null>(null);
   const [deleteFolderDialogOpen, setDeleteFolderDialogOpen] = useState(false);
-  const [folderToDelete, setFolderToDelete] = useState<{ id: string; name: string } | null>(null);
+  const [folderToDelete, setFolderToDelete] = useState<{
+    id: string;
+    name: string;
+  } | null>(null);
   const folderInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -100,7 +103,8 @@ export function useFolders(projectId: string) {
         setFolders((prev) => [...prev, ...data]);
         setNewFolderName("");
         setCreateFolderDialogOpen(false);
-        alert("Folder created successfully");
+        // USED TO BE ALERT()
+        console.log("Folder created successfully");
       } else {
         throw new Error("No data returned from insert operation");
       }
@@ -157,7 +161,8 @@ export function useFolders(projectId: string) {
         setCurrentFolder(null);
       }
 
-      alert("Folder deleted successfully");
+      // USED TO BE ALERT()
+      console.log("Folder deleted successfully");
     } catch (error) {
       console.error("Error deleting folder:", error);
       alert("Failed to delete folder");
@@ -170,11 +175,11 @@ export function useFolders(projectId: string) {
     setFolders,
     currentFolder,
     setCurrentFolder,
-    
+
     // Folder name states
     newFolderName,
     setNewFolderName,
-    
+
     // Dialog states
     createFolderDialogOpen,
     setCreateFolderDialogOpen,
@@ -182,20 +187,20 @@ export function useFolders(projectId: string) {
     setRenameFolderDialogOpen,
     deleteFolderDialogOpen,
     setDeleteFolderDialogOpen,
-    
+
     // Folder operation targets
     folderToRename,
     setFolderToRename,
     folderToDelete,
     setFolderToDelete,
-    
+
     // Refs
     folderInputRef,
-    
+
     // Main functions
     fetchFolders,
     handleCreateFolder,
     handleRenameFolder,
-    handleDeleteFolder
+    handleDeleteFolder,
   };
 }

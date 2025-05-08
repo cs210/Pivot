@@ -45,7 +45,7 @@ export default function RawImagesTab({ projectId }: RawImagesTabProps) {
     getCurrentFolderImages,
     getAllImages,
     getImagesInFolder,
-    handleImageUpload
+    handleImageUpload,
   } = useRawImages(projectId);
 
   // Use the folders hook
@@ -64,7 +64,7 @@ export default function RawImagesTab({ projectId }: RawImagesTabProps) {
     folderInputRef,
     handleCreateFolder,
     handleRenameFolder,
-    handleDeleteFolder
+    handleDeleteFolder,
   } = useFolders(projectId);
 
   useEffect(() => {
@@ -89,50 +89,52 @@ export default function RawImagesTab({ projectId }: RawImagesTabProps) {
       // First, analyze the file structure to understand the hierarchy
       const filesByPath: Record<string, File[]> = {};
       const directoryStructure: Record<string, Set<string>> = {}; // Parent directory -> child directories
-      
+
       // Track directories that contain images directly
       const directoriesWithImages = new Set<string>();
       // Track directories that only contain other directories
       const emptyDirectories = new Set<string>();
-      
+
       // Analyze the file structure
       for (let i = 0; i < files.length; i++) {
         const file = files[i];
         const relativePath = file.webkitRelativePath;
-        
+
         if (!relativePath) {
           console.warn("No relative path found, skipping file", file.name);
           continue;
         }
-        
+
         // Check if file is an image
-        const isImage = file.type.startsWith('image/');
+        const isImage = file.type.startsWith("image/");
         if (!isImage) {
           console.log(`Skipping non-image file: ${file.name}`);
           continue;
         }
 
         const pathParts = relativePath.split("/");
-        
+
         // We only support up to 3 levels: root/subfolder/file.jpg
         if (pathParts.length > 3) {
-          console.warn(`Skipping file ${relativePath} - too deep in hierarchy (max 3 levels)`);
+          console.warn(
+            `Skipping file ${relativePath} - too deep in hierarchy (max 3 levels)`
+          );
           continue;
         }
-        
+
         // Get directories in the path
         const rootDir = pathParts[0];
-        const parentPath = pathParts.slice(0, -1).join('/');
-        
+        const parentPath = pathParts.slice(0, -1).join("/");
+
         // Add file to its containing directory
         if (!filesByPath[parentPath]) {
           filesByPath[parentPath] = [];
         }
         filesByPath[parentPath].push(file);
-        
+
         // Mark directory as containing images
         directoriesWithImages.add(parentPath);
-        
+
         // Build directory structure
         if (pathParts.length > 2) {
           // This is a file in a subdirectory
@@ -143,40 +145,42 @@ export default function RawImagesTab({ projectId }: RawImagesTabProps) {
           directoryStructure[rootDir].add(subDir);
         }
       }
-      
+
       // Identify directories that don't directly contain images
       for (const parentDir in directoryStructure) {
         if (!filesByPath[parentDir] || filesByPath[parentDir].length === 0) {
           emptyDirectories.add(parentDir);
         }
       }
-      
+
       console.log("Directory analysis:", {
         directoriesWithImages: Array.from(directoriesWithImages),
         emptyDirectories: Array.from(emptyDirectories),
-        filesByPath: Object.keys(filesByPath).map(path => `${path}: ${filesByPath[path].length} files`)
+        filesByPath: Object.keys(filesByPath).map(
+          (path) => `${path}: ${filesByPath[path].length} files`
+        ),
       });
 
       // Process directories with images, skipping empty root directories
       for (const dirPath of Array.from(directoriesWithImages)) {
         const pathParts = dirPath.split("/");
-        
+
         // Skip the empty root directory if it only contains other directories
         if (pathParts.length === 1 && emptyDirectories.has(dirPath)) {
           console.log(`Skipping empty root directory: ${dirPath}`);
           continue;
         }
-        
+
         // Get folder name from path
         const folderName = pathParts[pathParts.length - 1];
-        
+
         // Determine parent folder ID
         let parentFolderId = null;
-        
+
         if (pathParts.length > 1) {
           // This is a subdirectory, so we need to find or create its parent
           const parentFolderName = pathParts[pathParts.length - 2];
-          
+
           // Create or get parent folder ID
           parentFolderId = await ensureFolderExists(parentFolderName);
         }
@@ -186,32 +190,32 @@ export default function RawImagesTab({ projectId }: RawImagesTabProps) {
 
         // Upload files for this folder
         const filesToUpload = filesByPath[dirPath] || [];
-        
+
         // Create a mock event for handleImageUpload
         for (const file of filesToUpload) {
           // Create a FileList-like object
           const mockFileList = {
             0: file,
             length: 1,
-            item: (index: number) => index === 0 ? file : null
+            item: (index: number) => (index === 0 ? file : null),
           } as unknown as FileList;
-          
+
           // Create a mock event
           const mockEvent = {
             target: {
-              files: mockFileList
-            }
+              files: mockFileList,
+            },
           } as React.ChangeEvent<HTMLInputElement>;
-          
+
           // Call handleImageUpload with the folder ID
           await handleImageUpload(mockEvent, folderId);
         }
       }
-
-      alert("Folders and images uploaded successfully");
+      // USED TO BE ALERT()
+      console.log("Folders and images uploaded successfully");
     } catch (error) {
       console.error("Error uploading folders:", error);
-      
+
       if (error instanceof Error) {
         alert(`Failed to upload folders: ${error.message}`);
       } else {
@@ -227,10 +231,10 @@ export default function RawImagesTab({ projectId }: RawImagesTabProps) {
   };
 
   // Helper functions for folder uploads
-  
+
   // Create or find a folder by name
   const ensureFolderExists = async (
-    folderName: string, 
+    folderName: string,
     parentFolderId: string | null = null
   ): Promise<string> => {
     // Check if folder already exists
@@ -240,13 +244,13 @@ export default function RawImagesTab({ projectId }: RawImagesTabProps) {
       .eq("name", folderName)
       .eq("project_id", projectId)
       .eq("parent_id", parentFolderId);
-      
+
     if (existingFolders && existingFolders.length > 0) {
       // Use existing folder
       console.log(`Using existing folder with ID: ${existingFolders[0].id}`);
       return existingFolders[0].id;
     }
-    
+
     // Create new folder
     const { data: folderData, error: folderError } = await supabase
       .from("folders")
@@ -273,7 +277,7 @@ export default function RawImagesTab({ projectId }: RawImagesTabProps) {
 
     // Add folder to state
     setFolders((prev) => [...prev, ...folderData]);
-    
+
     return folderData[0].id;
   };
 
@@ -289,9 +293,9 @@ export default function RawImagesTab({ projectId }: RawImagesTabProps) {
 
       if (!confirmDelete) return;
     }
-    
+
     await handleDeleteFolder(folderId);
-    
+
     // Delete the images if folder deletion was successful
     for (const image of folderImages) {
       await handleDeleteImage(image.id, false);

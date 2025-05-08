@@ -56,13 +56,12 @@ export default function Home() {
                   </p>
                 </div>
                 <div className="flex flex-col gap-2 min-[400px]:flex-row">
-                <Link href={user ? "/explore" : "/register"}>
+                  <Link href={user ? "/explore" : "/register"}>
                     <Button
                       size="lg"
                       className="bg-cyber-gradient hover:opacity-90 geometric-text"
                     >
-                      Explore Spaces{" "}
-                      <ArrowRight className="h-4 w-4 ml-2" />
+                      Explore Spaces <ArrowRight className="h-4 w-4 ml-2" />
                     </Button>
                   </Link>
                   <Link href={user ? "/dashboard" : "/register"}>
@@ -92,8 +91,8 @@ export default function Home() {
                     width="100%"
                     height="100%"
                     defaultZoomLvl={0}
-                    defaultYaw={0.3}
-                    defaultPitch={0.65}
+                    defaultYaw={0.05}
+                    defaultPitch={-0.4}
                   />
                 </div>
               </div>
