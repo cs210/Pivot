@@ -122,13 +122,14 @@ export default function PanoramasTab({ projectId }: PanoramasTabProps) {
           }),
         });
 
+        const raw = await response.text();
         let result;
         let isJson = false;
         try {
-          result = await response.json();
+          result = JSON.parse(raw);
           isJson = true;
-        } catch (e) {
-          result = await response.text();
+        } catch {
+          result = raw;
         }
         if (!response.ok) {
           console.error("Stitching failed:", result);
@@ -234,13 +235,14 @@ export default function PanoramasTab({ projectId }: PanoramasTabProps) {
             }),
           });
 
+          const raw = await response.text();
           let result;
           let isJson = false;
           try {
-            result = await response.json();
+            result = JSON.parse(raw);
             isJson = true;
-          } catch (e) {
-            result = await response.text();
+          } catch {
+            result = raw;
           }
           if (!response.ok) {
             console.error("Panorama stitching failed:", result);
