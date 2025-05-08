@@ -74,7 +74,7 @@ export default function RawImagesTab({ projectId }: RawImagesTabProps) {
   const handleFileUpload = async (
     event: React.ChangeEvent<HTMLInputElement>
   ) => {
-    await handleImageUpload(event);
+    await handleImageUpload(event, currentFolder?.id || null);
   };
 
   const handleFolderUpload = async (

@@ -322,7 +322,7 @@ export function useRawImages(projectId: string) {
           }
           
           // Upload the thumbnail with the same path as the main image
-          const { data: thumbnailData, error: thumbnailError } = await supabase.storage
+          const { error: thumbnailError } = await supabase.storage
             .from("thumbnails-private")
             .upload(filePath, thumbnailFile, {
               cacheControl: "3600",
@@ -361,7 +361,8 @@ export function useRawImages(projectId: string) {
         const newImage = {
           ...dbData[0],
           url: thumbnailUrl || null,
-          storage_path: uploadData.path
+          storage_path: uploadData.path,
+          folder_id: folder_id // Ensure folder_id is set in the new image object
         };
         
         // Update state - prevent duplicates by checking if image already exists
@@ -379,6 +380,9 @@ export function useRawImages(projectId: string) {
         // Update cache
         addRawImageToCache(projectId, newImage);
       }
+
+      // Refresh the images list to ensure proper folder display
+      await fetchRawImages(true);
 
       alert("Images uploaded successfully");
     } catch (error) {
