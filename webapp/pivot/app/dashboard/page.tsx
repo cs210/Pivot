@@ -41,15 +41,15 @@ import ShareDialog from "@/app/project/[id]/components/ShareDialog";
 
 export default function Dashboard() {
   const router = useRouter();
-  const { 
-    projects, 
+  const {
+    projects,
     loading,
-    createProject, 
+    createProject,
     deleteProject,
     updateProjectName,
-    setProjects
+    setProjects,
   } = useProjects(router);
-  
+
   const [newProjectName, setNewProjectName] = useState("");
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
   const [editDialogOpen, setEditDialogOpen] = useState(false);
@@ -62,7 +62,7 @@ export default function Dashboard() {
   const handleCreateProject = async () => {
     try {
       const newProject = await createProject(newProjectName.trim());
-      
+
       // Close dialog and reset form
       setNewProjectName("");
       setCreateDialogOpen(false);
@@ -80,13 +80,14 @@ export default function Dashboard() {
   const handleUpdateProjectName = async () => {
     try {
       if (!currentProject) return;
-      
+
       await updateProjectName(currentProject.id, editProjectName);
-      
+
       setEditDialogOpen(false);
       setCurrentProject(null);
 
-      alert("Project updated successfully");
+      // USED TO BE ALERT()
+      console.log("Project updated successfully");
       // Force a refresh to get updated data
       router.refresh();
     } catch (error) {
@@ -98,7 +99,8 @@ export default function Dashboard() {
   const handleDeleteProjectClick = async (id: string) => {
     try {
       await deleteProject(id);
-      alert("Project deleted successfully");
+      // USED TO BE ALERT()
+      console.log("Project deleted successfully");
     } catch (error) {
       console.error("Error deleting project:", error);
       alert("Failed to delete project");
@@ -138,45 +140,45 @@ export default function Dashboard() {
   // Function to handle updating project metadata without changing organization status
   const handleUpdateMetadata = async (newMetadata: any) => {
     if (!currentProject) return false;
-    
+
     try {
       const supabase = createClient();
-      
+
       // Update the project metadata in the database
       const { error } = await supabase
         .from("projects")
         .update({ metadata: newMetadata })
         .eq("id", currentProject.id);
-        
+
       if (error) throw error;
-      
+
       // Update the local projects state
-      const updatedProjects = projects.map(p => 
+      const updatedProjects = projects.map((p) =>
         p.id === currentProject.id ? { ...p, metadata: newMetadata } : p
       );
-      
+
       setProjects(updatedProjects);
-      
+
       return true;
     } catch (error) {
       console.error("Error updating project metadata:", error);
       return false;
     }
   };
-  
+
   // Function to handle toggling project organization status
   const handleToggleProjectOrg = async (customMetadata?: any) => {
     if (!currentProject) return false;
-    
+
     try {
       const supabase = createClient();
-      
+
       // Get current user
       const { data: userData } = await supabase.auth.getUser();
       if (!userData.user) return false;
-      
+
       let newOrgId = null;
-      
+
       if (!currentProject.organization_id) {
         // Find the organization ID that matches the user's email domain
         const { data: org, error } = await supabase
@@ -184,42 +186,42 @@ export default function Dashboard() {
           .select("*")
           .eq("domain_restriction", userData.user?.email?.split("@")[1] || "")
           .single();
-          
+
         if (error || !org) {
           console.error("No organization found for this email domain");
           return false;
         }
-        
+
         newOrgId = org.id;
       }
-      
+
       // Use the provided customMetadata if available, otherwise use existing metadata
       const metadataToUse = customMetadata || currentProject.metadata || {};
-      
+
       // Perform the update in the database
       const { error } = await supabase
         .from("projects")
-        .update({ 
+        .update({
           organization_id: newOrgId,
-          metadata: metadataToUse
+          metadata: metadataToUse,
         })
         .eq("id", currentProject.id);
-        
+
       if (error) throw error;
-      
+
       // Update local projects state
-      const updatedProjects = projects.map(p => 
-        p.id === currentProject.id 
-          ? { 
-              ...p, 
+      const updatedProjects = projects.map((p) =>
+        p.id === currentProject.id
+          ? {
+              ...p,
               organization_id: newOrgId,
-              metadata: metadataToUse 
-            } 
+              metadata: metadataToUse,
+            }
           : p
       );
-      
+
       setProjects(updatedProjects);
-      
+
       return true;
     } catch (error) {
       console.error("Error toggling project organization status:", error);
@@ -445,42 +447,42 @@ export default function Dashboard() {
             currentProject={currentProject}
             handleToggleProjectOrg={async (metadata) => {
               if (!currentProject) return false;
-              
+
               const success = await handleToggleProjectOrg(metadata);
-              
+
               if (success) {
                 // Update the local projects state to reflect the change
-                const updatedProjects = projects.map(p => 
-                  p.id === currentProject.id 
-                    ? { 
-                        ...p, 
-                        organization_id: !currentProject.organization_id ? "org-id" : null,
-                        metadata: metadata || p.metadata
-                      } 
+                const updatedProjects = projects.map((p) =>
+                  p.id === currentProject.id
+                    ? {
+                        ...p,
+                        organization_id: !currentProject.organization_id
+                          ? "org-id"
+                          : null,
+                        metadata: metadata || p.metadata,
+                      }
                     : p
                 );
-                
+
                 setProjects(updatedProjects);
               }
-              
+
               return success;
             }}
             handleUpdateMetadata={async (metadata) => {
               if (!currentProject) return false;
-              
+
               const success = await handleUpdateMetadata(metadata);
-              
+
               if (success) {
                 // Update the local projects state to reflect the change
-                const updatedProjects = projects.map(p => 
-                  p.id === currentProject.id 
-                    ? { ...p, metadata } 
-                    : p
+                const updatedProjects = projects.map((p) =>
+                  p.id === currentProject.id ? { ...p, metadata } : p
                 );
-                
+
                 setProjects(updatedProjects);
               }
-              
+
               return success;
             }}
           />

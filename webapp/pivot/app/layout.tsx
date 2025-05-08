@@ -18,8 +18,8 @@ const geistMono = localFont({
 });
 
 export const metadata: Metadata = {
-  title: "Pivot - 360° Video to VR Platform",
-  description: "Transform your 360° videos into interactive VR experiences",
+  title: "Pivot - VR Experiences",
+  description: "Transform your still images into interactive VR experiences",
 };
 
 export const viewport: Viewport = {
