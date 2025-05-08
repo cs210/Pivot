@@ -148,6 +148,7 @@ export default function ImageGrid({
                 ref={folderInputRef}
                 type="file"
                 className="hidden"
+                // @ts-ignore
                 webkitdirectory=""
                 directory=""
                 multiple
