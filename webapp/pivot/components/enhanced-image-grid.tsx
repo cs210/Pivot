@@ -134,7 +134,7 @@ export function EnhancedImageGrid({
               locationId,
               locationName: resolvedName,
               imageId: null,
-              itemType: "location",
+              itemType: "location" as const,
             }
           : item
       );
@@ -147,7 +147,7 @@ export function EnhancedImageGrid({
   const handleRemoveFromGrid = (position: number) => {
     const updatedItems = gridItems.map((item) =>
       item.position === position
-        ? { ...item, imageId: null, locationId: null, itemType: null }
+        ? { ...item, imageId: null, locationId: null, itemType: undefined }
         : item
     );
     setGridItems(updatedItems);
