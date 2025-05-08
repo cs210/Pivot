@@ -41,7 +41,7 @@ export async function POST(request) {
     log(`Generated job ID: ${jobId}`);
     
     // Create temporary directory for this job
-    const TEMP_DIR = path.join(process.cwd(), 'tmp');
+    const TEMP_DIR = '/tmp';
     const jobDir = path.join(TEMP_DIR, jobId);
     
     if (!existsSync(TEMP_DIR)) {
