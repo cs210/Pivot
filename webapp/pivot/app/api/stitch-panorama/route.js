@@ -15,7 +15,7 @@ const execPromise = promisify(exec);
 // Get environment variables
 const AWS_HOST = process.env.AWS_HOST;
 const AWS_USER = process.env.AWS_USER;
-const SSH_KEY_PATH = process.env.SSH_KEY_PATH;
+const SSH_KEY = process.env.SSH_KEY;
 
 // Debug logging helper
 const debugLog = [];
@@ -50,6 +50,18 @@ export async function POST(request) {
     
     await mkdir(jobDir, { recursive: true });
     log(`Created job directory: ${jobDir}`);
+    
+    // Write SSH key to a temp file in the job directory
+    const sshKeyFile = path.join(jobDir, 'id_rsa');
+    if (!SSH_KEY) {
+      log('Error: SSH_KEY environment variable is not set');
+      return NextResponse.json(
+        { error: 'SSH_KEY environment variable is not set', debug: debugLog },
+        { status: 500 }
+      );
+    }
+    await writeFile(sshKeyFile, SSH_KEY, { mode: 0o600 });
+    log(`Wrote SSH key to ${sshKeyFile}`);
     
     // Download images from Supabase and save them locally
     const savedFiles = [];
@@ -103,20 +115,11 @@ export async function POST(request) {
     
     log(`Successfully saved ${savedFiles.length} files from Supabase`);
     
-    // Check if SSH key exists
-    if (!existsSync(SSH_KEY_PATH)) {
-      log(`Error: SSH key not found at ${SSH_KEY_PATH}`);
-      return NextResponse.json(
-        { error: `SSH key not found at ${SSH_KEY_PATH}`, debug: debugLog },
-        { status: 500 }
-      );
-    }
-    
     // Test SSH connection
     try {
       log('Testing SSH connection...');
       const { stdout, stderr } = await execPromise(
-        `ssh -i "${SSH_KEY_PATH}" -o StrictHostKeyChecking=no -o ConnectTimeout=10 ${AWS_USER}@${AWS_HOST} "echo SSH connection successful"`
+        `ssh -i "${sshKeyFile}" -o StrictHostKeyChecking=no -o ConnectTimeout=10 ${AWS_USER}@${AWS_HOST} "echo SSH connection successful"`
       );
       log(`SSH test result: ${stdout.trim()} ${stderr ? '(stderr: ' + stderr.trim() + ')' : ''}`);
     } catch (error) {
@@ -132,7 +135,7 @@ export async function POST(request) {
     
     try {
       log(`Creating remote directory: ${remoteDir}`);
-      await execPromise(`ssh -i "${SSH_KEY_PATH}" -o StrictHostKeyChecking=no ${AWS_USER}@${AWS_HOST} "mkdir -p ${remoteDir}"`);
+      await execPromise(`ssh -i "${sshKeyFile}" -o StrictHostKeyChecking=no ${AWS_USER}@${AWS_HOST} "mkdir -p ${remoteDir}"`);
     } catch (error) {
       log(`Failed to create remote directory: ${error.message}`);
       return NextResponse.json(
@@ -144,7 +147,7 @@ export async function POST(request) {
     // Copy files to AWS server
     log(`Copying files to AWS server using SCP`);
     try {
-      const { stdout, stderr } = await execPromise(`scp -i "${SSH_KEY_PATH}" -o StrictHostKeyChecking=no "${jobDir}"/* ${AWS_USER}@${AWS_HOST}:${remoteDir}/`);
+      const { stdout, stderr } = await execPromise(`scp -i "${sshKeyFile}" -o StrictHostKeyChecking=no "${jobDir}"/* ${AWS_USER}@${AWS_HOST}:${remoteDir}/`);
       log(`SCP file transfer: ${stdout || 'Success'} ${stderr ? '(stderr: ' + stderr.trim() + ')' : ''}`);
     } catch (error) {
       log(`Failed to copy files to server: ${error.message}`);
@@ -158,13 +161,13 @@ export async function POST(request) {
     try {
       log('Verifying files were copied to remote server');
       const { stdout } = await execPromise(
-        `ssh -i "${SSH_KEY_PATH}" -o StrictHostKeyChecking=no ${AWS_USER}@${AWS_HOST} "ls -la ${remoteDir}"`
+        `ssh -i "${sshKeyFile}" -o StrictHostKeyChecking=no ${AWS_USER}@${AWS_HOST} "ls -la ${remoteDir}"`
       );
       log(`Remote directory contents: \n${stdout}`);
           
       // Specifically check for jpg files
       const { stdout: jpgCount } = await execPromise(
-        `ssh -i "${SSH_KEY_PATH}" -o StrictHostKeyChecking=no ${AWS_USER}@${AWS_HOST} "find ${remoteDir} -name '*.jpg' | wc -l"`
+        `ssh -i "${sshKeyFile}" -o StrictHostKeyChecking=no ${AWS_USER}@${AWS_HOST} "find ${remoteDir} -name '*.jpg' | wc -l"`
       );
       
       if (parseInt(jpgCount.trim()) === 0) {
@@ -188,7 +191,7 @@ export async function POST(request) {
     
     // First create the project
     try {
-      const createCommand = `ssh -i "${SSH_KEY_PATH}" -o StrictHostKeyChecking=no ${AWS_USER}@${AWS_HOST} "cd ${remoteDir} && ~/ptgui_trial_13.0/PTGui -createproject ${remoteDir}/*.jpg -output ${remoteDir}/${projectName}.pts"`;
+      const createCommand = `ssh -i "${sshKeyFile}" -o StrictHostKeyChecking=no ${AWS_USER}@${AWS_HOST} "cd ${remoteDir} && ~/ptgui_trial_13.0/PTGui -createproject ${remoteDir}/*.jpg -output ${remoteDir}/${projectName}.pts"`;
       log(`Executing create project command: ${createCommand}`);
       
       const { stdout, stderr } = await execPromise(createCommand);
@@ -203,7 +206,7 @@ export async function POST(request) {
     
     // Then stitch the panorama
     try {
-      const stitchCommand = `ssh -i "${SSH_KEY_PATH}" -o StrictHostKeyChecking=no ${AWS_USER}@${AWS_HOST} "cd ${remoteDir} && ~/ptgui_trial_13.0/PTGui -stitchnogui ${remoteDir}/${projectName}.pts"`;
+      const stitchCommand = `ssh -i "${sshKeyFile}" -o StrictHostKeyChecking=no ${AWS_USER}@${AWS_HOST} "cd ${remoteDir} && ~/ptgui_trial_13.0/PTGui -stitchnogui ${remoteDir}/${projectName}.pts"`;
       log(`Executing stitch command: ${stitchCommand}`);
       
       const { stdout, stderr } = await execPromise(stitchCommand);
@@ -236,7 +239,7 @@ export async function POST(request) {
 
     try {
       log(`Listing remote directory to find output file`);
-      const { stdout: lsOutput } = await execPromise(`ssh -i "${SSH_KEY_PATH}" -o StrictHostKeyChecking=no ${AWS_USER}@${AWS_HOST} "ls -la ${remoteDir}/"`);
+      const { stdout: lsOutput } = await execPromise(`ssh -i "${sshKeyFile}" -o StrictHostKeyChecking=no ${AWS_USER}@${AWS_HOST} "ls -la ${remoteDir}/"`);
       log(`Remote directory listing: \n${lsOutput.trim()}`);
       
       // Parse the ls output to find jpg files
@@ -294,7 +297,7 @@ export async function POST(request) {
     
     try {
       log(`Copying panorama from AWS to local path: ${localResultPath}`);
-      await execPromise(`scp -i "${SSH_KEY_PATH}" -o StrictHostKeyChecking=no ${AWS_USER}@${AWS_HOST}:${remoteResultPath} "${localResultPath}"`);
+      await execPromise(`scp -i "${sshKeyFile}" -o StrictHostKeyChecking=no ${AWS_USER}@${AWS_HOST}:${remoteResultPath} "${localResultPath}"`);
       log(`Successfully copied panorama to local path`);
     } catch (error) {
       log(`Failed to copy panorama from AWS: ${error.message}`);
