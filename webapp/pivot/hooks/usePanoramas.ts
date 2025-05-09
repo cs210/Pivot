@@ -361,6 +361,7 @@ export function usePanoramas(projectId: string) {
               content_type: "image/jpeg", // Always set to image/jpeg
               size_bytes: file.size,
               metadata: {},
+              is_public: false, // Set your default is_public value
               user_id: (await supabase.auth.getUser()).data.user?.id,
             },
           ])
@@ -503,44 +504,21 @@ export function usePanoramas(projectId: string) {
         console.log("Generated signed URL for panorama:", url);
         console.log("Generated signed URL for thumbnail:", thumbnailUrl);
 
-        // Insert into database
-        const { data, error } = await supabase
-          .from("panoramas")
-          .insert([
-            {
-              name: fileName,
-              project_id: projectId,
-              storage_path: uploadData.path,
-              content_type: file.type,
-              size_bytes: file.size,
-              metadata: {},
-              is_public: false,
-              user_id: (await supabase.auth.getUser()).data.user?.id,
-            },
-          ])
-          .select();
+        const updatedPanorama = {
+          ...dbData[0],
+          storage_path: uploadData.path,
+          url: url,
+          thumbnail_url: thumbnailUrl,
+          is_processing: false,
+        };
 
-        if (error) {
-          console.error("Database insert error:", error);
-          throw error;
-        }
+        // Add to state and cache
+        setPanoramas((prev) => {
+          if (prev.some((p) => p.id === updatedPanorama.id)) return prev;
+          return [...prev, updatedPanorama];
+        });
 
-        if (data && data.length > 0) {
-          const newPanorama = {
-            ...data[0],
-            url: url,
-            thumbnail_url: thumbnailUrl,
-            is_processing: false,
-          };
-
-          // ✅ Prevent duplicate appends
-          setPanoramas((prev) => {
-            if (prev.some((p) => p.id === newPanorama.id)) return prev;
-            return [...prev, newPanorama];
-          });
-
-          addPanoramaToCache(projectId, newPanorama);
-        }
+        addPanoramaToCache(projectId, updatedPanorama);
       }
 
       alert("360 images uploaded successfully");
