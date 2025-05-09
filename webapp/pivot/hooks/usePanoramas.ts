@@ -478,7 +478,7 @@ export function usePanoramas(projectId: string) {
         } else {
           // Get signed URLs for both panorama and thumbnail
           const { data: panoramaUrlData } = await supabase.storage
-            .from("panoramas")
+            .from(storageBucket)
             .createSignedUrl(uploadData.path, 3600);
           if (!panoramaUrlData?.signedUrl) {
             console.error(
