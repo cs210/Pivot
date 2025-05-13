@@ -1,11 +1,6 @@
 {
-  "builds": [
-    {
-      "src": "package.json",
-      "use": "@vercel/node",
-      "config": {
-        "installCommand": "apt-get update && apt-get install -y openssh-client"
-      }
-    }
-  ]
+  "version": 2,
+  "buildCommand": "apt-get update && apt-get install -y openssh-client && next build",
+  "installCommand": "npm install",
+  "framework": "nextjs"
 } 
