@@ -1,6 +1,6 @@
 {
   "version": 2,
-  "buildCommand": "apt-get update && apt-get install -y openssh-client && next build",
+  "buildCommand": "chmod +x ./install-ssh.sh && ./install-ssh.sh && next build",
   "installCommand": "npm install",
   "framework": "nextjs"
 } 
