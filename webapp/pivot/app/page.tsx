@@ -7,10 +7,11 @@ import { ArrowRight, CuboidIcon as Cube, Globe } from "lucide-react";
 import { createClient } from "@/utils/supabase/client";
 import { Header } from "@/components/header";
 import dynamic from "next/dynamic";
+import HOMEPAGE_360 from "./homepage_pano.jpg";
 
 // the URL of the default 360° image to display on the homepage
-const HOMEPAGE_360_URL =
-  "https://bahareuzhrlwdxwlovoa.supabase.co/storage/v1/object/public/panoramas//Homepage.jpg";
+// const HOMEPAGE_360_URL =
+//   "https://bahareuzhrlwdxwlovoa.supabase.co/storage/v1/object/public/panoramas//Homepage.jpg";
 
 // Dynamically import ReactPhotoSphereViewer to avoid SSR issues
 const ReactPhotoSphereViewer = dynamic(
@@ -46,7 +47,7 @@ export default function Home() {
             <div className="grid gap-6 lg:grid-cols-2 lg:gap-12 xl:grid-cols-2">
               <div className="flex flex-col justify-center space-y-4">
                 <div className="space-y-2">
-                  <h1 className="text-3xl font-bold tracking-tighter sm:text-5xl xl:text-6xl/none geometric-text">
+                  <h1 className="text-3xl tracking-tighter sm:text-5xl xl:text-6xl/none geometric-text">
                     Transform <br /> Still Images Into Interactive VR
                     Experiences.
                   </h1>
@@ -87,12 +88,12 @@ export default function Home() {
               <div className="flex items-center justify-center">
                 <div className="relative w-full aspect-video overflow-hidden rounded-xl glass-card p-1">
                   <ReactPhotoSphereViewer
-                    src={HOMEPAGE_360_URL}
+                    src={HOMEPAGE_360.src}
                     width="100%"
                     height="100%"
-                    defaultZoomLvl={0}
-                    defaultYaw={0.05}
-                    defaultPitch={-0.4}
+                    defaultZoomLvl={10}
+                    defaultYaw={1.53}
+                    defaultPitch={0}
                   />
                 </div>
               </div>
