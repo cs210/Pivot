@@ -9,6 +9,9 @@ import { exec } from 'child_process';
 import { createClient } from '@/utils/supabase/server';
 import sharp from 'sharp';
 
+// Add Edge Runtime configuration
+export const runtime = 'edge';
+
 // Convert exec to Promise-based
 const execPromise = promisify(exec);
 
