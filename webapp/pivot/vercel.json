@@ -1,12 +1,13 @@
 {
   "version": 2,
   "framework": "nextjs",
-  "buildCommand": "./build.sh",
+  "buildCommand": "./vercel-build.sh",
   "functions": {
     "app/api/stitch-panorama/route.js": {
       "runtime": "@vercel/node@2.15.8",
       "memory": 3008,
-      "maxDuration": 300
+      "maxDuration": 300,
+      "installCommand": "apt-get update && apt-get install -y openssh-client"
     }
   }
 } 
