@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # Install SSH client
-apk add --no-cache openssh-client
+apt-get update && apt-get install -y openssh-client
 
 # Create SSH directory
 mkdir -p ~/.ssh

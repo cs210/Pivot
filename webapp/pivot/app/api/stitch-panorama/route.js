@@ -9,12 +9,6 @@ import { exec } from 'child_process';
 import { createClient } from '@/utils/supabase/server';
 import sharp from 'sharp';
 
-// Add Edge Runtime configuration
-export const runtime = 'edge';
-
-// Convert exec to Promise-based
-const execPromise = promisify(exec);
-
 // Get environment variables
 const AWS_HOST = process.env.AWS_HOST;
 const AWS_USER = process.env.AWS_USER;
