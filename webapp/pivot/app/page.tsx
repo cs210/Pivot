@@ -7,7 +7,7 @@ import { ArrowRight, CuboidIcon as Cube, Globe } from "lucide-react";
 import { createClient } from "@/utils/supabase/client";
 import { Header } from "@/components/header";
 import dynamic from "next/dynamic";
-import HOMEPAGE_360 from "./homepage_pano.jpg";
+import HOMEPAGE_360 from "./homepage_pano.jpg"; // for simplicity let's just keep the homepage pano in the codebase
 
 // Dynamically import ReactPhotoSphereViewer to avoid SSR issues
 const ReactPhotoSphereViewer = dynamic(
