@@ -106,24 +106,38 @@ export async function POST(request) {
     // Prepare the files for upload to EC2
     const formData = new FormData();
     await Promise.all(savedFiles.map(async (filePath, index) => {
-      formData.append(`image_${index}`, new Blob([await readFile(filePath)]), `image_${index}.jpg`);
+      const fileBuffer = await readFile(filePath);
+      const blob = new Blob([fileBuffer], { type: 'image/jpeg' });
+      formData.append('images', blob, `image_${index}.jpg`);
     }));
     formData.append('jobId', jobId);
     formData.append('panoramaId', panoramaId);
 
     // Send files to EC2 API for processing
     log(`Sending files to EC2 API for processing`);
-    const response = await fetch(`${EC2_API_ENDPOINT}/stitch`, {
-      method: 'POST',
-      body: formData,
-    });
+    log(`EC2 API Endpoint: ${EC2_API_ENDPOINT}/stitch`);
+    
+    try {
+      const response = await fetch(`${EC2_API_ENDPOINT}/stitch`, {
+        method: 'POST',
+        body: formData
+      });
 
-    if (!response.ok) {
-      const errorData = await response.json();
-      log(`EC2 API error: ${errorData.error || response.statusText}`);
+      if (!response.ok) {
+        const errorData = await response.json();
+        log(`EC2 API error: ${JSON.stringify(errorData)}`);
+        return NextResponse.json(
+          { error: `Failed to process panorama on EC2: ${errorData.error || response.statusText}`, debug: debugLog },
+          { status: response.status }
+        );
+      }
+    } catch (error) {
+      log(`Fetch error details: ${error.message}`);
+      log(`Error cause: ${error.cause?.message || 'No cause'}`);
+      log(`Error code: ${error.cause?.code || 'No code'}`);
       return NextResponse.json(
-        { error: `Failed to process panorama on EC2: ${errorData.error || response.statusText}`, debug: debugLog },
-        { status: response.status }
+        { error: `Failed to connect to EC2 API: ${error.message}`, debug: debugLog },
+        { status: 500 }
       );
     }
 

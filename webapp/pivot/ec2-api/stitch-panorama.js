@@ -10,35 +10,82 @@ const execPromise = promisify(exec);
 const app = express();
 const port = process.env.PORT || 3001;
 
-// Enable CORS
-app.use(cors());
+// Enable CORS with specific options
+app.use(cors({
+  origin: '*',
+  methods: ['GET', 'POST'],
+  allowedHeaders: ['Content-Type', 'Accept']
+}));
+
+// Add error handling middleware
+app.use((err, req, res, next) => {
+  console.error('Error:', err);
+  res.status(500).json({ 
+    error: err.message,
+    stack: err.stack,
+    type: err.name
+  });
+});
 
 // Configure multer for file uploads
 const storage = multer.diskStorage({
-  destination: async (req, file, cb) => {
-    const jobId = req.body.jobId;
-    const jobDir = path.join('/tmp', jobId);
-    await fs.mkdir(jobDir, { recursive: true });
-    cb(null, jobDir);
+  destination: (req, file, cb) => {
+    // Create a temporary directory for this upload
+    const tempDir = path.join('/tmp', 'upload_' + Date.now());
+    fs.mkdir(tempDir, { recursive: true })
+      .then(() => cb(null, tempDir))
+      .catch(err => cb(err));
   },
   filename: (req, file, cb) => {
+    console.log('Processing file:', file);
     cb(null, file.originalname);
   }
 });
 
-const upload = multer({ storage });
+const upload = multer({ 
+  storage,
+  fileFilter: (req, file, cb) => {
+    console.log('File filter received:', file);
+    cb(null, true);
+  }
+});
 
 // Endpoint to handle panorama stitching
-app.post('/stitch', upload.array('images'), async (req, res) => {
+app.post('/stitch', upload.any(), async (req, res) => {
   try {
+    console.log('Received request headers:', req.headers);
+    console.log('Received files:', req.files);
+    console.log('Received body:', req.body);
+
     const { jobId, panoramaId } = req.body;
-    const jobDir = path.join('/tmp', jobId);
     
-    // Create PTGui project
+    if (!jobId || !panoramaId) {
+      return res.status(400).json({ 
+        error: 'Missing required fields',
+        details: 'jobId and panoramaId are required'
+      });
+    }
+
+    if (!req.files || req.files.length === 0) {
+      return res.status(400).json({ error: 'No files were uploaded' });
+    }
+
+    // Create the job directory
+    const jobDir = path.join('/tmp', jobId);
+    await fs.mkdir(jobDir, { recursive: true });
+
+    // Move files to job directory
+    await Promise.all(req.files.map(async (file) => {
+      const newPath = path.join(jobDir, file.originalname);
+      await fs.rename(file.path, newPath);
+    }));
+
     const projectName = `${panoramaId.replace(/[^a-zA-Z0-9]/g, '_')}_${jobId}`;
     
     // Create the project
     const createCommand = `cd ${jobDir} && ~/ptgui_trial_13.0/PTGui -createproject ${jobDir}/*.jpg -output ${jobDir}/${projectName}.pts`;
+    console.log('Executing command:', createCommand);
+    
     const { stdout: createStdout, stderr: createStderr } = await execPromise(createCommand);
     
     if (createStderr) {
@@ -48,6 +95,8 @@ app.post('/stitch', upload.array('images'), async (req, res) => {
     
     // Stitch the panorama
     const stitchCommand = `cd ${jobDir} && ~/ptgui_trial_13.0/PTGui -stitchnogui ${jobDir}/${projectName}.pts`;
+    console.log('Executing command:', stitchCommand);
+    
     const { stdout: stitchStdout, stderr: stitchStderr } = await execPromise(stitchCommand);
     
     if (stitchStderr) {
@@ -55,7 +104,6 @@ app.post('/stitch', upload.array('images'), async (req, res) => {
       return res.status(500).json({ error: 'Failed to stitch panorama' });
     }
     
-    // Check for stitching errors
     if (stitchStdout.includes("Could not find control points for all images") || 
         stitchStdout.includes("not stitching the panorama")) {
       return res.status(422).json({ 
@@ -66,7 +114,7 @@ app.post('/stitch', upload.array('images'), async (req, res) => {
     
     res.json({ success: true, message: 'Panorama stitched successfully' });
   } catch (error) {
-    console.error('Error processing panorama:', error);
+    console.error('Processing error:', error);
     res.status(500).json({ error: error.message });
   }
 });
