@@ -138,7 +138,8 @@ export function useFolders(projectId: string) {
       setRenameFolderDialogOpen(false);
       setFolderToRename(null);
       setNewFolderName("");
-      alert("Folder renamed successfully");
+      // USED TO BE ALERT()
+      console.log("Folder renamed successfully");
     } catch (error) {
       console.error("Error renaming folder:", error);
       alert("Failed to rename folder");
