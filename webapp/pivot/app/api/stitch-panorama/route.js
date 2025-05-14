@@ -1,21 +1,8 @@
 // app/api/stitch-panorama/route.js
 import { NextResponse } from 'next/server';
-import { writeFile, mkdir, readdir, readFile } from 'fs/promises';
-import { existsSync } from 'fs';
-import path from 'path';
-import { v4 as uuidv4 } from 'uuid';
-import { promisify } from 'util';
-import { exec } from 'child_process';
 import { createClient } from '@/utils/supabase/server';
 import sharp from 'sharp';
-
-// Convert exec to Promise-based
-const execPromise = promisify(exec);
-
-// Get environment variables
-const AWS_HOST = process.env.AWS_HOST;
-const AWS_USER = process.env.AWS_USER;
-const SSH_KEY_PATH = process.env.SSH_KEY_PATH;
+import { v4 as uuidv4 } from 'uuid';
 
 // Debug logging helper
 const debugLog = [];
@@ -31,7 +18,7 @@ export async function POST(request) {
     
     log('Received panorama stitching request');
     
-    // Parse the request body instead of form data
+    // Parse the request body
     const { panoramaId, sourceImages, sourceFolder, projectId, isPublic } = await request.json();
     
     log(`Processing request for panorama ${panoramaId} with ${sourceImages?.length || 0} source images`);
@@ -40,19 +27,8 @@ export async function POST(request) {
     const jobId = uuidv4();
     log(`Generated job ID: ${jobId}`);
     
-    // Create temporary directory for this job
-    const TEMP_DIR = path.join(process.cwd(), 'tmp');
-    const jobDir = path.join(TEMP_DIR, jobId);
-    
-    if (!existsSync(TEMP_DIR)) {
-      await mkdir(TEMP_DIR, { recursive: true });
-    }
-    
-    await mkdir(jobDir, { recursive: true });
-    log(`Created job directory: ${jobDir}`);
-    
-    // Download images from Supabase and save them locally
-    const savedFiles = [];
+    // Download images from Supabase and prepare them for upload
+    const imageBuffers = [];
     
     if (!sourceImages || sourceImages.length === 0) {
       log('No source images provided');
@@ -89,331 +65,177 @@ export async function POST(request) {
         continue;
       }
       
-      // Save the file locally
-      const fileName = `image_${i}.jpg`;
-      const filePath = path.join(jobDir, fileName);
-      
-      // Convert blob to buffer and save
+      // Convert blob to buffer
       const buffer = Buffer.from(await fileData.arrayBuffer());
-      await writeFile(filePath, buffer);
-      
-      savedFiles.push(filePath);
-      log(`Saved file from Supabase: ${filePath}`);
+      imageBuffers.push(buffer);
+      log(`Downloaded image ${i + 1} of ${sourceImages.length}`);
     }
     
-    log(`Successfully saved ${savedFiles.length} files from Supabase`);
-    
-    // Check if SSH key exists
-    if (!existsSync(SSH_KEY_PATH)) {
-      log(`Error: SSH key not found at ${SSH_KEY_PATH}`);
+    log(`Successfully downloaded ${imageBuffers.length} images from Supabase`);
+
+    // Get the EC2 API endpoint from environment variables
+    const EC2_API_ENDPOINT = process.env.EC2_API_ENDPOINT;
+    if (!EC2_API_ENDPOINT) {
+      log('Error: EC2_API_ENDPOINT environment variable not set');
       return NextResponse.json(
-        { error: `SSH key not found at ${SSH_KEY_PATH}`, debug: debugLog },
-        { status: 500 }
-      );
-    }
-    
-    // Test SSH connection
-    try {
-      log('Testing SSH connection...');
-      const { stdout, stderr } = await execPromise(
-        `ssh -i "${SSH_KEY_PATH}" -o StrictHostKeyChecking=no -o ConnectTimeout=10 ${AWS_USER}@${AWS_HOST} "echo SSH connection successful"`
-      );
-      log(`SSH test result: ${stdout.trim()} ${stderr ? '(stderr: ' + stderr.trim() + ')' : ''}`);
-    } catch (error) {
-      log(`SSH connection test failed: ${error.message}`);
-      return NextResponse.json(
-        { error: `Failed to connect to AWS server: ${error.message}`, debug: debugLog },
-        { status: 500 }
-      );
-    }
-    
-    // Create remote directory on AWS server
-    const remoteDir = `/home/${AWS_USER}/panorama_jobs/${jobId}`;
-    
-    try {
-      log(`Creating remote directory: ${remoteDir}`);
-      await execPromise(`ssh -i "${SSH_KEY_PATH}" -o StrictHostKeyChecking=no ${AWS_USER}@${AWS_HOST} "mkdir -p ${remoteDir}"`);
-    } catch (error) {
-      log(`Failed to create remote directory: ${error.message}`);
-      return NextResponse.json(
-        { error: `Failed to create directory on server: ${error.message}`, debug: debugLog },
-        { status: 500 }
-      );
-    }
-    
-    // Copy files to AWS server
-    log(`Copying files to AWS server using SCP`);
-    try {
-      const { stdout, stderr } = await execPromise(`scp -i "${SSH_KEY_PATH}" -o StrictHostKeyChecking=no "${jobDir}"/* ${AWS_USER}@${AWS_HOST}:${remoteDir}/`);
-      log(`SCP file transfer: ${stdout || 'Success'} ${stderr ? '(stderr: ' + stderr.trim() + ')' : ''}`);
-    } catch (error) {
-      log(`Failed to copy files to server: ${error.message}`);
-      return NextResponse.json(
-        { error: `Failed to copy files to server: ${error.message}`, debug: debugLog },
+        { error: 'EC2_API_ENDPOINT environment variable not set', debug: debugLog },
         { status: 500 }
       );
     }
 
-    // After copying files to the AWS server, add this:
-    try {
-      log('Verifying files were copied to remote server');
-      const { stdout } = await execPromise(
-        `ssh -i "${SSH_KEY_PATH}" -o StrictHostKeyChecking=no ${AWS_USER}@${AWS_HOST} "ls -la ${remoteDir}"`
-      );
-      log(`Remote directory contents: \n${stdout}`);
-          
-      // Specifically check for jpg files
-      const { stdout: jpgCount } = await execPromise(
-        `ssh -i "${SSH_KEY_PATH}" -o StrictHostKeyChecking=no ${AWS_USER}@${AWS_HOST} "find ${remoteDir} -name '*.jpg' | wc -l"`
-      );
-      
-      if (parseInt(jpgCount.trim()) === 0) {
-        log('No jpg files found in remote directory!');
-        return NextResponse.json(
-          { error: 'No image files were successfully transferred to the server', debug: debugLog },
-          { status: 500 }
-        );
-      }
-      
-      log(`Found ${jpgCount.trim()} jpg files in remote directory`);
-    } catch (error) {
-      log(`Error verifying remote files: ${error.message}`);
-      // Continue anyway
-    }
-    
-    // Create PTGui project and stitch panorama on AWS
-    const projectName = `${panoramaId.replace(/[^a-zA-Z0-9]/g, '_')}_${jobId}`;
-    
-    log(`Creating and stitching panorama project: ${projectName}`);
-    
-    // First create the project
-    try {
-      const createCommand = `ssh -i "${SSH_KEY_PATH}" -o StrictHostKeyChecking=no ${AWS_USER}@${AWS_HOST} "cd ${remoteDir} && ~/ptgui_trial_13.0/PTGui -createproject ${remoteDir}/*.jpg -output ${remoteDir}/${projectName}.pts"`;
-      log(`Executing create project command: ${createCommand}`);
-      
-      const { stdout, stderr } = await execPromise(createCommand);
-      log(`Project creation result: \n${stdout.trim()}\n${stderr ? 'stderr: ' + stderr.trim() : ''}`);
-    } catch (error) {
-      log(`Failed to create panorama project: ${error.message}`);
-      return NextResponse.json(
-        { error: `Failed to create panorama project: ${error.message}`, debug: debugLog },
-        { status: 500 }
-      );
-    }
-    
-    // Then stitch the panorama
-    try {
-      const stitchCommand = `ssh -i "${SSH_KEY_PATH}" -o StrictHostKeyChecking=no ${AWS_USER}@${AWS_HOST} "cd ${remoteDir} && ~/ptgui_trial_13.0/PTGui -stitchnogui ${remoteDir}/${projectName}.pts"`;
-      log(`Executing stitch command: ${stitchCommand}`);
-      
-      const { stdout, stderr } = await execPromise(stitchCommand);
-      log(`Stitching result: \n${stdout.trim()}\n${stderr ? 'stderr: ' + stderr.trim() : ''}`);
-      
-      // Check if stitching failed due to control points
-      if (stdout.includes("Could not find control points for all images") || 
-          stdout.includes("not stitching the panorama")) {
-        log(`Stitching failed: Not enough control points between images`);
-        return NextResponse.json(
-          { 
-            error: "Could not stitch panorama. The images may not have enough overlap or shared features.", 
-            detail: "Try using images with more overlap or that show the same scene from different angles.",
-            debug: debugLog 
-          },
-          { status: 422 }
-        );
-      }
-    } catch (error) {
-      log(`Failed to stitch panorama: ${error.message}`);
-      return NextResponse.json(
-        { error: `Failed to stitch panorama: ${error.message}`, debug: debugLog },
-        { status: 500 }
-      );
-    }
-    
-    // Get the output file name (PTGui might create a file with a different name)
-    let outputFileName;
-    let largestSize = 0;
+    // Prepare the files for upload to EC2
+    const formData = new FormData();
+    imageBuffers.forEach((buffer, index) => {
+      formData.append('images', new Blob([buffer], { type: 'image/jpeg' }), `image_${index}.jpg`);
+    });
+    formData.append('jobId', jobId);
+    formData.append('panoramaId', panoramaId);
 
+    // Send files to EC2 API for processing
+    log(`Sending files to EC2 API for processing`);
+    log(`EC2 API Endpoint: ${EC2_API_ENDPOINT}/stitch`);
+    
     try {
-      log(`Listing remote directory to find output file`);
-      const { stdout: lsOutput } = await execPromise(`ssh -i "${SSH_KEY_PATH}" -o StrictHostKeyChecking=no ${AWS_USER}@${AWS_HOST} "ls -la ${remoteDir}/"`);
-      log(`Remote directory listing: \n${lsOutput.trim()}`);
-      
-      // Parse the ls output to find jpg files
-      const lines = lsOutput.split('\n');
-      const jpgFiles = lines.filter(line => line.toLowerCase().includes('.jpg'));
-      
-      jpgFiles.forEach(file => {
-        // Extract size and filename from ls output
-        const matches = file.match(/\S+\s+\S+\s+\S+\s+\S+\s+(\d+)\s+\S+\s+\S+\s+\S+\s+(.+)/);
-        if (matches && matches[1] && matches[2]) {
-          const size = parseInt(matches[1]);
-          const name = matches[2].trim();
-          
-          // Skip input files (with image_ prefix)
-          if (name.startsWith('image_')) {
-            log(`Skipping input file: ${name}`);
-            return;
-          }
-          
-          // Check if this file contains the job ID or project name (most likely our panorama)
-          if (name.includes(jobId) || name.includes(projectName)) {
-            outputFileName = name;
-            largestSize = size;
-            log(`Found panorama by ID/name match: ${outputFileName} (${size} bytes)`);
-            return; // Break the loop once we find a match
-          }
-          
-          // Otherwise track the largest file as a fallback
-          if (size > largestSize) {
-            largestSize = size;
-            outputFileName = name;
-            log(`Found larger file: ${outputFileName} (${size} bytes)`);
-          }
-        }
+      const response = await fetch(`${EC2_API_ENDPOINT}/stitch`, {
+        method: 'POST',
+        body: formData
       });
-      
-      if (!outputFileName) {
-        log(`Could not find output panorama file in remote directory`);
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        log(`EC2 API error: ${JSON.stringify(errorData)}`);
         return NextResponse.json(
-          { error: "No panorama output file was found after stitching", debug: debugLog },
-          { status: 500 }
+          { error: `Failed to process panorama on EC2: ${errorData.error || response.statusText}`, debug: debugLog },
+          { status: response.status }
         );
       }
-      
-      log(`Selected panorama output file: ${outputFileName} (${largestSize} bytes)`);
-    } catch (error) {
-      log(`Failed to list remote directory: ${error.message}`);
-      // Continue anyway, we'll try to copy using the expected path
-      outputFileName = `${projectName}.jpg`;
-    }
-    
-    // Copy the panorama file back to our server
-    const remoteResultPath = `${remoteDir}/${outputFileName}`;
-    const localResultPath = path.join(jobDir, outputFileName);
-    
-    try {
-      log(`Copying panorama from AWS to local path: ${localResultPath}`);
-      await execPromise(`scp -i "${SSH_KEY_PATH}" -o StrictHostKeyChecking=no ${AWS_USER}@${AWS_HOST}:${remoteResultPath} "${localResultPath}"`);
-      log(`Successfully copied panorama to local path`);
-    } catch (error) {
-      log(`Failed to copy panorama from AWS: ${error.message}`);
-      return NextResponse.json(
-        { error: `Failed to copy panorama from server: ${error.message}`, debug: debugLog },
-        { status: 500 }
-      );
-    }
-    
-    // Generate thumbnail using sharp
-    try {
-      log(`Generating thumbnail for panorama`);
-      const thumbnailBuffer = await sharp(localResultPath)
-        .resize(800, 800, {
-          fit: 'inside',
-          withoutEnlargement: true
-        })
-        .jpeg({ quality: 95 })
-        .toBuffer();
-      
-      log(`Successfully generated thumbnail`);
-      
-      // Upload the panorama to Supabase
-      log(`Uploading panorama to Supabase storage`);
-      
-      // Read the local file
-      const fileBuffer = await readFile(localResultPath);
-      
-      // Generate a storage path
-      const storagePath = `${projectId}/${panoramaId}_${Date.now()}.jpg`;
-      const storageBucket = isPublic ? 'panoramas-public' : 'panoramas-private';
 
-      // Upload to Supabase storage
-      const { data: uploadData, error: uploadError } = await supabase.storage
-        .from(storageBucket)
-        .upload(storagePath, fileBuffer, {
-          contentType: "image/jpeg",
-          cacheControl: "3600",
-          upsert: true,
-        });
-
-      if (uploadError) {
-        log(`Error uploading panorama to Supabase (public=${isPublic}): ${uploadError.message}`);
-        throw uploadError;
-      }
-      
-      log(`Successfully uploaded panorama to Supabase: ${uploadData.path}`);
-
-      // Upload thumbnail to Supabase storage
-      const { data: thumbnailData, error: thumbnailError } = await supabase.storage
-        .from("thumbnails-private")
-        .upload(storagePath, thumbnailBuffer, {
-          contentType: "image/jpeg",
-          cacheControl: "3600",
-          upsert: true,
-        });
-
-      if (thumbnailError) {
-        log(`Error uploading thumbnail to Supabase: ${thumbnailError.message}`);
-        throw thumbnailError;
+      // Get the processed panorama from EC2
+      const panoramaResponse = await fetch(`${EC2_API_ENDPOINT}/download/${jobId}`);
+      if (!panoramaResponse.ok) {
+        log(`Failed to download panorama from EC2: ${panoramaResponse.statusText}`);
+        return NextResponse.json(
+          { error: `Failed to download panorama from EC2: ${panoramaResponse.statusText}`, debug: debugLog },
+          { status: panoramaResponse.status }
+        );
       }
 
-      log(`Successfully uploaded thumbnail to Supabase: ${thumbnailData.path}`);
-      
-      // Update the panorama record in the database
-      const { error: updateError } = await supabase
-        .from("panoramas")
-        .update({
-          storage_path: uploadData.path,
-          size_bytes: fileBuffer.length,
-          metadata: {
-            status: 'completed',
-            source_images: sourceImages,
-            source_folder: sourceFolder,
-            jobId: jobId
-          }
-        })
-        .eq("id", panoramaId);
-        
-      if (updateError) {
-        log(`Error updating panorama record: ${updateError.message}`);
-        throw updateError;
-      }
-      
-      log(`Successfully updated panorama database record`);
-      
-      // Return success with updated info
-      return NextResponse.json({ 
-        success: true,
-        panoramaId,
-        storagePath: uploadData.path,
-        jobId,
-        message: "Panorama created and uploaded successfully",
-        debug: debugLog
-      });
-    } catch (error) {
-      log(`Failed to process panorama: ${error.message}`);
-      
-      // Update the database to mark the panorama as failed
+      const panoramaBuffer = await panoramaResponse.arrayBuffer();
+
+      // Generate thumbnail using sharp
       try {
-        await supabase
+        log(`Generating thumbnail for panorama`);
+        const thumbnailBuffer = await sharp(Buffer.from(panoramaBuffer))
+          .resize(800, 800, {
+            fit: 'inside',
+            withoutEnlargement: true
+          })
+          .jpeg({ quality: 95 })
+          .toBuffer();
+        
+        log(`Successfully generated thumbnail`);
+        
+        // Upload the panorama to Supabase
+        log(`Uploading panorama to Supabase storage`);
+        
+        // Generate a storage path
+        const storagePath = `${projectId}/${panoramaId}_${Date.now()}.jpg`;
+        const storageBucket = isPublic ? 'panoramas-public' : 'panoramas-private';
+
+        // Upload to Supabase storage
+        const { data: uploadData, error: uploadError } = await supabase.storage
+          .from(storageBucket)
+          .upload(storagePath, Buffer.from(panoramaBuffer), {
+            contentType: "image/jpeg",
+            cacheControl: "3600",
+            upsert: true,
+          });
+
+        if (uploadError) {
+          log(`Error uploading panorama to Supabase (public=${isPublic}): ${uploadError.message}`);
+          throw uploadError;
+        }
+        
+        log(`Successfully uploaded panorama to Supabase: ${uploadData.path}`);
+
+        // Upload thumbnail to Supabase storage
+        const { data: thumbnailData, error: thumbnailError } = await supabase.storage
+          .from("thumbnails-private")
+          .upload(storagePath, thumbnailBuffer, {
+            contentType: "image/jpeg",
+            cacheControl: "3600",
+            upsert: true,
+          });
+
+        if (thumbnailError) {
+          log(`Error uploading thumbnail to Supabase: ${thumbnailError.message}`);
+          throw thumbnailError;
+        }
+
+        log(`Successfully uploaded thumbnail to Supabase: ${thumbnailData.path}`);
+        
+        // Update the panorama record in the database
+        const { error: updateError } = await supabase
           .from("panoramas")
           .update({
+            storage_path: uploadData.path,
+            size_bytes: panoramaBuffer.byteLength,
             metadata: {
-              status: 'failed',
-              error: error.message || "Failed to process panorama",
+              status: 'completed',
               source_images: sourceImages,
               source_folder: sourceFolder,
+              jobId: jobId
             }
           })
           .eq("id", panoramaId);
           
-        log(`Updated panorama record with failed status`);
-      } catch (dbError) {
-        log(`Failed to update panorama status: ${dbError.message}`);
+        if (updateError) {
+          log(`Error updating panorama record: ${updateError.message}`);
+          throw updateError;
+        }
+        
+        log(`Successfully updated panorama database record`);
+        
+        // Return success with updated info
+        return NextResponse.json({ 
+          success: true,
+          panoramaId,
+          storagePath: uploadData.path,
+          jobId,
+          message: "Panorama created and uploaded successfully",
+          debug: debugLog
+        });
+      } catch (error) {
+        log(`Failed to process panorama: ${error.message}`);
+        
+        // Update the database to mark the panorama as failed
+        try {
+          await supabase
+            .from("panoramas")
+            .update({
+              metadata: {
+                status: 'failed',
+                error: error.message || "Failed to process panorama",
+                source_images: sourceImages,
+                source_folder: sourceFolder,
+              }
+            })
+            .eq("id", panoramaId);
+            
+          log(`Updated panorama record with failed status`);
+        } catch (dbError) {
+          log(`Failed to update panorama status: ${dbError.message}`);
+        }
+        
+        return NextResponse.json(
+          { error: `Failed to process panorama: ${error.message}`, debug: debugLog },
+          { status: 500 }
+        );
       }
-      
+    } catch (error) {
+      log(`Failed to connect to EC2 API: ${error.message}`);
       return NextResponse.json(
-        { error: `Failed to process panorama: ${error.message}`, debug: debugLog },
+        { error: `Failed to connect to EC2 API: ${error.message}`, debug: debugLog },
         { status: 500 }
       );
     }
