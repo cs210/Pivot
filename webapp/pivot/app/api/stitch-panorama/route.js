@@ -1,11 +1,8 @@
 // app/api/stitch-panorama/route.js
 import { NextResponse } from 'next/server';
-import { writeFile, mkdir, readdir, readFile } from 'fs/promises';
-import { existsSync } from 'fs';
-import path from 'path';
-import { v4 as uuidv4 } from 'uuid';
 import { createClient } from '@/utils/supabase/server';
 import sharp from 'sharp';
+import { v4 as uuidv4 } from 'uuid';
 
 // Debug logging helper
 const debugLog = [];
@@ -30,19 +27,8 @@ export async function POST(request) {
     const jobId = uuidv4();
     log(`Generated job ID: ${jobId}`);
     
-    // Create temporary directory for this job
-    const TEMP_DIR = path.join(process.cwd(), 'tmp');
-    const jobDir = path.join(TEMP_DIR, jobId);
-    
-    if (!existsSync(TEMP_DIR)) {
-      await mkdir(TEMP_DIR, { recursive: true });
-    }
-    
-    await mkdir(jobDir, { recursive: true });
-    log(`Created job directory: ${jobDir}`);
-    
-    // Download images from Supabase and save them locally
-    const savedFiles = [];
+    // Download images from Supabase and prepare them for upload
+    const imageBuffers = [];
     
     if (!sourceImages || sourceImages.length === 0) {
       log('No source images provided');
@@ -79,19 +65,13 @@ export async function POST(request) {
         continue;
       }
       
-      // Save the file locally
-      const fileName = `image_${i}.jpg`;
-      const filePath = path.join(jobDir, fileName);
-      
-      // Convert blob to buffer and save
+      // Convert blob to buffer
       const buffer = Buffer.from(await fileData.arrayBuffer());
-      await writeFile(filePath, buffer);
-      
-      savedFiles.push(filePath);
-      log(`Saved file from Supabase: ${filePath}`);
+      imageBuffers.push(buffer);
+      log(`Downloaded image ${i + 1} of ${sourceImages.length}`);
     }
     
-    log(`Successfully saved ${savedFiles.length} files from Supabase`);
+    log(`Successfully downloaded ${imageBuffers.length} images from Supabase`);
 
     // Get the EC2 API endpoint from environment variables
     const EC2_API_ENDPOINT = process.env.EC2_API_ENDPOINT;
@@ -105,11 +85,9 @@ export async function POST(request) {
 
     // Prepare the files for upload to EC2
     const formData = new FormData();
-    await Promise.all(savedFiles.map(async (filePath, index) => {
-      const fileBuffer = await readFile(filePath);
-      const blob = new Blob([fileBuffer], { type: 'image/jpeg' });
-      formData.append('images', blob, `image_${index}.jpg`);
-    }));
+    imageBuffers.forEach((buffer, index) => {
+      formData.append('images', new Blob([buffer], { type: 'image/jpeg' }), `image_${index}.jpg`);
+    });
     formData.append('jobId', jobId);
     formData.append('panoramaId', panoramaId);
 
@@ -131,137 +109,133 @@ export async function POST(request) {
           { status: response.status }
         );
       }
-    } catch (error) {
-      log(`Fetch error details: ${error.message}`);
-      log(`Error cause: ${error.cause?.message || 'No cause'}`);
-      log(`Error code: ${error.cause?.code || 'No code'}`);
-      return NextResponse.json(
-        { error: `Failed to connect to EC2 API: ${error.message}`, debug: debugLog },
-        { status: 500 }
-      );
-    }
 
-    // Get the processed panorama from EC2
-    const panoramaResponse = await fetch(`${EC2_API_ENDPOINT}/download/${jobId}`);
-    if (!panoramaResponse.ok) {
-      log(`Failed to download panorama from EC2: ${panoramaResponse.statusText}`);
-      return NextResponse.json(
-        { error: `Failed to download panorama from EC2: ${panoramaResponse.statusText}`, debug: debugLog },
-        { status: panoramaResponse.status }
-      );
-    }
-
-    const panoramaBuffer = await panoramaResponse.arrayBuffer();
-    const localResultPath = path.join(jobDir, 'panorama.jpg');
-    await writeFile(localResultPath, Buffer.from(panoramaBuffer));
-
-    // Generate thumbnail using sharp
-    try {
-      log(`Generating thumbnail for panorama`);
-      const thumbnailBuffer = await sharp(localResultPath)
-        .resize(800, 800, {
-          fit: 'inside',
-          withoutEnlargement: true
-        })
-        .jpeg({ quality: 95 })
-        .toBuffer();
-      
-      log(`Successfully generated thumbnail`);
-      
-      // Upload the panorama to Supabase
-      log(`Uploading panorama to Supabase storage`);
-      
-      // Generate a storage path
-      const storagePath = `${projectId}/${panoramaId}_${Date.now()}.jpg`;
-      const storageBucket = isPublic ? 'panoramas-public' : 'panoramas-private';
-
-      // Upload to Supabase storage
-      const { data: uploadData, error: uploadError } = await supabase.storage
-        .from(storageBucket)
-        .upload(storagePath, Buffer.from(panoramaBuffer), {
-          contentType: "image/jpeg",
-          cacheControl: "3600",
-          upsert: true,
-        });
-
-      if (uploadError) {
-        log(`Error uploading panorama to Supabase (public=${isPublic}): ${uploadError.message}`);
-        throw uploadError;
-      }
-      
-      log(`Successfully uploaded panorama to Supabase: ${uploadData.path}`);
-
-      // Upload thumbnail to Supabase storage
-      const { data: thumbnailData, error: thumbnailError } = await supabase.storage
-        .from("thumbnails-private")
-        .upload(storagePath, thumbnailBuffer, {
-          contentType: "image/jpeg",
-          cacheControl: "3600",
-          upsert: true,
-        });
-
-      if (thumbnailError) {
-        log(`Error uploading thumbnail to Supabase: ${thumbnailError.message}`);
-        throw thumbnailError;
+      // Get the processed panorama from EC2
+      const panoramaResponse = await fetch(`${EC2_API_ENDPOINT}/download/${jobId}`);
+      if (!panoramaResponse.ok) {
+        log(`Failed to download panorama from EC2: ${panoramaResponse.statusText}`);
+        return NextResponse.json(
+          { error: `Failed to download panorama from EC2: ${panoramaResponse.statusText}`, debug: debugLog },
+          { status: panoramaResponse.status }
+        );
       }
 
-      log(`Successfully uploaded thumbnail to Supabase: ${thumbnailData.path}`);
-      
-      // Update the panorama record in the database
-      const { error: updateError } = await supabase
-        .from("panoramas")
-        .update({
-          storage_path: uploadData.path,
-          size_bytes: panoramaBuffer.byteLength,
-          metadata: {
-            status: 'completed',
-            source_images: sourceImages,
-            source_folder: sourceFolder,
-            jobId: jobId
-          }
-        })
-        .eq("id", panoramaId);
-        
-      if (updateError) {
-        log(`Error updating panorama record: ${updateError.message}`);
-        throw updateError;
-      }
-      
-      log(`Successfully updated panorama database record`);
-      
-      // Return success with updated info
-      return NextResponse.json({ 
-        success: true,
-        panoramaId,
-        storagePath: uploadData.path,
-        jobId,
-        message: "Panorama created and uploaded successfully",
-        debug: debugLog
-      });
-    } catch (error) {
-      log(`Failed to process panorama: ${error.message}`);
-      
-      // Update the database to mark the panorama as failed
+      const panoramaBuffer = await panoramaResponse.arrayBuffer();
+
+      // Generate thumbnail using sharp
       try {
-        await supabase
+        log(`Generating thumbnail for panorama`);
+        const thumbnailBuffer = await sharp(Buffer.from(panoramaBuffer))
+          .resize(800, 800, {
+            fit: 'inside',
+            withoutEnlargement: true
+          })
+          .jpeg({ quality: 95 })
+          .toBuffer();
+        
+        log(`Successfully generated thumbnail`);
+        
+        // Upload the panorama to Supabase
+        log(`Uploading panorama to Supabase storage`);
+        
+        // Generate a storage path
+        const storagePath = `${projectId}/${panoramaId}_${Date.now()}.jpg`;
+        const storageBucket = isPublic ? 'panoramas-public' : 'panoramas-private';
+
+        // Upload to Supabase storage
+        const { data: uploadData, error: uploadError } = await supabase.storage
+          .from(storageBucket)
+          .upload(storagePath, Buffer.from(panoramaBuffer), {
+            contentType: "image/jpeg",
+            cacheControl: "3600",
+            upsert: true,
+          });
+
+        if (uploadError) {
+          log(`Error uploading panorama to Supabase (public=${isPublic}): ${uploadError.message}`);
+          throw uploadError;
+        }
+        
+        log(`Successfully uploaded panorama to Supabase: ${uploadData.path}`);
+
+        // Upload thumbnail to Supabase storage
+        const { data: thumbnailData, error: thumbnailError } = await supabase.storage
+          .from("thumbnails-private")
+          .upload(storagePath, thumbnailBuffer, {
+            contentType: "image/jpeg",
+            cacheControl: "3600",
+            upsert: true,
+          });
+
+        if (thumbnailError) {
+          log(`Error uploading thumbnail to Supabase: ${thumbnailError.message}`);
+          throw thumbnailError;
+        }
+
+        log(`Successfully uploaded thumbnail to Supabase: ${thumbnailData.path}`);
+        
+        // Update the panorama record in the database
+        const { error: updateError } = await supabase
           .from("panoramas")
           .update({
+            storage_path: uploadData.path,
+            size_bytes: panoramaBuffer.byteLength,
             metadata: {
-              status: 'failed',
-              error: error.message || "Failed to process panorama",
+              status: 'completed',
               source_images: sourceImages,
               source_folder: sourceFolder,
+              jobId: jobId
             }
           })
           .eq("id", panoramaId);
           
-        log(`Updated panorama record with failed status`);
-      } catch (dbError) {
-        log(`Failed to update panorama status: ${dbError.message}`);
+        if (updateError) {
+          log(`Error updating panorama record: ${updateError.message}`);
+          throw updateError;
+        }
+        
+        log(`Successfully updated panorama database record`);
+        
+        // Return success with updated info
+        return NextResponse.json({ 
+          success: true,
+          panoramaId,
+          storagePath: uploadData.path,
+          jobId,
+          message: "Panorama created and uploaded successfully",
+          debug: debugLog
+        });
+      } catch (error) {
+        log(`Failed to process panorama: ${error.message}`);
+        
+        // Update the database to mark the panorama as failed
+        try {
+          await supabase
+            .from("panoramas")
+            .update({
+              metadata: {
+                status: 'failed',
+                error: error.message || "Failed to process panorama",
+                source_images: sourceImages,
+                source_folder: sourceFolder,
+              }
+            })
+            .eq("id", panoramaId);
+            
+          log(`Updated panorama record with failed status`);
+        } catch (dbError) {
+          log(`Failed to update panorama status: ${dbError.message}`);
+        }
+        
+        return NextResponse.json(
+          { error: `Failed to process panorama: ${error.message}`, debug: debugLog },
+          { status: 500 }
+        );
       }
-      
+    } catch (error) {
+      log(`Failed to connect to EC2 API: ${error.message}`);
       return NextResponse.json(
-        { error: `Failed to process panorama: ${error.message}`, debug: debugLog },
+        { error: `Failed to connect to EC2 API: ${error.message}`, debug: debugLog },
         { status: 500 }
       );
     }
