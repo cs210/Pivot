@@ -31,6 +31,7 @@ export type RootStackParamList = {
   Profile: undefined; // Add profile screen route
   GroupDetail: { groupId: string; projects?: Project[] }; // GroupDetail screen expects a groupId and optional projects array
   Camera: undefined; // Camera screen doesn't expect any parameters
+  SignUp: undefined; // SignUp screen doesn't expect any parameters
   // Add other root stack screens and their parameters here
   // Example: Profile: { userId: string };
 };

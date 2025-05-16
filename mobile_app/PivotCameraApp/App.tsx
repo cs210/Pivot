@@ -3,7 +3,7 @@ import { NavigationContainer } from "@react-navigation/native";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import { StatusBar } from "expo-status-bar";
 import { supabase } from "./utils/supabase";
-import type { User } from '@supabase/supabase-js';
+import type { User } from "@supabase/supabase-js";
 import * as SplashScreen from "expo-splash-screen";
 import {
   useFonts,
@@ -19,6 +19,7 @@ import CameraScreen from "./screens/CameraScreen";
 import GroupDetailScreen from "./screens/GroupDetailScreen";
 import AuthScreen from "./screens/AuthScreen";
 import ProfileScreen from "./screens/ProfileScreen"; // Import the new Profile screen
+import SignUpScreen from "./screens/SignUpScreen"; // Import the new SignUp screen
 
 // Import GalleryScreen with a require statement to avoid module resolution issues
 const GalleryScreen = require("./screens/GalleryScreen").default;
@@ -37,10 +38,12 @@ export default function App() {
     ChakraPetch_700Bold,
   });
   // Track authentication state
-  const [user, setUser] = useState<User|null>(null);
+  const [user, setUser] = useState<User | null>(null);
   useEffect(() => {
     supabase.auth.getUser().then(({ data }) => setUser(data.user));
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_e, session) => {
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((_e, session) => {
       setUser(session?.user ?? null);
     });
     return () => subscription.unsubscribe();
@@ -59,14 +62,35 @@ export default function App() {
       {!user ? (
         <Stack.Navigator screenOptions={{ headerShown: false }}>
           <Stack.Screen name="Auth" component={AuthScreen} />
+          <Stack.Screen name="SignUp" component={SignUpScreen} />
         </Stack.Navigator>
       ) : (
         <Stack.Navigator initialRouteName="Home">
-          <Stack.Screen name="Home" component={HomeScreen} options={{ headerShown: false }} />
-          <Stack.Screen name="Camera" component={CameraScreen} options={{ headerShown: false }} />
-          <Stack.Screen name="Gallery" component={GalleryScreen} options={{ title: "Captured Images" }} />
-          <Stack.Screen name="GroupDetail" component={GroupDetailScreen} options={{ headerShown: false }} />
-          <Stack.Screen name="Profile" component={ProfileScreen} options={{ headerShown: false }} />
+          <Stack.Screen
+            name="Home"
+            component={HomeScreen}
+            options={{ headerShown: false }}
+          />
+          <Stack.Screen
+            name="Camera"
+            component={CameraScreen}
+            options={{ headerShown: false }}
+          />
+          <Stack.Screen
+            name="Gallery"
+            component={GalleryScreen}
+            options={{ title: "Captured Images" }}
+          />
+          <Stack.Screen
+            name="GroupDetail"
+            component={GroupDetailScreen}
+            options={{ headerShown: false }}
+          />
+          <Stack.Screen
+            name="Profile"
+            component={ProfileScreen}
+            options={{ headerShown: false }}
+          />
         </Stack.Navigator>
       )}
     </NavigationContainer>
