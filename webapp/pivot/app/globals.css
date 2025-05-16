@@ -125,12 +125,18 @@ button {
   border: 3px solid rgba(0, 0, 0, 0.1);
   border-radius: 50%;
   border-top-color: hsl(350 38% 79%);
-  animation: spin 1s ease-in-out infinite;
+  animation: psv-spin 1s ease-in-out infinite;
   position: absolute;
   top: 50%;
   left: 50%;
   transform: translate(-50%, -50%);
   z-index: 10;
+}
+
+@keyframes psv-spin {
+  to {
+    transform: translate(-50%, -50%) rotate(360deg);
+  }
 }
 
 @keyframes spin {
