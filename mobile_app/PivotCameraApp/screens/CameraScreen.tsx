@@ -7,6 +7,8 @@ import {
   Dimensions,
   Alert,
   ActivityIndicator,
+  Modal,
+  TextInput,
 } from "react-native";
 import { CameraView, useCameraPermissions } from "expo-camera";
 import * as FileSystem from "expo-file-system";
@@ -15,7 +17,8 @@ import { useNavigation } from "@react-navigation/native";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import { LinearGradient } from "expo-linear-gradient";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { COLORS, GRADIENTS, STYLES } from "../theme";
+import { COLORS, GRADIENTS, STYLES, FONT } from "../theme";
+import { GroupStorage } from "../utils/groupStorage";
 
 const SCREEN_WIDTH = Dimensions.get("window").width;
 const SCREEN_HEIGHT = Dimensions.get("window").height;
@@ -32,6 +35,10 @@ const CameraScreen: React.FC = () => {
   const [cameraReady, setCameraReady] = useState<boolean>(false);
   const [capturing, setCapturing] = useState<boolean>(false);
   const [capturedImages, setCapturedImages] = useState<CapturedImage[]>([]);
+  const [publishModalVisible, setPublishModalVisible] = useState(false);
+  const [groupName, setGroupName] = useState("");
+  const [groupDescription, setGroupDescription] = useState("");
+  const [publishing, setPublishing] = useState(false);
 
   // Ask for camera permissions
   useEffect(() => {
@@ -128,6 +135,41 @@ const CameraScreen: React.FC = () => {
   // Calculate number of captured images
   const capturedCount = capturedImages.length;
 
+  const handlePublish = async () => {
+    if (capturedImages.length === 0) {
+      Alert.alert("Error", "No images to publish");
+      return;
+    }
+
+    setPublishing(true);
+    try {
+      const imageUris = capturedImages.map((img) => img.uri);
+      const group = await GroupStorage.createGroup(
+        groupName || `Session ${new Date().toLocaleString()}`,
+        groupDescription,
+        imageUris
+      );
+
+      Alert.alert("Success", "Images published to group successfully", [
+        {
+          text: "OK",
+          onPress: () => {
+            setPublishModalVisible(false);
+            setGroupName("");
+            setGroupDescription("");
+            setCapturedImages([]);
+            navigation.goBack();
+          },
+        },
+      ]);
+    } catch (error) {
+      console.error("Error publishing images:", error);
+      Alert.alert("Error", "Failed to publish images");
+    } finally {
+      setPublishing(false);
+    }
+  };
+
   if (hasPermission === null) {
     console.log("Permission status is null - requesting permissions");
     return (
@@ -162,13 +204,21 @@ const CameraScreen: React.FC = () => {
 
       <View style={styles.overlay}>
         <SafeAreaView style={styles.statusBar}>
-          <Text style={styles.progressText}>{capturedCount} Images</Text>
           <TouchableOpacity
             style={styles.backButton}
             onPress={() => navigation.goBack()}
           >
             <Ionicons name="arrow-back" size={28} color="white" />
           </TouchableOpacity>
+          <Text style={styles.progressText}>{capturedCount} Images</Text>
+          {capturedCount > 0 && (
+            <TouchableOpacity
+              style={styles.publishButton}
+              onPress={() => setPublishModalVisible(true)}
+            >
+              <Text style={styles.publishButtonText}>Publish</Text>
+            </TouchableOpacity>
+          )}
         </SafeAreaView>
 
         <View style={styles.controlsContainer}>
@@ -185,6 +235,55 @@ const CameraScreen: React.FC = () => {
           </TouchableOpacity>
         </View>
       </View>
+
+      {/* Publish Modal */}
+      <Modal
+        visible={publishModalVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setPublishModalVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <Text style={styles.modalTitle}>Publish Images</Text>
+            <TextInput
+              style={styles.input}
+              placeholder="Group Name (optional)"
+              value={groupName}
+              onChangeText={setGroupName}
+              placeholderTextColor={COLORS.secondary}
+            />
+            <TextInput
+              style={[styles.input, styles.textArea]}
+              placeholder="Description (optional)"
+              value={groupDescription}
+              onChangeText={setGroupDescription}
+              placeholderTextColor={COLORS.secondary}
+              multiline
+              numberOfLines={3}
+            />
+            <View style={styles.modalButtons}>
+              <TouchableOpacity
+                style={[styles.modalButton, styles.cancelButton]}
+                onPress={() => setPublishModalVisible(false)}
+              >
+                <Text style={styles.modalButtonText}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.modalButton, styles.publishButton]}
+                onPress={handlePublish}
+                disabled={publishing}
+              >
+                {publishing ? (
+                  <ActivityIndicator color="white" size="small" />
+                ) : (
+                  <Text style={styles.modalButtonText}>Publish</Text>
+                )}
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 };
@@ -204,14 +303,14 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     flexDirection: "row",
-    justifyContent: "center",
+    justifyContent: "space-between",
     alignItems: "center",
     backgroundColor: "transparent",
     zIndex: 1,
+    paddingHorizontal: 20,
+    paddingTop: 10,
   },
   backButton: {
-    position: "absolute",
-    left: 20,
     padding: 8,
   },
   progressText: {
@@ -234,6 +333,69 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
     marginBottom: 20,
+  },
+  publishButton: {
+    backgroundColor: COLORS.primary,
+    paddingHorizontal: 15,
+    paddingVertical: 8,
+    borderRadius: 20,
+  },
+  publishButtonText: {
+    color: COLORS.primaryForeground,
+    fontFamily: FONT.bold,
+    fontSize: 14,
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0, 0, 0, 0.7)",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  modalContent: {
+    backgroundColor: COLORS.card,
+    borderRadius: 15,
+    padding: 20,
+    width: "80%",
+    maxWidth: 400,
+  },
+  modalTitle: {
+    fontSize: 20,
+    fontFamily: FONT.bold,
+    color: COLORS.foreground,
+    marginBottom: 20,
+    textAlign: "center",
+  },
+  input: {
+    backgroundColor: COLORS.background,
+    borderRadius: 10,
+    padding: 15,
+    marginBottom: 15,
+    color: COLORS.foreground,
+    fontFamily: FONT.regular,
+  },
+  textArea: {
+    height: 100,
+    textAlignVertical: "top",
+  },
+  modalButtons: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    marginTop: 10,
+  },
+  modalButton: {
+    flex: 1,
+    paddingVertical: 12,
+    borderRadius: 10,
+    alignItems: "center",
+    marginHorizontal: 5,
+  },
+  cancelButton: {
+    backgroundColor: COLORS.secondary,
+  },
+  modalButtonText: {
+    color: COLORS.primaryForeground,
+    fontFamily: FONT.bold,
+    fontSize: 16,
   },
 });
 
