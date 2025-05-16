@@ -78,15 +78,8 @@ const AuthScreen = () => {
     setLoading(false); // Ensure loading is set to false in all paths
   };
 
-  const handleSignUp = async () => {
-    setLoading(true);
-    // TODO: Implement Supabase sign up
-    Alert.alert("Sign Up Attempt", `Email: ${email}, Password: ${password}`);
-    // Example:
-    // const { error } = await supabase.auth.signUp({ email, password });
-    // if (error) Alert.alert('Sign Up Error', error.message);
-    // else Alert.alert('Success', 'Check your email for verification!');
-    setLoading(false);
+  const handleSignUp = () => {
+    navigation.navigate("SignUp");
   };
 
   return (
