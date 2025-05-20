@@ -820,3 +820,19 @@ USING (
         )
     )
 );
+
+-- Project Views Table
+CREATE TABLE project_views (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    project_id UUID NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+    user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+    organization_id UUID REFERENCES organizations(id) ON DELETE SET NULL,
+    viewed_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT unique_project_view UNIQUE (project_id, user_id, viewed_at)
+);
+
+-- Create index for project views
+CREATE INDEX idx_project_views_project_id ON project_views(project_id);
+CREATE INDEX idx_project_views_user_id ON project_views(user_id);
+CREATE INDEX idx_project_views_organization_id ON project_views(organization_id);
+CREATE INDEX idx_project_views_viewed_at ON project_views(viewed_at); 
