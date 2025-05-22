@@ -9,6 +9,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import PanoramaViewerPage from "../../project/[id]/components/PanoramaViewerPage";
 import PlaceLocationsTabContent from "../../project/[id]/components/EnhancedImageGrid";
 import { Lock, Eye, ArrowLeft, Building2 } from "lucide-react";
+import { useProjectView } from "@/app/hooks/useProjectView";
 
 export default function SharedProjectPage() {
   const params = useParams();
@@ -20,6 +21,9 @@ export default function SharedProjectPage() {
   const [error, setError] = useState("");
   const [activeTab, setActiveTab] = useState("walkthrough");
   const [organization, setOrganization] = useState<any>(null);
+
+  // Record the view when the project is loaded
+  useProjectView(projectId, !!project?.organization_id);
 
   useEffect(() => {
     const fetchProject = async () => {
