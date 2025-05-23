@@ -36,15 +36,12 @@ export async function GET(
     }
 
     // Get unique views count (count distinct users)
-    const { count: uniqueViews, error: uniqueViewsError } = await supabase
+    const { data: uniqueUsers, error: uniqueViewsError } = await supabase
       .from('project_views')
-      .select('user_id', { count: 'exact', head: true })
-      .eq('project_id', params.id)
-      .distinct();
+      .select('user_id')
+      .eq('project_id', params.id);
 
-    if (uniqueViewsError) {
-      return NextResponse.json({ error: 'Failed to get unique views' }, { status: 500 });
-    }
+    const uniqueViews = uniqueUsers ? new Set(uniqueUsers.map(view => view.user_id)).size : 0;
 
     return NextResponse.json({
       totalViews: totalViews || 0,
