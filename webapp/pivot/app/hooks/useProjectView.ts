@@ -1,6 +1,10 @@
 import { useEffect, useRef } from 'react';
 
-export function useProjectView(projectId: string, inOrganization: boolean) {
+export function useProjectView(
+  projectId: string,
+  inOrganization: boolean,
+  onViewRecorded?: (viewId: string) => void
+) {
   const hasRecordedView = useRef(false);
 
   useEffect(() => {
@@ -10,7 +14,7 @@ export function useProjectView(projectId: string, inOrganization: boolean) {
       hasRecordedView.current = true;
 
       try {
-        await fetch(`/api/projects/${projectId}/views`, {
+        const response = await fetch(`/api/projects/${projectId}/views`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -20,6 +24,11 @@ export function useProjectView(projectId: string, inOrganization: boolean) {
             recordUniqueView: true,
           }),
         });
+
+        if (response.ok) {
+          const data = await response.json();
+          onViewRecorded?.(data.viewId);
+        }
       } catch (error) {
         console.error('Error recording project view:', error);
         // Reset the flag if there's an error so we can try again
@@ -28,5 +37,5 @@ export function useProjectView(projectId: string, inOrganization: boolean) {
     };
 
     recordView();
-  }, [projectId]);
+  }, [projectId, onViewRecorded]);
 } 

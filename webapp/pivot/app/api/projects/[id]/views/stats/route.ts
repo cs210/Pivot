@@ -47,9 +47,27 @@ export async function GET(
       return NextResponse.json({ error: 'Failed to get unique views' }, { status: 500 });
     }
 
+    // Get duration statistics
+    const { data: durationStats, error: durationError } = await supabase
+      .from('project_views')
+      .select('view_duration')
+      .eq('project_id', params.id)
+      .not('view_duration', 'is', null);
+
+    if (durationError) {
+      return NextResponse.json({ error: 'Failed to get duration stats' }, { status: 500 });
+    }
+
+    // Calculate duration statistics
+    const durations = durationStats?.map(stat => stat.view_duration) || [];
+    const totalDuration = durations.reduce((sum, duration) => sum + duration, 0);
+    const averageDuration = durations.length > 0 ? Math.round(totalDuration / durations.length) : 0;
+
     return NextResponse.json({
       totalViews: totalViews || 0,
-      uniqueViews: uniqueViews || 0
+      uniqueViews: uniqueViews || 0,
+      totalDuration,
+      averageDuration
     });
   } catch (error) {
     console.error('Error getting project view stats:', error);

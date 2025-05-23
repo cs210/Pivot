@@ -41,7 +41,7 @@ export async function POST(
     const isFirstView = !existingViews || existingViews.length === 0;
 
     // Record the view
-    const { error: viewError } = await supabase
+    const { data: viewData, error: viewError } = await supabase
       .from('project_views')
       .insert({
         project_id: params.id,
@@ -49,7 +49,9 @@ export async function POST(
         organization_id: project.organization_id,
         is_unique_view: isFirstView,
         viewed_at: new Date().toISOString()
-      });
+      })
+      .select('id')
+      .single();
 
     if (viewError) {
       console.error('Error recording view:', viewError);
@@ -58,7 +60,8 @@ export async function POST(
 
     return NextResponse.json({ 
       success: true,
-      isFirstView
+      isFirstView,
+      viewId: viewData.id
     });
   } catch (error) {
     console.error('Error recording project view:', error);

@@ -1,10 +1,12 @@
 import { useEffect, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { BarChart, Users, Eye } from "lucide-react";
+import { BarChart, Users, Eye, Clock } from "lucide-react";
 
 interface ViewStats {
   totalViews: number;
   uniqueViews: number;
+  averageDuration: number;
+  totalDuration: number;
 }
 
 export default function ProjectAnalytics({ projectId }: { projectId: string }) {
@@ -27,6 +29,13 @@ export default function ProjectAnalytics({ projectId }: { projectId: string }) {
 
     fetchStats();
   }, [projectId]);
+
+  const formatDuration = (seconds: number) => {
+    if (seconds < 60) return `${seconds}s`;
+    const minutes = Math.floor(seconds / 60);
+    const remainingSeconds = seconds % 60;
+    return `${minutes}m ${remainingSeconds}s`;
+  };
 
   if (loading) {
     return (
@@ -65,6 +74,30 @@ export default function ProjectAnalytics({ projectId }: { projectId: string }) {
                 <h3 className="font-medium">Unique Viewers</h3>
               </div>
               <p className="text-2xl font-bold">{stats?.uniqueViews || 0}</p>
+            </CardContent>
+          </Card>
+
+          <Card className="bg-muted/30">
+            <CardContent className="p-6">
+              <div className="flex items-center gap-2 mb-2">
+                <Clock className="h-4 w-4 text-muted-foreground" />
+                <h3 className="font-medium">Average View Duration</h3>
+              </div>
+              <p className="text-2xl font-bold">
+                {stats?.averageDuration ? formatDuration(stats.averageDuration) : '0s'}
+              </p>
+            </CardContent>
+          </Card>
+
+          <Card className="bg-muted/30">
+            <CardContent className="p-6">
+              <div className="flex items-center gap-2 mb-2">
+                <Clock className="h-4 w-4 text-muted-foreground" />
+                <h3 className="font-medium">Total View Time</h3>
+              </div>
+              <p className="text-2xl font-bold">
+                {stats?.totalDuration ? formatDuration(stats.totalDuration) : '0s'}
+              </p>
             </CardContent>
           </Card>
         </div>

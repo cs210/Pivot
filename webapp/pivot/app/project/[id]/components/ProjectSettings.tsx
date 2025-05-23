@@ -63,7 +63,6 @@ export default function ProjectSettings({
                 className="justify-start"
                 onClick={() => setActiveSection("analytics")}
               >
-                <BarChart className="mr-2 h-4 w-4" />
                 Analytics
               </Button>
               <Button
