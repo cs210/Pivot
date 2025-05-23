@@ -1,9 +1,9 @@
 import { createClient } from '@/utils/supabase/server';
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 
 export async function GET(
-  request: Request,
-  { params }: { params: { id: string } }
+  request: NextRequest,
+  context: { params: { id: string } }
 ) {
   try {
     const supabase = createClient();
@@ -18,7 +18,7 @@ export async function GET(
     const { data: project, error: projectError } = await supabase
       .from('projects')
       .select('organization_id')
-      .eq('id', params.id)
+      .eq('id', context.params.id)
       .single();
 
     if (projectError || !project) {
@@ -29,7 +29,7 @@ export async function GET(
     const { count: totalViews, error: totalViewsError } = await supabase
       .from('project_views')
       .select('*', { count: 'exact', head: true })
-      .eq('project_id', params.id);
+      .eq('project_id', context.params.id);
 
     if (totalViewsError) {
       return NextResponse.json({ error: 'Failed to get total views' }, { status: 500 });
@@ -39,7 +39,7 @@ export async function GET(
     const { data: uniqueUsers, error: uniqueViewsError } = await supabase
       .from('project_views')
       .select('user_id')
-      .eq('project_id', params.id);
+      .eq('project_id', context.params.id);
 
     const uniqueViews = uniqueUsers ? new Set(uniqueUsers.map(view => view.user_id)).size : 0;
 
