@@ -1,5 +1,5 @@
 "use client";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { createClient } from "@/utils/supabase/client";
@@ -9,6 +9,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import PanoramaViewerPage from "../../project/[id]/components/PanoramaViewerPage";
 import PlaceLocationsTabContent from "../../project/[id]/components/EnhancedImageGrid";
 import { Lock, Eye, ArrowLeft, Building2 } from "lucide-react";
+import { useProjectView } from "@/app/hooks/useProjectView";
 
 export default function SharedProjectPage() {
   const params = useParams();
@@ -20,6 +21,40 @@ export default function SharedProjectPage() {
   const [error, setError] = useState("");
   const [activeTab, setActiveTab] = useState("walkthrough");
   const [organization, setOrganization] = useState<any>(null);
+  const viewStartTime = useRef<number>(Date.now());
+  const viewId = useRef<string | null>(null);
+
+  // Record the view when the project is loaded
+  useProjectView(projectId, !!project?.organization_id, (id) => {
+    viewId.current = id;
+  });
+
+  // Track view duration when user leaves the page
+  useEffect(() => {
+    const handleBeforeUnload = async () => {
+      if (!viewId.current) return;
+
+      const duration = Math.floor((Date.now() - viewStartTime.current) / 1000); // Convert to seconds
+      
+      try {
+        await fetch(`/api/projects/${projectId}/views/${viewId.current}/duration`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ duration }),
+        });
+      } catch (error) {
+        console.error('Error recording view duration:', error);
+      }
+    };
+
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => {
+      window.removeEventListener('beforeunload', handleBeforeUnload);
+      handleBeforeUnload(); // Also record duration when component unmounts
+    };
+  }, [projectId]);
 
   useEffect(() => {
     const fetchProject = async () => {

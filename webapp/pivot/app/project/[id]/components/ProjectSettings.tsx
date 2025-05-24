@@ -4,8 +4,9 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
-import { Save, Share2, AlertCircle, Building } from "lucide-react";
+import { Save, Share2, AlertCircle, Building, BarChart } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import ProjectAnalytics from "./ProjectAnalytics";
 
 interface ProjectSettingsProps {
   projectId: string;
@@ -57,13 +58,13 @@ export default function ProjectSettings({
               >
                 General
               </Button>
-              {/* <Button
-                variant={activeSection === "sharing" ? "default" : "ghost"}
+              <Button
+                variant={activeSection === "analytics" ? "default" : "ghost"}
                 className="justify-start"
-                onClick={() => setActiveSection("sharing")}
+                onClick={() => setActiveSection("analytics")}
               >
-                Sharing
-              </Button> */}
+                Analytics
+              </Button>
               <Button
                 variant="ghost"
                 className="justify-start"
@@ -196,6 +197,10 @@ export default function ProjectSettings({
               </div>
             </CardContent>
           </Card>
+        )}
+
+        {activeSection === "analytics" && (
+          <ProjectAnalytics projectId={projectId} />
         )}
       </div>
     </div>
