@@ -11,6 +11,7 @@ import tempfile
 from pathlib import Path
 from datetime import datetime
 import random
+import time
 
 class IncrementalPanoramaStitcher:
     def __init__(self, source_dir):
@@ -130,6 +131,8 @@ class IncrementalPanoramaStitcher:
     
     def run_single_attempt(self, all_images, starting_index, attempt_num):
         """Run a single attempt starting from a specific image."""
+        attempt_start_time = time.time()
+        
         print(f"\n{'='*60}")
         print(f"ATTEMPT {attempt_num}: Starting with image {starting_index + 1} - {all_images[starting_index].name}")
         print(f"{'='*60}")
@@ -163,12 +166,16 @@ class IncrementalPanoramaStitcher:
                     print(f"\n\nStopping early: {failures} failures (≥{failure_threshold} threshold)")
                     break
         
+        attempt_time = time.time() - attempt_start_time
         print(f"\n\nAttempt {attempt_num} complete: kept {len(kept_images)}/{total_images} images ({len(kept_images)/total_images*100:.1f}%)")
+        print(f"Time: {attempt_time:.1f} seconds")
         
         return kept_images
     
     def run_multiple_attempts(self):
         """Run multiple attempts with different starting images."""
+        total_start_time = time.time()
+        
         print(f"Starting multi-attempt panorama stitching from: {self.source_dir}")
         
         # Get images sorted by creation time
@@ -218,6 +225,9 @@ class IncrementalPanoramaStitcher:
         print(f"FINAL RESULTS")
         print(f"{'='*60}")
         print(f"Best result: {len(best_result)}/{total_images} images ({len(best_result)/total_images*100:.1f}%)")
+        
+        total_time = time.time() - total_start_time
+        print(f"Total execution time: {total_time:.1f} seconds ({total_time/60:.1f} minutes)")
         
         if best_result:
             print("\nImages included in final panorama:")
