@@ -62,7 +62,9 @@ class IncrementalPanoramaStitcher:
     def try_stitch(self, images, project_name):
         """Attempt to stitch the given images."""
         if not images:
-            return False, None
+            return False, None, 0.0
+        
+        stitch_start_time = time.time()
         
         # Copy images to temp directory
         temp_images = self.copy_images_to_temp(images)
@@ -79,7 +81,8 @@ class IncrementalPanoramaStitcher:
         try:
             result = subprocess.run(create_cmd, shell=True, capture_output=True, text=True)
             if result.returncode != 0:
-                return False, None
+                stitch_time = time.time() - stitch_start_time
+                return False, None, stitch_time
             
             # Attempt to stitch
             stitch_cmd = f'{self.ptgui_path} -stitchnogui {project_file}'
@@ -100,14 +103,17 @@ class IncrementalPanoramaStitcher:
             
             for indicator in failure_indicators:
                 if indicator in output:
-                    return False, None
+                    stitch_time = time.time() - stitch_start_time
+                    return False, None, stitch_time
             
             # Look for output file (PTGui usually creates a file with _0000.jpg suffix)
             output_pattern = project_file.stem + "*0000.jpg"
             output_files = list(Path(self.temp_dir).glob(output_pattern))
             
+            stitch_time = time.time() - stitch_start_time
+            
             if output_files:
-                return True, output_files[0]
+                return True, output_files[0], stitch_time
             else:
                 # Sometimes PTGui creates files with different naming
                 jpg_files = [f for f in Path(self.temp_dir).glob("*.jpg") 
@@ -115,12 +121,13 @@ class IncrementalPanoramaStitcher:
                 if jpg_files:
                     # Get the largest file (likely the panorama)
                     output_file = max(jpg_files, key=lambda f: f.stat().st_size)
-                    return True, output_file
+                    return True, output_file, stitch_time
                 else:
-                    return False, None
+                    return False, None, stitch_time
                     
         except subprocess.CalledProcessError as e:
-            return False, None
+            stitch_time = time.time() - stitch_start_time
+            return False, None, stitch_time
         finally:
             # Clean up temporary images
             for img in temp_images:
@@ -142,6 +149,10 @@ class IncrementalPanoramaStitcher:
         failures = 0
         failure_threshold = int(total_images * 0.25)  # 25% of total images
         
+        # Track timing statistics
+        accepted_times = []
+        rejected_times = []
+        
         # Process images in order, wrapping around
         # Start from starting_index and go through all images
         for offset in range(1, total_images):
@@ -149,17 +160,21 @@ class IncrementalPanoramaStitcher:
             current_index = (starting_index + offset) % total_images
             current_image = all_images[current_index]
             
-            print(f"\rTrying to add image {current_index + 1}/{total_images}: {current_image.name}", end='', flush=True)
-            
             # Try to stitch with current set plus new image
             test_set = kept_images + [current_image]
             
-            success, _ = self.try_stitch(test_set, f"attempt{attempt_num}_test_{offset}")
+            success, _, stitch_time = self.try_stitch(test_set, f"attempt{attempt_num}_test_{offset}")
             
             if success:
                 kept_images.append(current_image)
+                accepted_times.append(stitch_time)
+                status = "✓ ACCEPTED"
+                print(f"\rImage {current_index + 1}/{total_images}: {current_image.name:<30} {status} ({stitch_time:.1f}s)")
             else:
                 failures += 1
+                rejected_times.append(stitch_time)
+                status = "✗ REJECTED"
+                print(f"\rImage {current_index + 1}/{total_images}: {current_image.name:<30} {status} ({stitch_time:.1f}s)")
                 
                 # Check if we should stop early
                 if failures >= failure_threshold:
@@ -167,8 +182,18 @@ class IncrementalPanoramaStitcher:
                     break
         
         attempt_time = time.time() - attempt_start_time
+        
+        # Calculate timing statistics
+        avg_accepted = sum(accepted_times) / len(accepted_times) if accepted_times else 0
+        avg_rejected = sum(rejected_times) / len(rejected_times) if rejected_times else 0
+        
         print(f"\n\nAttempt {attempt_num} complete: kept {len(kept_images)}/{total_images} images ({len(kept_images)/total_images*100:.1f}%)")
-        print(f"Time: {attempt_time:.1f} seconds")
+        print(f"Total attempt time: {attempt_time:.1f} seconds")
+        print(f"\nTiming comparison:")
+        print(f"  Accepted images: {len(accepted_times)} (avg: {avg_accepted:.1f}s per image)")
+        print(f"  Rejected images: {len(rejected_times)} (avg: {avg_rejected:.1f}s per image)")
+        if avg_accepted > 0 and avg_rejected > 0:
+            print(f"  Acceptance takes {avg_accepted/avg_rejected:.1f}x longer than rejection")
         
         return kept_images
     
@@ -211,7 +236,7 @@ class IncrementalPanoramaStitcher:
                 print(f"  → New best result: {len(best_result)} images")
                 
                 # Create panorama for this attempt
-                success, output_file = self.try_stitch(best_result, f"best_attempt_{attempt}")
+                success, output_file, _ = self.try_stitch(best_result, f"best_attempt_{attempt}")
                 if success and output_file:
                     best_output = output_file
             
