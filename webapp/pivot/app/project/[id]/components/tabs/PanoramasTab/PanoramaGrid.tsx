@@ -27,7 +27,6 @@ import {
 } from "lucide-react";
 import { createClient } from "@/utils/supabase/client";
 import { Panorama } from "../../../../../../hooks/usePanoramas";
-import BlurWorkerURL from "@/workers/blurWorker.ts?worker"; // vite / next 14+
 
 interface PanoramaGridProps {
   panoramas: Panorama[];
@@ -222,62 +221,70 @@ export default function PanoramaGrid({
 
   /* -------------------  SAVE BLURRED IMAGE ------------------ */
   const handleSave = async () => {
-    if (!redactTarget) return;
+    if (!imgEl || !redactTarget) return;
     setSaving(true);
 
-    try {
-      // fetch original JPEG once (as Blob) so CORS isn’t an issue
-      const originalBlob = await (await fetch(redactTarget.url!)).blob();
+    const out = document.createElement("canvas");
+    out.width = imgEl.width;
+    out.height = imgEl.height;
+    const octx = out.getContext("2d")!;
+    octx.drawImage(imgEl, 0, 0);
 
-      // spin up worker
-      const worker = new Worker(new URL(BlurWorkerURL, import.meta.url));
-      worker.postMessage({
-        imageBlob: originalBlob,
-        rects: rects.map((r) => ({
-          x: Math.round(r.x / scale),
-          y: Math.round(r.y / scale),
-          w: Math.round(r.w / scale),
-          h: Math.round(r.h / scale),
-        })),
-      });
+    rects.forEach((r) =>
+      blurRect(
+        octx,
+        imgEl,
+        { x: r.x / scale, y: r.y / scale, w: r.w / scale, h: r.h / scale },
+        1
+      )
+    );
 
-      worker.onmessage = async (ev) => {
-        const { blob } = ev.data as { blob: Blob };
+    out.toBlob(
+      async (blob) => {
+        if (!blob) {
+          setSaving(false);
+          alert("Failed to create image blob.");
+          return;
+        }
+        try {
+          const bucket = redactTarget.is_public
+            ? "panoramas-public"
+            : "panoramas-private";
+          await supabase.storage
+            .from(bucket)
+            .upload(redactTarget.storage_path, blob, {
+              upsert: true,
+              contentType: "image/jpeg",
+            });
 
-        const bucket = redactTarget.is_public
-          ? "panoramas-public"
-          : "panoramas-private";
-
-        await supabase.storage
-          .from(bucket)
-          .upload(redactTarget.storage_path, blob, {
-            upsert: true,
-            contentType: "image/jpeg",
-          });
-
-        // cache-bust & refresh UI
-        const ts = Date.now();
-        const newUrl = redactTarget.is_public
-          ? supabase.storage
+          /* bust cache & refresh thumbnail */
+          const ts = Date.now();
+          let newUrl: string | null = null;
+          if (redactTarget.is_public) {
+            const { data } = supabase.storage
               .from(bucket)
-              .getPublicUrl(redactTarget.storage_path).data.publicUrl +
-            `?t=${ts}`
-          : (
-              await supabase.storage
-                .from(bucket)
-                .createSignedUrl(redactTarget.storage_path, 3600)
-            ).data!.signedUrl + `&t=${ts}`;
-
-        setBlurredUrls((prev) => ({ ...prev, [redactTarget.id]: newUrl }));
-        setRedactDialogOpen(false);
-        setSaving(false);
-        worker.terminate();
-      };
-    } catch (err) {
-      console.error(err);
-      alert("Failed to save blurred image");
-      setSaving(false);
-    }
+              .getPublicUrl(redactTarget.storage_path);
+            newUrl = data.publicUrl + `?t=${ts}`;
+          } else {
+            const { data } = await supabase.storage
+              .from(bucket)
+              .createSignedUrl(redactTarget.storage_path, 3600);
+            newUrl = (data?.signedUrl ?? "") + `&t=${ts}`;
+          }
+          if (newUrl) {
+            setBlurredUrls((prev) => ({ ...prev, [redactTarget.id]: newUrl }));
+          }
+          setRedactDialogOpen(false);
+        } catch (err) {
+          console.error(err);
+          alert("Failed to save blurred image");
+        } finally {
+          setSaving(false);
+        }
+      },
+      "image/jpeg",
+      0.95
+    );
   };
 
   /* ------------------------------------------------------------------ */
