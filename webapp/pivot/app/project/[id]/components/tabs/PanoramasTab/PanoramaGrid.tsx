@@ -63,67 +63,29 @@ export default function PanoramaGrid({
   setGenerate360DialogOpen,
   getProjectPanoramas,
 }: PanoramaGridProps) {
-  /* ------------------------------------------------------------------ */
-  /* -----------------------  BLUR & REDACT --------------------------- */
-  /* ------------------------------------------------------------------ */
+  // -------- local state for redaction --------
   const supabase = createClient();
   const [redactDialogOpen, setRedactDialogOpen] = useState(false);
   const [redactTarget, setRedactTarget] = useState<Panorama | null>(null);
-
-  const canvasRef = useRef<HTMLCanvasElement>(null); // visible canvas
+  const canvasRef = useRef<HTMLCanvasElement>(null);
   const [imgEl, setImgEl] = useState<HTMLImageElement | null>(null);
-
-  const [scale, setScale] = useState(1); // display-scale factor
   const [rects, setRects] = useState<
     { x: number; y: number; w: number; h: number }[]
   >([]);
-
   const [drawing, setDrawing] = useState(false);
   const startPos = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
-
+  const [scale, setScale] = useState(1);
   const [saving, setSaving] = useState(false);
   const [blurredUrls, setBlurredUrls] = useState<Record<string, string>>({});
 
   const panoramasToShow = getProjectPanoramas();
 
-  /* ------------------  CANVAS DRAW HELPERS ------------------ */
-  const blurRect = (
-    ctx: CanvasRenderingContext2D,
-    img: HTMLImageElement,
-    r: { x: number; y: number; w: number; h: number },
-    scaleFactor = 1
-  ) => {
-    ctx.save();
-    ctx.beginPath();
-    ctx.rect(r.x, r.y, r.w, r.h);
-    ctx.clip();
-    ctx.filter = "blur(10px)";
-    ctx.drawImage(
-      img,
-      r.x / scaleFactor,
-      r.y / scaleFactor,
-      r.w / scaleFactor,
-      r.h / scaleFactor,
-      r.x,
-      r.y,
-      r.w,
-      r.h
-    );
-    ctx.restore();
-
-    // outline
-    ctx.save();
-    ctx.strokeStyle = "white";
-    ctx.setLineDash([6, 4]);
-    ctx.lineWidth = 2;
-    ctx.strokeRect(r.x, r.y, r.w, r.h);
-    ctx.restore();
-  };
-
+  // -------- helper to draw (or re-draw) canvas --------
   const redraw = useCallback(
-    (preview?: { x: number; y: number; w: number; h: number } | null) => {
+    (previewRect?: { x: number; y: number; w: number; h: number } | null) => {
       if (!canvasRef.current || !imgEl) return;
-      const ctx = canvasRef.current.getContext("2d")!;
+      const ctx = canvasRef.current.getContext("2d");
+      if (!ctx) return;
       ctx.clearRect(0, 0, canvasRef.current.width, canvasRef.current.height);
       ctx.drawImage(
         imgEl,
@@ -133,51 +95,64 @@ export default function PanoramaGrid({
         canvasRef.current.height
       );
 
-      rects.forEach((r) => blurRect(ctx, imgEl, r, scale));
-      if (preview) blurRect(ctx, imgEl, preview, scale);
+      const allRects = previewRect ? [...rects, previewRect] : rects;
+
+      allRects.forEach((r) => {
+        ctx.save();
+        ctx.filter = "blur(10px)";
+        // blur only the sub-rectangle
+        ctx.drawImage(
+          imgEl,
+          r.x / scale,
+          r.y / scale,
+          r.w / scale,
+          r.h / scale,
+          r.x,
+          r.y,
+          r.w,
+          r.h
+        );
+        ctx.restore();
+        // draw dashed outline so user sees selection
+        ctx.save();
+        ctx.strokeStyle = "rgba(255,255,255,0.8)";
+        ctx.lineWidth = 2;
+        ctx.setLineDash([6, 4]);
+        ctx.strokeRect(r.x, r.y, r.w, r.h);
+        ctx.restore();
+      });
     },
     [imgEl, rects, scale]
   );
 
-  /* ----------------  DIALOG OPEN & IMAGE LOAD ---------------- */
+  // -------- open redaction dialog --------
   const openRedactor = (p: Panorama) => {
-    setRects([]);
     setRedactTarget(p);
+    setRects([]);
     setRedactDialogOpen(true);
   };
 
+  // -------- load image when dialog opens --------
   useEffect(() => {
     if (!redactDialogOpen || !redactTarget) return;
-    let objectURL = "";
-
-    const fetchAndLoad = async () => {
-      const res = await fetch(redactTarget.url ?? "", { mode: "cors" });
-      const blob = await res.blob();
-      objectURL = URL.createObjectURL(blob);
-      const img = new Image();
-      img.onload = () => {
-        const maxDisplay = 800;
-        const sc = img.width > maxDisplay ? maxDisplay / img.width : 1;
-        setScale(sc);
-
-        if (canvasRef.current) {
-          canvasRef.current.width = img.width * sc;
-          canvasRef.current.height = img.height * sc;
-        }
-
-        setImgEl(img);
-        redraw();
-      };
-      img.src = objectURL;
-    };
-
-    fetchAndLoad();
-    return () => {
-      if (objectURL) URL.revokeObjectURL(objectURL);
+    const img = new Image();
+    img.crossOrigin = "anonymous";
+    img.src = redactTarget.url ?? "";
+    img.onload = () => {
+      // fit image into at most 800px width for the dialog
+      const maxW = 800;
+      const sc = img.width > maxW ? maxW / img.width : 1;
+      setScale(sc);
+      if (canvasRef.current) {
+        canvasRef.current.width = img.width * sc;
+        canvasRef.current.height = img.height * sc;
+      }
+      setImgEl(img);
+      redraw();
     };
   }, [redactDialogOpen, redactTarget, redraw]);
 
-  /* -------------------  MOUSE HANDLERS ---------------------- */
+  // -------- mouse handlers --------
   const handleMouseDown = (e: React.MouseEvent) => {
     if (!canvasRef.current) return;
     const rect = canvasRef.current.getBoundingClientRect();
@@ -201,49 +176,37 @@ export default function PanoramaGrid({
     redraw(preview);
   };
 
-  const handleMouseUp = () => {
-    if (!drawing) return;
+  const handleMouseUp = (e: React.MouseEvent) => {
+    if (!drawing || !canvasRef.current) return;
+    const rectCanvas = canvasRef.current.getBoundingClientRect();
+    const end = {
+      x: e.clientX - rectCanvas.left,
+      y: e.clientY - rectCanvas.top,
+    };
+    const newRect = {
+      x: Math.min(startPos.current.x, end.x),
+      y: Math.min(startPos.current.y, end.y),
+      w: Math.abs(end.x - startPos.current.x),
+      h: Math.abs(end.y - startPos.current.y),
+    };
+    setRects((prev) => [...prev, newRect]);
     setDrawing(false);
-    setRects((prev) => [...prev, prevPreview.current!]);
-    redraw();
   };
 
-  // keep track of current preview rectangle
-  const prevPreview = useRef<{
-    x: number;
-    y: number;
-    w: number;
-    h: number;
-  } | null>(null);
+  // re-draw whenever rects change
   useEffect(() => {
-    if (!drawing) prevPreview.current = null;
-  }, [drawing]);
+    if (rects.length > 0) redraw();
+  }, [rects, redraw]);
 
-  /* -------------------  SAVE BLURRED IMAGE ------------------ */
+  // -------- save blurred image --------
   const handleSave = async () => {
-    if (!imgEl || !redactTarget) return;
+    if (!canvasRef.current || !redactTarget) return;
     setSaving(true);
-
-    const out = document.createElement("canvas");
-    out.width = imgEl.width;
-    out.height = imgEl.height;
-    const octx = out.getContext("2d")!;
-    octx.drawImage(imgEl, 0, 0);
-
-    rects.forEach((r) =>
-      blurRect(
-        octx,
-        imgEl,
-        { x: r.x / scale, y: r.y / scale, w: r.w / scale, h: r.h / scale },
-        1
-      )
-    );
-
-    out.toBlob(
+    canvasRef.current.toBlob(
       async (blob) => {
         if (!blob) {
           setSaving(false);
-          alert("Failed to create image blob.");
+          alert("Failed to generate image blob");
           return;
         }
         try {
@@ -257,26 +220,25 @@ export default function PanoramaGrid({
               contentType: "image/jpeg",
             });
 
-          /* bust cache & refresh thumbnail */
-          const ts = Date.now();
+          // refresh URL (signed or public)
           let newUrl: string | null = null;
           if (redactTarget.is_public) {
             const { data } = supabase.storage
               .from(bucket)
               .getPublicUrl(redactTarget.storage_path);
-            newUrl = data.publicUrl + `?t=${ts}`;
+            newUrl = data.publicUrl + `?t=${Date.now()}`; // cache-buster
           } else {
             const { data } = await supabase.storage
               .from(bucket)
               .createSignedUrl(redactTarget.storage_path, 3600);
-            newUrl = (data?.signedUrl ?? "") + `&t=${ts}`;
+            newUrl = (data?.signedUrl ?? "") + `&t=${Date.now()}`;
           }
           if (newUrl) {
             setBlurredUrls((prev) => ({ ...prev, [redactTarget.id]: newUrl }));
           }
           setRedactDialogOpen(false);
         } catch (err) {
-          console.error(err);
+          console.error("Save blurred image error:", err);
           alert("Failed to save blurred image");
         } finally {
           setSaving(false);
@@ -287,9 +249,9 @@ export default function PanoramaGrid({
     );
   };
 
-  /* ------------------------------------------------------------------ */
-  /* -------------------  MAIN COMPONENT UI --------------------------- */
-  /* ------------------------------------------------------------------ */
+  // --------------------------------------------------
+  // ----------------------- UI -----------------------
+  // --------------------------------------------------
   return (
     <div className="w-full">
       {/* ---------- main card ---------- */}
@@ -445,7 +407,7 @@ export default function PanoramaGrid({
                             disabled={panorama.is_processing}
                           >
                             <Wand2 className="mr-2 h-4 w-4" />
-                            Blur&nbsp;&amp;&nbsp;Redact
+                            Blur&nbsp;&amp;&nbsp;Redact (beta)
                           </DropdownMenuItem>
 
                           <DropdownMenuItem
@@ -533,7 +495,7 @@ export default function PanoramaGrid({
                           disabled={panorama.is_processing}
                         >
                           <Wand2 className="mr-2 h-4 w-4" />
-                          Blur&nbsp;&amp;&nbsp;Redact
+                          Blur&nbsp;&amp;&nbsp;Redact (beta)
                         </DropdownMenuItem>
 
                         <DropdownMenuItem
@@ -591,23 +553,21 @@ export default function PanoramaGrid({
         </CardContent>
       </Card>
 
-      {/* -----------------  REDACTION DIALOG  ----------------- */}
+      {/* ---------- REDACTION DIALOG ---------- */}
       <Dialog open={redactDialogOpen} onOpenChange={setRedactDialogOpen}>
         <DialogContent className="max-w-[900px]">
           <DialogHeader>
-            <DialogTitle>Blur &amp; Redact</DialogTitle>
+            <DialogTitle>Blur &amp; Redact (beta) </DialogTitle>
           </DialogHeader>
-
           <div className="w-full overflow-auto">
             <canvas
               ref={canvasRef}
-              className="border rounded shadow max-w-full cursor-crosshair select-none"
+              className="border rounded shadow max-w-full cursor-crosshair"
               onMouseDown={handleMouseDown}
               onMouseMove={handleMouseMove}
               onMouseUp={handleMouseUp}
             />
           </div>
-
           <DialogFooter className="space-x-2">
             <Button
               variant="secondary"
