@@ -24,6 +24,16 @@ Pivot democratizes tour creation:
 
 ---
 
+## 🧪 Demo
+
+<p align="center">
+  <img src="img/readme/example%20tour.gif" alt="Example Tour Walkthrough" width="600"/>
+</p>
+
+*<p align="center">A sample walkthrough generated entirely using Pivot’s guided photo capture and auto-stitch pipeline.</p>*
+
+---
+
 ## 🔍 Key Features
 
 | Feature | Description |
@@ -40,13 +50,6 @@ Pivot democratizes tour creation:
 | **Annotations** | Highlight key features (e.g., dishwasher, balcony) with labels/icons |
 | **Project Page** | <br>![Project Page](img/readme/project.png)<br>Upload & organize photos, stitch 360° images, arrange room layout, annotate, and manage project settings |
 | **Explore Page** | <br>![Explore Page](img/readme/explore.png)<br>Discover tours in your organization (e.g., Stanford dorm rooms for housing discovery) |
-
----
-
-## 🧪 Demo
-
-![Example Tour Walkthrough](img/readme/example%20tour.gif)  
-*A sample walkthrough generated entirely using Pivot’s guided photo capture and auto-stitch pipeline.*
 
 ---
 
