@@ -2,8 +2,6 @@
 
 **Mobile-first 360° virtual tour creation using just your phone**
 
-![Home Page](img/readme/home%20page.png)
-
 Pivot is a lightweight platform for capturing, generating, and sharing immersive 360° walkthroughs of real estate spaces—no special hardware or technical skills required. Designed with short-term rental hosts, subletters, and real estate agents in mind, Pivot lets users scan their space room-by-room using their smartphone, automatically generate 360° views, and instantly share a complete virtual tour via link.
 
 Unlike traditional solutions like Matterport, Pivot is fast, affordable, and accessible to everyday users.
