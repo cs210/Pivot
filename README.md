@@ -36,13 +36,13 @@ Pivot democratizes tour creation:
 
 ## 🔍 Key Features
 
-<table>
+<table style="border-collapse: collapse; border: none;">
   <tr>
-    <td align="center">
+    <td align="center" style="border: none;">
       <img src="img/readme/project.png" alt="Project Page" width="300"/><br>
       <em>Project Page: Upload & organize photos, stitch 360° images, arrange room layout, annotate, and manage project settings</em>
     </td>
-    <td align="center">
+    <td align="center" style="border: none;">
       <img src="img/readme/explore.png" alt="Explore Page" width="300"/><br>
       <em>Explore Page: Browse tours created by users with your email domain (e.g., Stanford housing discovery)</em>
     </td>
