@@ -44,22 +44,19 @@ Pivot democratizes tour creation:
     </td>
     <td align="center">
       <img src="img/readme/explore.png" alt="Explore Page" width="300"/><br>
-      <em>Explore Page: Discover tours across your organization (e.g., Stanford dorm rooms, by account domain)</em>
+      <em>Explore Page: Browse tours created by users with your email domain (e.g., Stanford housing discovery)</em>
     </td>
   </tr>
 </table>
 
-- **Project & Room Setup** – Create structured projects and define rooms before capture  
-- **Guided Photo Capture** – Step-by-step camera guidance to generate smooth 360° coverage  
-- **Existing Photo Upload** – Use pre-existing 360°/panoramic images if preferred  
-- **Auto Tour Generation** – Automatically connects rooms into a seamless, navigable tour  
-- **360 Viewer** – Intuitive mobile + web viewer with pan, zoom, and room transitions  
-- **Shareable Link & Embed** – Instantly share via link or embed in listings  
-- **Room Rearrangement Tool** – Drag-and-drop rooms into a visual floorplan  
-- **Room Labeling** – Custom names for each room (e.g., "Primary Bedroom")  
-- **Tour Privacy Settings** – Public, private, or password-protected viewing options  
-- **Annotations** – Highlight key features (e.g., dishwasher, balcony) with labels/icons  
-- **Explore by Organization** – View all tours associated with your org’s email domain (e.g., `@stanford.edu`)  
+- **Structured Projects** – Set up projects, define rooms, and manage tour settings in one place  
+- **Flexible Photo Input** – Capture guided 360° shots or upload your own panoramic images  
+- **Auto Tour Builder** – Automatically stitches images and connects rooms into smooth, navigable walkthroughs  
+- **Interactive 360° Viewer** – Pan, zoom, and transition between rooms on mobile or desktop  
+- **Floor Plan Editor** – Visually arrange rooms to reflect real spatial layout  
+- **Custom Room Labels & Annotations** – Name rooms and tag features (e.g., dishwasher, balcony) with icons or notes  
+- **Explore by Organization** – Discover public tours made by others with your domain (e.g., `@stanford.edu`)  
+- **Privacy Controls & Sharing** – Public, private, or password-protected tours with link/embedding options  
 
 ---
 
