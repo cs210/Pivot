@@ -30,26 +30,38 @@ Pivot democratizes tour creation:
   <img src="img/readme/example%20tour.gif" alt="Example Tour Walkthrough" width="600"/>
 </p>
 
-*<p align="center">A sample walkthrough generated entirely using Pivot’s guided photo capture and auto-stitch pipeline.</p>*
+*<p align="center">A sample walkthrough generated entirely using Pivot’s guided photo capture and auto-stitch pipeline. GIF compressed due to Github size constraints. </p>*
 
 ---
 
 ## 🔍 Key Features
 
-| Feature | Description |
-|--------|-------------|
-| **Project & Room Setup** | Create structured projects and define rooms before capture |
-| **Guided Photo Capture** | Step-by-step camera guidance to generate smooth 360° coverage |
-| **Existing Photo Upload** | Use pre-existing 360°/panoramic images if preferred |
-| **Auto Tour Generation** | Automatically connects rooms into a seamless, navigable tour |
-| **360 Viewer** | Intuitive mobile + web viewer with pan, zoom, and room transitions |
-| **Shareable Link & Embed** | Instantly share via link or embed in listings |
-| **Room Rearrangement Tool** | Drag-and-drop rooms into a visual floorplan |
-| **Room Labeling** | Custom names for each room (e.g., "Primary Bedroom") |
-| **Tour Privacy Settings** | Public, private, or password-protected viewing options |
-| **Annotations** | Highlight key features (e.g., dishwasher, balcony) with labels/icons |
-| **Project Page** | <br>![Project Page](img/readme/project.png)<br>Upload & organize photos, stitch 360° images, arrange room layout, annotate, and manage project settings |
-| **Explore Page** | <br>![Explore Page](img/readme/explore.png)<br>Discover tours in your organization (e.g., Stanford dorm rooms for housing discovery) |
+<div style="display: flex; justify-content: center; gap: 40px; flex-wrap: wrap; align-items: flex-start;">
+
+  <div style="text-align: center;">
+    <img src="img/readme/project.png" alt="Project Page" width="300"/>
+    <div><em>Project Page: Upload & organize photos, stitch 360° images, arrange room layout, annotate, and manage project settings</em></div>
+  </div>
+
+  <div style="text-align: center;">
+    <img src="img/readme/explore.png" alt="Explore Page" width="300"/>
+    <div><em>Explore Page: Discover tours in your organization (e.g., Stanford dorm rooms for housing discovery)</em></div>
+  </div>
+
+</div>
+
+<br>
+
+- **Project & Room Setup** – Create structured projects and define rooms before capture  
+- **Guided Photo Capture** – Step-by-step camera guidance to generate smooth 360° coverage  
+- **Existing Photo Upload** – Use pre-existing 360°/panoramic images if preferred  
+- **Auto Tour Generation** – Automatically connects rooms into a seamless, navigable tour  
+- **360 Viewer** – Intuitive mobile + web viewer with pan, zoom, and room transitions  
+- **Shareable Link & Embed** – Instantly share via link or embed in listings. Also share with users from your organization (e.g., @stanford.edu)
+- **Room Rearrangement Tool** – Drag-and-drop rooms into a visual floorplan  
+- **Room Labeling** – Custom names for each room (e.g., "Primary Bedroom")  
+- **Tour Privacy Settings** – Public, private, or password-protected viewing options  
+- **Annotations** – Highlight key features (e.g., dishwasher, balcony) with labels/icons  
 
 ---
 
